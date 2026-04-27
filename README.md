@@ -1,13 +1,34 @@
 # Codex Bootstrap
 
-Codex Bootstrap is a catalog of small, production-shaped starter environments for new software projects. Each environment is meant to be easy for a Codex agent to copy, inspect, verify, and extend without guessing the project conventions from scratch.
+Codex Bootstrap is a GitHub-hosted launchpad for starting software projects with an agent-ready baseline. Clone it into the directory that should become the new project, run `./bootstrap`, and the checkout rewrites itself into the selected starter with fresh Git metadata.
 
-The repo starts with two pieces:
+The repo currently ships:
 
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests and a deterministic verification path.
+- `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
+- `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
+
+## Quick Start
+
+```bash
+git clone <codex-bootstrap-repo-url> my-service
+cd my-service
+./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice
+./scripts/agent-gradle . check
+```
+
+The launcher is intentionally destructive. It stages the selected template, rewrites the project identity, removes catalog-only files, deletes the cloned Git metadata, runs `git init`, and leaves the generated project uncommitted with no remote.
+
+Use `--dry-run` to inspect the plan first:
+
+```bash
+./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice --dry-run
+```
+
+Use `--yes` for non-interactive agent runs.
 
 ## Environment Contract
 
@@ -19,6 +40,8 @@ Every bootstrap environment should include:
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
 - clear extension points for common next moves.
 
+Runnable templates should also include a `bootstrap-template.json` manifest describing required inputs, support paths that must survive into the generated project, and generated verification commands.
+
 General source rules:
 
 - keep non-generated product source files at 1000 lines or less;
@@ -29,11 +52,15 @@ Prefer compatibility-breaking cleanup over preserving early template mistakes. T
 ## Layout
 
 ```text
+bootstrap
 environments/
   supermeta/
+scripts/
+  agent-gradle
 templates/
   java-gradle-cli/
 tools/
+  bootstrap/
   supermeta-gradle/
   supermeta-rules/
 ```
@@ -42,7 +69,13 @@ Use `environments/` for meta or workflow environments. Use `templates/` for copy
 
 ## Verification
 
-The catalog itself is mostly documentation today. Verify the first runnable template with:
+Verify the bootstrap launcher and generated-project smoke path with:
+
+```bash
+python3 -m unittest discover -s tools/bootstrap -p '*_test.py'
+```
+
+Verify the first runnable template in catalog form with:
 
 ```bash
 ./scripts/agent-gradle templates/java-gradle-cli test

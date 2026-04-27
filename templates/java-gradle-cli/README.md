@@ -2,6 +2,19 @@
 
 This template is a minimal Java command-line application with Gradle, JUnit tests, and a Codex-friendly verification path.
 
+It can be materialized from the catalog root with:
+
+```bash
+./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice
+```
+
+After materialization, the generated project is standalone and uses:
+
+```bash
+./scripts/agent-gradle . check
+./scripts/agent-gradle . run
+```
+
 ## Prerequisites
 
 - a shell environment that can run the Gradle wrapper;
@@ -63,6 +76,8 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 - wildcard imports are acceptable and preferred when they keep Java files cleaner.
 
 The source limit is configured in `supermeta-rules.json` and executed by Gradle through the shared `tools/supermeta-rules/check.py` helper.
+
+`bootstrap-template.json` declares the generated-project inputs, local support paths, and verification commands used by the root launcher.
 
 ## Project Shape
 

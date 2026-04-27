@@ -1,0 +1,28 @@
+{
+  "id": "java-gradle-cli",
+  "displayName": "Java Gradle CLI",
+  "description": "A compact Java command-line project with Gradle, JUnit tests, agent notes, and a deterministic verification path.",
+  "type": "java-gradle-cli",
+  "requiredInputs": [
+    "name",
+    "package"
+  ],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-gradle",
+      "destination": "scripts/agent-gradle"
+    },
+    {
+      "source": "tools/supermeta-gradle",
+      "destination": "tools/supermeta-gradle"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    }
+  ],
+  "verificationCommands": [
+    "./scripts/agent-gradle . check",
+    "./scripts/agent-gradle . run"
+  ]
+}

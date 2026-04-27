@@ -18,6 +18,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep reusable checks in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Use the Supermeta Gradle harness for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the template is runnable without a global Gradle install.
+- Keep `bootstrap-template.json` aligned with generated-project support paths and verification commands.
 - Keep the sample app small and test-covered.
 - Rename `com.example` before turning this into a real project.
 - Prefer breaking the template contract cleanly over keeping weak starter conventions.
