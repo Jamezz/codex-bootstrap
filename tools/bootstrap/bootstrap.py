@@ -160,6 +160,18 @@ class SupportPath:
 
 
 @dataclass(frozen=True)
+class GeneratedDocs:
+    summary: str
+    runtime: str
+    entrypoints: tuple[str, ...]
+    source_roots: tuple[str, ...]
+    test_roots: tuple[str, ...]
+    verification_commands: tuple[str, ...]
+    run_commands: tuple[str, ...]
+    first_useful_edit: str
+
+
+@dataclass(frozen=True)
 class TemplateManifest:
     template_id: str
     display_name: str
@@ -168,6 +180,7 @@ class TemplateManifest:
     required_inputs: tuple[str, ...]
     support_paths: tuple[SupportPath, ...]
     verification_commands: tuple[str, ...]
+    generated_docs: GeneratedDocs
 
     @classmethod
     def load(cls, repo_root: Path, template_id: str) -> "TemplateManifest":
@@ -192,6 +205,7 @@ class TemplateManifest:
         required_inputs = tuple(require_string_list(raw, "requiredInputs"))
         support_paths = tuple(parse_support_paths(raw.get("supportPaths", [])))
         verification_commands = tuple(require_string_list(raw, "verificationCommands"))
+        generated_docs = parse_generated_docs(raw.get("generatedDocs"))
 
         return cls(
             template_id=manifest_id,
@@ -201,6 +215,7 @@ class TemplateManifest:
             required_inputs=required_inputs,
             support_paths=support_paths,
             verification_commands=verification_commands,
+            generated_docs=generated_docs,
         )
 
 
@@ -451,6 +466,7 @@ def common_replacements(plan: BootstrapPlan) -> dict[str, str]:
     return {
         "../../scripts/agent-gradle .": "./scripts/agent-gradle .",
         "../../scripts/agent-gradle": "./scripts/agent-gradle",
+        "../../scripts/agent-beans": "./scripts/agent-beans",
         "../../scripts/agent-task": "./scripts/agent-task",
         "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
     }
@@ -521,6 +537,43 @@ def should_rewrite_text(path: Path) -> bool:
 def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
     (staged_root / "README.md").write_text(generated_readme(plan), encoding="utf-8")
     (staged_root / "AGENTS.md").write_text(generated_agents(plan), encoding="utf-8")
+    docs_dir = staged_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    (docs_dir / "ARCHITECTURE.md").write_text(generated_architecture(plan), encoding="utf-8")
+    (docs_dir / "OPERATIONS.md").write_text(generated_operations(plan), encoding="utf-8")
+    (docs_dir / "DECISIONS.md").write_text(generated_decisions(plan), encoding="utf-8")
+    write_generated_beans(plan, staged_root)
+
+
+def generated_project_docs_section() -> str:
+    return """## Project Docs
+
+- `docs/ARCHITECTURE.md`: runtime shape, entrypoints, and code layout.
+- `docs/OPERATIONS.md`: verification, run, troubleshooting, and backlog commands.
+- `docs/DECISIONS.md`: active decisions only; superseded decision history belongs in completed or archived Beans.
+
+## Backlog
+
+This project starts with a small Beans backlog for replacing the starter behavior, locking architecture decisions, and adding CI or release verification.
+
+If the pinned Beans CLI is installed, inspect project task context with:
+
+```bash
+./scripts/agent-beans prime
+./scripts/agent-beans list
+./scripts/agent-beans check
+```
+"""
+
+
+def generated_agent_beans_section() -> str:
+    return """## Beans
+
+- Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.
+- Use `./scripts/agent-beans list --ready` to inspect ready work.
+- Keep the seeded Beans current as starter behavior is replaced.
+- If `./scripts/agent-beans` reports a missing or wrong Beans CLI version, tell the user instead of bypassing the wrapper.
+"""
 
 
 def generated_readme(plan: BootstrapPlan) -> str:
@@ -602,6 +655,7 @@ Extend the CLI behavior in `App.java`, update `AppTest.java` first or in the sam
 ./scripts/agent-gradle . run --args='example'
 ```
 
+{generated_project_docs_section()}
 ## Agent Workflow
 
 Agents should start by reading `AGENTS.md`, then run:
@@ -632,6 +686,9 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Test: `./scripts/agent-gradle . test`
 - Run: `./scripts/agent-gradle . run`
 - Run with app args: `./scripts/agent-gradle . run --args="example"`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
 - List generic task logs: `./scripts/agent-task logs .gradle/supermeta-gradle/logs`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle . --ps`
@@ -639,6 +696,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Stop scoped Gradle daemon: `./scripts/agent-gradle . --stop`
 - If debugging raw Gradle behavior only: `./gradlew check`
 
+{generated_agent_beans_section()}
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.
@@ -724,6 +782,7 @@ Extend the CLI behavior in `cli.py`, update `tests/test_cli.py` first or in the 
 uv run {plan.config.project_name} example
 ```
 
+{generated_project_docs_section()}
 """
 
 
@@ -745,9 +804,13 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 - Run: `uv run {plan.config.project_name}`
 - Run with app args: `uv run {plan.config.project_name} "example"`
 - Run module entrypoint: `uv run python -m {module_name} "example"`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
+{generated_agent_beans_section()}
 ## Rules
 
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
@@ -820,6 +883,7 @@ Extend the CLI behavior in `src/cli.ts`, update `tests/cli.test.ts` first or in 
 bun run src/main.ts example
 ```
 
+{generated_project_docs_section()}
 """
 
 
@@ -838,9 +902,13 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Test: `bun test`
 - Run: `bun run src/main.ts`
 - Run with app args: `bun run src/main.ts "example"`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
+{generated_agent_beans_section()}
 ## Rules
 
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
@@ -854,6 +922,196 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Extend the sample CLI into real behavior early, and keep tests updated with that change.
 - Prefer clean new-project conventions over compatibility with starter mistakes.
 """
+
+
+def generated_architecture(plan: BootstrapPlan) -> str:
+    docs = plan.manifest.generated_docs
+    return f"""# {plan.project_title} Architecture
+
+## Runtime Shape
+
+{render_doc_text(plan, docs.summary)}
+
+{render_doc_text(plan, docs.runtime)}
+
+## Entrypoints
+
+{markdown_list(render_doc_items(plan, docs.entrypoints))}
+
+## Code Layout
+
+Product source:
+
+{markdown_list(render_doc_items(plan, docs.source_roots))}
+
+Tests:
+
+{markdown_list(render_doc_items(plan, docs.test_roots))}
+
+## Starter Boundary
+
+The generated CLI is intentionally small. Replace the sample behavior early, keep the verification path green, and update this file when the runtime shape changes.
+"""
+
+
+def generated_operations(plan: BootstrapPlan) -> str:
+    docs = plan.manifest.generated_docs
+    return f"""# {plan.project_title} Operations
+
+## Verify
+
+{markdown_code_list(render_doc_items(plan, docs.verification_commands))}
+
+## Run
+
+{markdown_code_list(render_doc_items(plan, docs.run_commands))}
+
+## Backlog
+
+```bash
+./scripts/agent-beans prime
+./scripts/agent-beans list
+./scripts/agent-beans check
+./scripts/agent-beans roadmap
+```
+
+## Troubleshooting
+
+Use `./scripts/agent-task ps` to inspect stuck build or test processes. Use the language-specific commands in `AGENTS.md` before killing processes directly.
+
+If `./scripts/agent-beans` fails because Beans is absent or has the wrong version, install the pinned version shown by the wrapper and rerun the command.
+"""
+
+
+def generated_decisions(plan: BootstrapPlan) -> str:
+    docs = plan.manifest.generated_docs
+    first_useful_edit = render_doc_text(plan, docs.first_useful_edit)
+    return f"""# {plan.project_title} Decisions
+
+This file contains active project decisions only. When a decision is superseded, remove it from this file after a completed or archived Bean records the old decision, why it changed, and where the current rule lives.
+
+## Active Decisions
+
+### Bootstrap Baseline
+
+- Status: active
+- Decision: Start from the `{plan.manifest.template_id}` starter with its checked-in verification path, agent notes, docs pack, and Beans backlog.
+- Reason: A generated project should be immediately runnable, inspectable, and ready for agent handoff.
+
+### First Useful Edit
+
+- Status: active
+- Decision: {first_useful_edit}
+- Reason: The starter exists to become real product code quickly; sample behavior should not survive longer than necessary.
+"""
+
+
+def write_generated_beans(plan: BootstrapPlan, staged_root: Path) -> None:
+    beans_dir = staged_root / ".beans"
+    beans_dir.mkdir(parents=True, exist_ok=True)
+    (staged_root / ".beans.yml").write_text(generated_beans_config(plan), encoding="utf-8")
+    (beans_dir / ".gitignore").write_text(
+        "# Generated by beans init\n.worktrees/\n.conversations/\n",
+        encoding="utf-8",
+    )
+    for filename, content in generated_seed_beans(plan).items():
+        (beans_dir / filename).write_text(content, encoding="utf-8")
+
+
+def generated_beans_config(plan: BootstrapPlan) -> str:
+    return f"""# Beans configuration
+# See: https://github.com/hmans/beans
+project:
+  name: {plan.project_title}
+beans:
+  path: .beans
+  prefix: {plan.config.project_name}-
+  id_length: 4
+  default_status: todo
+  default_type: task
+agent:
+  enabled: true
+  default_mode: act
+"""
+
+
+def generated_seed_beans(plan: BootstrapPlan) -> dict[str, str]:
+    prefix = f"{plan.config.project_name}-"
+    milestone = f"{prefix}m001"
+    feature = f"{prefix}f001"
+    architecture_task = f"{prefix}t001"
+    ci_task = f"{prefix}t002"
+    return {
+        f"{milestone}--ship-first-real-project-slice.md": bean_markdown(
+            "Ship first real project slice",
+            "milestone",
+            "A working first slice should replace the starter behavior, keep verification green, and leave the docs accurate.",
+            order="a",
+        ),
+        f"{feature}--replace-starter-behavior.md": bean_markdown(
+            "Replace starter behavior with real product behavior",
+            "feature",
+            "Turn the generated CLI into the first useful product path. Update tests before or with the behavior change.",
+            parent=milestone,
+            order="b",
+        ),
+        f"{architecture_task}--lock-architecture-and-decisions.md": bean_markdown(
+            "Lock architecture and active decisions",
+            "task",
+            "Review `docs/ARCHITECTURE.md` and `docs/DECISIONS.md` after the first real behavior lands. Keep only active decisions in the docs.",
+            parent=feature,
+            order="c",
+        ),
+        f"{ci_task}--add-ci-and-release-verification.md": bean_markdown(
+            "Add CI and release verification",
+            "task",
+            "Choose the project CI path and make the default verification command run there without hidden local state.",
+            parent=feature,
+            order="d",
+        ),
+    }
+
+
+def bean_markdown(title: str, bean_type: str, body: str, order: str, parent: str = "") -> str:
+    parent_line = f"parent: {parent}\n" if parent else ""
+    return f"""---
+title: {title}
+status: todo
+type: {bean_type}
+priority: normal
+order: {order}
+{parent_line}---
+
+{body}
+"""
+
+
+def markdown_list(items: tuple[str, ...]) -> str:
+    return "\n".join(f"- `{item}`" for item in items)
+
+
+def markdown_code_list(items: tuple[str, ...]) -> str:
+    return "\n".join(f"```bash\n{item}\n```" for item in items)
+
+
+def render_doc_items(plan: BootstrapPlan, items: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(render_doc_text(plan, item) for item in items)
+
+
+def render_doc_text(plan: BootstrapPlan, text: str) -> str:
+    replacements = {
+        plan.manifest.template_id: plan.config.project_name,
+    }
+    if plan.config.package_name is not None:
+        replacements["com.example"] = plan.config.package_name
+        replacements["com/example"] = plan.config.package_name.replace(".", "/")
+    if plan.manifest.template_type == "python-uv-cli":
+        replacements["python_uv_cli"] = python_module_from_slug(plan.config.project_name)
+
+    rendered = text
+    for old, new in replacements.items():
+        rendered = rendered.replace(old, new)
+    return rendered
 
 
 def clear_directory(root: Path) -> None:
@@ -972,6 +1230,21 @@ def parse_support_paths(raw: Any) -> list[SupportPath]:
             )
         )
     return support_paths
+
+
+def parse_generated_docs(raw: Any) -> GeneratedDocs:
+    if not isinstance(raw, dict):
+        raise UsageError("generatedDocs must be an object")
+    return GeneratedDocs(
+        summary=require_string(raw, "summary"),
+        runtime=require_string(raw, "runtime"),
+        entrypoints=tuple(require_string_list(raw, "entrypoints")),
+        source_roots=tuple(require_string_list(raw, "sourceRoots")),
+        test_roots=tuple(require_string_list(raw, "testRoots")),
+        verification_commands=tuple(require_string_list(raw, "verificationCommands")),
+        run_commands=tuple(require_string_list(raw, "runCommands")),
+        first_useful_edit=require_string(raw, "firstUsefulEdit"),
+    )
 
 
 def require_string(raw: dict[str, Any], key: str) -> str:

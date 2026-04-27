@@ -9,6 +9,8 @@ This is a copyable starter, not a long-lived framework.
 - Java lint from repo root: `./scripts/agent-gradle templates/java-gradle-cli checkstyleMain checkstyleTest`
 - Run from repo root: `./scripts/agent-gradle templates/java-gradle-cli run`
 - Run with app args from repo root: `./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"`
+- Beans prime after materialization: `./scripts/agent-beans prime`
+- Beans check after materialization: `./scripts/agent-beans check`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
 - List generic task logs: `./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle templates/java-gradle-cli --ps`
@@ -27,6 +29,7 @@ This is a copyable starter, not a long-lived framework.
 - Use wildcard imports where feasible.
 - Use Lombok where it keeps Java source compact; preserve compile-only and annotation-processor wiring.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
 - Keep Java lint in Gradle Checkstyle with config under `config/checkstyle/`.
 - Use the Supermeta Gradle harness for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the template is runnable without a global Gradle install.

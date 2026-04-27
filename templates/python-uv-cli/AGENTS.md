@@ -13,6 +13,8 @@ This is a copyable starter, not a long-lived framework.
 - Run from repo root: `cd templates/python-uv-cli && uv run python-uv-cli`
 - Run with app args from repo root: `cd templates/python-uv-cli && uv run python-uv-cli "Ada Lovelace"`
 - Run module entrypoint from repo root: `cd templates/python-uv-cli && uv run python -m python_uv_cli "Ada Lovelace"`
+- Beans prime after materialization: `./scripts/agent-beans prime`
+- Beans check after materialization: `./scripts/agent-beans check`
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
@@ -24,6 +26,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep product source files under `src/` at 1000 lines or less.
 - Preserve `py.typed` so the package advertises inline types.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
 - Route Python lint through Ruff, type checking through mypy, and behavior checks through pytest.
 - Use `./scripts/check` for agent verification unless debugging one tool directly.
 - Keep `bootstrap-template.json` aligned with generated-project support paths and verification commands.

@@ -12,6 +12,7 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Add verification commands for every runnable template.
 - Add or update `bootstrap-template.json` when a template's generated contract changes.
 - Keep generated starters compact but production-shaped: docs, tests, agent notes, and a real build path.
+- Keep generated docs and Beans support first-class for every starter: architecture, operations, active decisions, `.beans.yml`, seeded starter backlog, and `scripts/agent-beans`.
 - Keep non-generated product source files at 1000 lines or less.
 - Exception: `tools/bootstrap/bootstrap.py` may exceed 1000 lines because it owns the destructive launcher, template rewrite dispatch, and generated-project docs in one tested control surface. Split it only when the boundary is obvious and keeps the bootstrap flow easier to audit.
 - Keep Java packages at 8 source files or fewer before splitting into subpackages.

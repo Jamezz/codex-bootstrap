@@ -71,6 +71,14 @@ Stuck-task diagnostics from the repository root:
 ./scripts/agent-task ps --match pytest
 ```
 
+Generated projects also include a pinned Beans wrapper and seeded starter backlog:
+
+```bash
+./scripts/agent-beans prime
+./scripts/agent-beans list --ready
+./scripts/agent-beans check
+```
+
 ## Conventions
 
 - production source files under `src/` are checked for a 1000-line maximum;
@@ -80,6 +88,8 @@ Stuck-task diagnostics from the repository root:
 - reusable checks and project callouts live in `supermeta-rules.json` and the shared `tools/supermeta-rules/check.py` helper.
 
 `bootstrap-template.json` declares the generated-project inputs, local support paths, and verification commands used by the root launcher.
+
+The manifest also declares generated-doc metadata used to write `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md` after bootstrap.
 
 ## Project Shape
 

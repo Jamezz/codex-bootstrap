@@ -6,8 +6,16 @@
   "requiredInputs": ["name"],
   "supportPaths": [
     {
+      "source": "scripts/agent-beans",
+      "destination": "scripts/agent-beans"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-beans",
+      "destination": "tools/supermeta-beans"
     },
     {
       "source": "tools/supermeta-task",
@@ -18,5 +26,18 @@
       "destination": "tools/supermeta-rules"
     }
   ],
-  "verificationCommands": ["./scripts/check", "bun run src/main.ts"]
+  "verificationCommands": ["./scripts/check", "bun run src/main.ts"],
+  "generatedDocs": {
+    "summary": "This is a compact TypeScript Bun command-line project with tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": "Bun owns package installation, runtime execution, and tests. Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
+    "entrypoints": ["src/main.ts", "src/cli.ts", "package.json scripts"],
+    "sourceRoots": ["src", "tools/supermeta-rules"],
+    "testRoots": ["tests", "supermeta-rules.json"],
+    "verificationCommands": ["./scripts/check"],
+    "runCommands": [
+      "bun run src/main.ts",
+      "bun run src/main.ts \"Ada Lovelace\""
+    ],
+    "firstUsefulEdit": "Extend `src/cli.ts`, update `tests/cli.test.ts` first or in the same change, then rerun `./scripts/check`."
+  }
 }

@@ -63,11 +63,15 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual("java-gradle-cli", manifest.template_type)
         self.assertEqual(("name", "package"), manifest.required_inputs)
         self.assertIn("./scripts/agent-gradle . check", manifest.verification_commands)
+        self.assertIn("Java Gradle", manifest.generated_docs.summary)
+        self.assertIn("src/main/java/com/example/App.java", manifest.generated_docs.entrypoints)
         self.assertEqual(
             [
                 "scripts/agent-gradle",
+                "scripts/agent-beans",
                 "scripts/agent-task",
                 "tools/supermeta-gradle",
+                "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
             ],
@@ -82,8 +86,16 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(("name",), manifest.required_inputs)
         self.assertIn("./scripts/check", manifest.verification_commands)
         self.assertIn("uv run python-uv-cli", manifest.verification_commands)
+        self.assertIn("Python uv", manifest.generated_docs.summary)
+        self.assertIn("src/python_uv_cli/cli.py", manifest.generated_docs.entrypoints)
         self.assertEqual(
-            ["scripts/agent-task", "tools/supermeta-task", "tools/supermeta-rules"],
+            [
+                "scripts/agent-beans",
+                "scripts/agent-task",
+                "tools/supermeta-beans",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+            ],
             [path.source for path in manifest.support_paths],
         )
 
@@ -95,8 +107,16 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(("name",), manifest.required_inputs)
         self.assertIn("./scripts/check", manifest.verification_commands)
         self.assertIn("bun run src/main.ts", manifest.verification_commands)
+        self.assertIn("TypeScript Bun", manifest.generated_docs.summary)
+        self.assertIn("src/main.ts", manifest.generated_docs.entrypoints)
         self.assertEqual(
-            ["scripts/agent-task", "tools/supermeta-task", "tools/supermeta-rules"],
+            [
+                "scripts/agent-beans",
+                "scripts/agent-task",
+                "tools/supermeta-beans",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+            ],
             [path.source for path in manifest.support_paths],
         )
 
@@ -135,8 +155,10 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertFalse((checkout / "bootstrap").exists())
             self.assertFalse((checkout / "tools" / "bootstrap").exists())
             self.assertTrue((checkout / "scripts" / "agent-gradle").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -181,12 +203,15 @@ class BootstrapSmokeTest(unittest.TestCase):
             agents = read_text(checkout / "AGENTS.md")
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/agent-gradle . check", readme)
+            self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("./scripts/agent-task ps --match gradle", readme)
             self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", readme)
             self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
+            self.assertIn("docs/ARCHITECTURE.md", readme)
             self.assertIn("update `application.mainClass` in `build.gradle.kts`", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("./scripts/agent-task ps --match gradle", agents)
             self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", agents)
             self.assertIn("./scripts/agent-gradle . --ps", agents)
@@ -194,6 +219,11 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-gradle . --stop", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
+            assert_generated_operational_baseline(self, checkout)
+            self.assertIn(
+                "src/main/java/com/acme/sample/App.java",
+                read_text(checkout / "docs" / "ARCHITECTURE.md"),
+            )
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
             run_checked(
@@ -250,7 +280,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -275,10 +307,15 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/check", readme)
             self.assertIn("uv run sample-app", readme)
             self.assertIn("uv run python -m sample_app", readme)
+            self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("uv run sample-app", agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
+            assert_generated_operational_baseline(self, checkout)
+            self.assertIn("src/sample_app/cli.py", read_text(checkout / "docs" / "ARCHITECTURE.md"))
+            self.assertIn("uv run sample-app", read_text(checkout / "docs" / "OPERATIONS.md"))
 
             env = {"UV_CACHE_DIR": "/tmp/codex-bootstrap-uv-cache"}
             run_checked(["./scripts/check"], cwd=checkout, timeout=360, env=env)
@@ -316,7 +353,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -340,10 +379,13 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("bun install --frozen-lockfile", readme)
             self.assertIn("./scripts/check", readme)
             self.assertIn("bun run src/main.ts", readme)
+            self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("Bun is the only package-manager/runtime contract", agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
+            assert_generated_operational_baseline(self, checkout)
 
             if shutil.which("bun") is None:
                 self.skipTest("bun is required for TypeScript check/run verification")
@@ -578,6 +620,43 @@ def assert_catalog_removed(test_case: unittest.TestCase, checkout: Path) -> None
         check=False,
     )
     test_case.assertNotEqual(0, head.returncode)
+
+
+def assert_generated_operational_baseline(test_case: unittest.TestCase, checkout: Path) -> None:
+    for doc_path in ("docs/ARCHITECTURE.md", "docs/OPERATIONS.md", "docs/DECISIONS.md"):
+        test_case.assertTrue((checkout / doc_path).is_file(), doc_path)
+
+    architecture = read_text(checkout / "docs" / "ARCHITECTURE.md")
+    operations = read_text(checkout / "docs" / "OPERATIONS.md")
+    decisions = read_text(checkout / "docs" / "DECISIONS.md")
+    beans_config = read_text(checkout / ".beans.yml")
+
+    test_case.assertIn("# Sample App Architecture", architecture)
+    test_case.assertIn("## Runtime Shape", architecture)
+    test_case.assertIn("# Sample App Operations", operations)
+    test_case.assertIn("./scripts/agent-beans check", operations)
+    test_case.assertIn("# Sample App Decisions", decisions)
+    test_case.assertIn("active project decisions only", decisions)
+    test_case.assertIn("prefix: sample-app-", beans_config)
+    test_case.assertIn("default_type: task", beans_config)
+    test_case.assertEqual(
+        "# Generated by beans init\n.worktrees/\n.conversations/\n",
+        read_text(checkout / ".beans" / ".gitignore"),
+    )
+
+    bean_files = sorted(path.name for path in (checkout / ".beans").glob("*.md"))
+    test_case.assertEqual(
+        [
+            "sample-app-f001--replace-starter-behavior.md",
+            "sample-app-m001--ship-first-real-project-slice.md",
+            "sample-app-t001--lock-architecture-and-decisions.md",
+            "sample-app-t002--add-ci-and-release-verification.md",
+        ],
+        bean_files,
+    )
+    seed_bean = read_text(checkout / ".beans" / "sample-app-f001--replace-starter-behavior.md")
+    test_case.assertIn("type: feature", seed_bean)
+    test_case.assertIn("parent: sample-app-m001", seed_bean)
 
 
 def run_checked(

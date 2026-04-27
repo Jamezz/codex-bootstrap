@@ -12,6 +12,7 @@ The repo currently ships:
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
+- `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
 - `tools/supermeta-task/`: a language-agnostic stuck-task diagnostic helper copied into generated projects.
 
 ## Quick Start
@@ -51,11 +52,13 @@ Every bootstrap environment should include:
 
 - a README that explains purpose, prerequisites, usage, verification, and customization;
 - an `AGENTS.md` with direct instructions for Codex-style agents working inside the environment;
+- a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
+- a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` wrapper;
 - a deterministic verification command that can be run before handoff;
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
 - clear extension points for common next moves.
 
-Runnable templates should also include a `bootstrap-template.json` manifest describing required inputs, support paths that must survive into the generated project, and generated verification commands.
+Runnable templates should also include a `bootstrap-template.json` manifest describing required inputs, support paths that must survive into the generated project, generated verification commands, and generated-doc metadata.
 
 General source rules:
 
@@ -74,6 +77,7 @@ bootstrap
 environments/
   supermeta/
 scripts/
+  agent-beans
   agent-gradle
   agent-task
 templates/
@@ -83,6 +87,7 @@ templates/
 tools/
   bootstrap/
   supermeta-gradle/
+  supermeta-beans/
   supermeta-rules/
   supermeta-task/
 ```

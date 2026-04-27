@@ -8,8 +8,16 @@
   ],
   "supportPaths": [
     {
+      "source": "scripts/agent-beans",
+      "destination": "scripts/agent-beans"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-beans",
+      "destination": "tools/supermeta-beans"
     },
     {
       "source": "tools/supermeta-task",
@@ -23,5 +31,31 @@
   "verificationCommands": [
     "./scripts/check",
     "uv run python-uv-cli"
-  ]
+  ],
+  "generatedDocs": {
+    "summary": "This is a compact Python uv command-line project with tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": "uv owns dependency resolution and command execution. Ruff owns formatting and linting, mypy owns type checking, pytest owns behavior tests, and `scripts/check` ties the full agent verification path together.",
+    "entrypoints": [
+      "src/python_uv_cli/cli.py",
+      "src/python_uv_cli/__main__.py",
+      "pyproject.toml project.scripts"
+    ],
+    "sourceRoots": [
+      "src/python_uv_cli",
+      "tools/supermeta-rules"
+    ],
+    "testRoots": [
+      "tests",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
+    "runCommands": [
+      "uv run python-uv-cli",
+      "uv run python-uv-cli \"Ada Lovelace\"",
+      "uv run python -m python_uv_cli \"Ada Lovelace\""
+    ],
+    "firstUsefulEdit": "Extend `src/python_uv_cli/cli.py`, update `tests/test_cli.py` first or in the same change, then rerun `./scripts/check`."
+  }
 }

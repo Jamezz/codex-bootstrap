@@ -74,6 +74,14 @@ Stuck-build diagnostics from the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli --stop
 ```
 
+Generated projects also include a pinned Beans wrapper and seeded starter backlog:
+
+```bash
+./scripts/agent-beans prime
+./scripts/agent-beans list --ready
+./scripts/agent-beans check
+```
+
 Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs under `.gradle/supermeta-gradle/logs/`, and warm Gradle performance by default.
 
 For parallel Gradle execution inside one build:
@@ -119,6 +127,8 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 The source limits and project callouts are configured in `supermeta-rules.json` and executed through the shared `tools/supermeta-rules/check.py` helper. Java lint uses Gradle Checkstyle with config in `config/checkstyle/checkstyle.xml`.
 
 `bootstrap-template.json` declares the generated-project inputs, local support paths, and verification commands used by the root launcher.
+
+The manifest also declares generated-doc metadata used to write `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md` after bootstrap.
 
 ## Project Shape
 

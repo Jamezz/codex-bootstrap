@@ -11,6 +11,8 @@ This is a copyable starter, not a long-lived framework.
 - Test from repo root: `cd templates/typescript-bun-cli && bun test`
 - Run from repo root: `cd templates/typescript-bun-cli && bun run src/main.ts`
 - Run with app args from repo root: `cd templates/typescript-bun-cli && bun run src/main.ts "Ada Lovelace"`
+- Beans prime after materialization: `./scripts/agent-beans prime`
+- Beans check after materialization: `./scripts/agent-beans check`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
@@ -21,6 +23,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep CLI behavior in `src/cli.ts` and entrypoint glue in `src/main.ts`.
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
 - Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.
 - Keep the `typecheck`, `lint`, and `format` package scripts Bun-invoked so a stale global Node install cannot break verification.
 - Use `./scripts/check` for agent verification unless debugging one tool directly.
