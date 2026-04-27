@@ -1,6 +1,7 @@
 # Python uv CLI Template
 
 This template is a minimal Python command-line application with uv, pytest, Ruff, mypy, and a Codex-friendly verification path.
+It includes first-class runtime logging through Python's standard `logging` package with quiet text logs by default and JSON logs available through environment configuration.
 
 It can be materialized from the catalog root with:
 
@@ -57,6 +58,15 @@ uv run --no-editable python-uv-cli
 uv run --no-editable python-uv-cli "Ada Lovelace"
 ```
 
+Enable runtime logs:
+
+```bash
+LOG_LEVEL=info uv run --no-editable python-uv-cli
+LOG_LEVEL=info LOG_FORMAT=json uv run --no-editable python-uv-cli
+```
+
+`LOG_LEVEL` accepts `trace`, `debug`, `info`, `warn`, `error`, or `off`. `LOG_FORMAT` accepts `text` or `json`. Logs always go to stderr, and normal command output stays on stdout unless the CLI is reporting a user-facing error.
+
 Run the module entrypoint:
 
 ```bash
@@ -96,6 +106,7 @@ The manifest also declares generated-doc metadata used to write `docs/ARCHITECTU
 ```text
 src/python_uv_cli/cli.py
 src/python_uv_cli/__main__.py
+src/python_uv_cli/logging_config.py
 tests/test_cli.py
 ```
 

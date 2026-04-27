@@ -5,9 +5,9 @@ Codex Bootstrap is a GitHub-hosted launchpad for starting software projects with
 The repo currently ships:
 
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
-- `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests and a deterministic verification path.
-- `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, and a deterministic verification path.
-- `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, and a deterministic verification path.
+- `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
+- `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
+- `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, first-class runtime logging, and a deterministic verification path.
 - `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
 - `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
@@ -70,6 +70,7 @@ Every bootstrap environment should include:
 - an `AGENTS.md` with direct instructions for Codex-style agents working inside the environment;
 - a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
 - a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` wrapper;
+- first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - a deterministic verification command that can be run before handoff;
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
 - clear extension points for common next moves.

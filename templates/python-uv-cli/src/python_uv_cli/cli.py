@@ -5,6 +5,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TextIO
 
+from python_uv_cli.logging_config import LoggingConfigurationError, configure_logging
+
 DEFAULT_NAME = "python-uv-cli"
 USAGE = "Usage: python-uv-cli [name]"
 
@@ -35,7 +37,14 @@ def write_result(result: CliResult, stdout: TextIO, stderr: TextIO) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        logger = configure_logging()
+    except LoggingConfigurationError as error:
+        print(f"Logging configuration error: {error}", file=sys.stderr)
+        return 2
+
     args = sys.argv[1:] if argv is None else list(argv)
     result = render(args)
     write_result(result, sys.stdout, sys.stderr)
+    logger.info("command completed", extra={"exitCode": result.exit_code})
     return result.exit_code

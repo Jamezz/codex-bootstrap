@@ -1,7 +1,7 @@
 {
   "id": "typescript-bun-cli",
   "displayName": "TypeScript Bun CLI",
-  "description": "A compact TypeScript command-line project with Bun, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
+  "description": "A compact TypeScript command-line project with Bun, Biome, type checking, Bun tests, first-class runtime logging, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-cli",
   "requiredInputs": ["name"],
   "supportPaths": [
@@ -28,15 +28,21 @@
   ],
   "verificationCommands": ["./scripts/check", "bun run src/main.ts"],
   "generatedDocs": {
-    "summary": "This is a compact TypeScript Bun command-line project with tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
-    "runtime": "Bun owns package installation, runtime execution, and tests. Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
-    "entrypoints": ["src/main.ts", "src/cli.ts", "package.json scripts"],
+    "summary": "This is a compact TypeScript Bun command-line project with tests, type checking, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": "Bun owns package installation, runtime execution, and tests. Runtime logging uses Pino, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
+    "entrypoints": [
+      "src/main.ts",
+      "src/cli.ts",
+      "src/logging.ts",
+      "package.json scripts"
+    ],
     "sourceRoots": ["src", "tools/supermeta-rules"],
     "testRoots": ["tests", "supermeta-rules.json"],
     "verificationCommands": ["./scripts/check"],
     "runCommands": [
       "bun run src/main.ts",
-      "bun run src/main.ts \"Ada Lovelace\""
+      "bun run src/main.ts \"Ada Lovelace\"",
+      "LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts"
     ],
     "firstUsefulEdit": "Extend `src/cli.ts`, update `tests/cli.test.ts` first or in the same change, then rerun `./scripts/check`."
   }

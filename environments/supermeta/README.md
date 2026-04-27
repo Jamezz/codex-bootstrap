@@ -30,6 +30,7 @@ When adding a new environment or template, include:
 - `AGENTS.md` with repo-local instructions for agents;
 - generated-project docs metadata for `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
 - generated-project Beans support through `scripts/agent-beans`, `.beans.yml`, `.beans/.gitignore`, and starter backlog files;
+- first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - `bootstrap-template.json` for runnable templates that can be materialized by the root launcher;
 - a deterministic validation command;
 - a small working example;

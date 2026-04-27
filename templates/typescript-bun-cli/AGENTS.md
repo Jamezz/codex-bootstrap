@@ -11,6 +11,8 @@ This is a copyable starter, not a long-lived framework.
 - Test from repo root: `cd templates/typescript-bun-cli && bun test`
 - Run from repo root: `cd templates/typescript-bun-cli && bun run src/main.ts`
 - Run with app args from repo root: `cd templates/typescript-bun-cli && bun run src/main.ts "Ada Lovelace"`
+- Run with text logs: `cd templates/typescript-bun-cli && LOG_LEVEL=info bun run src/main.ts`
+- Run with JSON logs: `cd templates/typescript-bun-cli && LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
@@ -21,6 +23,8 @@ This is a copyable starter, not a long-lived framework.
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
 - Keep runtime and dev dependencies in `package.json`, with the resolved lock in `bun.lock`.
 - Keep CLI behavior in `src/cli.ts` and entrypoint glue in `src/main.ts`.
+- Keep runtime logging in `src/logging.ts`; `LOG_LEVEL` and `LOG_FORMAT` are the public knobs.
+- Keep logs on stderr and normal command output on stdout.
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.

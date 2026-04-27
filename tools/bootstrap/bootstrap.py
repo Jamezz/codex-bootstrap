@@ -598,6 +598,27 @@ def generated_agent_beans_section() -> str:
 """
 
 
+def generated_logging_readme_section() -> str:
+    return """## Logging
+
+Runtime logs are quiet by default and become visible when `LOG_LEVEL` enables them:
+
+```bash
+LOG_LEVEL=info LOG_FORMAT=text <run-command>
+LOG_LEVEL=info LOG_FORMAT=json <run-command>
+```
+
+`LOG_LEVEL` accepts `trace`, `debug`, `info`, `warn`, `error`, or `off`. `LOG_FORMAT` accepts `text` or `json`. Logs always go to stderr; normal command output stays on stdout unless the CLI is reporting a user-facing error.
+"""
+
+
+def generated_logging_agent_rules() -> str:
+    return """- Keep runtime logging behind `LOG_LEVEL` and `LOG_FORMAT`.
+- Keep default logging quiet: `LOG_LEVEL=warn` and `LOG_FORMAT=text`.
+- Keep logs on stderr and normal command output on stdout.
+- Fail fast with exit code 2 when logging configuration is invalid."""
+
+
 def generated_readme(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
@@ -613,7 +634,7 @@ def generated_java_readme(plan: BootstrapPlan) -> str:
     package_name = plan.config.package_name
     return f"""# {title}
 
-{title} is a compact Java Gradle command-line project with tests, agent notes, and a deterministic verification path.
+{title} is a compact Java Gradle command-line project with tests, first-class runtime logging, agent notes, and a deterministic verification path.
 
 ## Prerequisites
 
@@ -648,6 +669,8 @@ Run the full verification lifecycle:
 ./scripts/agent-gradle . check
 ```
 
+{generated_logging_readme_section().replace("<run-command>", "./scripts/agent-gradle . run")}
+
 Inspect stuck task state:
 
 ```bash
@@ -660,6 +683,7 @@ Inspect stuck task state:
 
 - Change the Java baseline in `gradle.properties`.
 - Change the Lombok baseline in `gradle.properties`.
+- Change the SLF4J, Logback, and logstash-logback-encoder baselines in `gradle.properties`.
 - Leave `useExactJavaToolchain=false` for normal agent runs unless the runtime JDK version itself is under test.
 - Product source lives under `src/main/java/{package_name.replace(".", "/")}`.
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
@@ -708,6 +732,8 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Test: `./scripts/agent-gradle . test`
 - Run: `./scripts/agent-gradle . run`
 - Run with app args: `./scripts/agent-gradle . run --args="example"`
+- Run with text logs: `LOG_LEVEL=info ./scripts/agent-gradle . run`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json ./scripts/agent-gradle . run`
 - Beans prime: `./scripts/agent-beans prime`
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`
@@ -723,7 +749,9 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 
 - Keep Java version changes in `gradle.properties`.
 - Keep Lombok version changes in `gradle.properties`.
+- Keep SLF4J, Logback, and logstash-logback-encoder version changes in `gradle.properties`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
+{generated_logging_agent_rules()}
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Use wildcard imports where feasible.
@@ -742,7 +770,7 @@ def generated_python_readme(plan: BootstrapPlan) -> str:
     module_name = python_module_from_slug(plan.config.project_name)
     return f"""# {title}
 
-{title} is a compact Python uv command-line project with tests, type checking, agent notes, and a deterministic verification path.
+{title} is a compact Python uv command-line project with tests, type checking, first-class runtime logging, agent notes, and a deterministic verification path.
 
 ## Prerequisites
 
@@ -785,11 +813,14 @@ uv run --no-editable python -m {module_name}
 uv run --no-editable python -m {module_name} "Ada Lovelace"
 ```
 
+{generated_logging_readme_section().replace("<run-command>", f"uv run --no-editable {plan.config.project_name}")}
+
 ## Customization
 
 - Product source lives under `src/{module_name}`.
 - Test source lives under `tests/`.
 - CLI behavior starts in `src/{module_name}/cli.py`.
+- Runtime logging lives in `src/{module_name}/logging_config.py`.
 - The console script is declared in `pyproject.toml`.
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
@@ -826,6 +857,8 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 - Run: `uv run --no-editable {plan.config.project_name}`
 - Run with app args: `uv run --no-editable {plan.config.project_name} "example"`
 - Run module entrypoint: `uv run --no-editable python -m {module_name} "example"`
+- Run with text logs: `LOG_LEVEL=info uv run --no-editable {plan.config.project_name}`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json uv run --no-editable {plan.config.project_name}`
 - Beans prime: `./scripts/agent-beans prime`
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`
@@ -838,6 +871,8 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
 - Keep the Python baseline at 3.14 unless the project intentionally chooses a different runtime floor.
 - Keep CLI behavior in `src/{module_name}/cli.py` and entrypoint glue in `src/{module_name}/__main__.py`.
+- Keep runtime logging in `src/{module_name}/logging_config.py`.
+{generated_logging_agent_rules()}
 - Keep product source files under `src/` at 1000 lines or less.
 - Preserve `py.typed` so the package advertises inline types.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
@@ -852,7 +887,7 @@ def generated_typescript_readme(plan: BootstrapPlan) -> str:
     title = plan.project_title
     return f"""# {title}
 
-{title} is a compact TypeScript Bun command-line project with tests, type checking, agent notes, and a deterministic verification path.
+{title} is a compact TypeScript Bun command-line project with tests, type checking, first-class runtime logging, agent notes, and a deterministic verification path.
 
 ## Prerequisites
 
@@ -886,11 +921,14 @@ bun run src/main.ts
 bun run src/main.ts "Ada Lovelace"
 ```
 
+{generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts")}
+
 ## Customization
 
 - Product source lives under `src/`.
 - Test source lives under `tests/`.
 - CLI behavior starts in `src/cli.ts`.
+- Runtime logging lives in `src/logging.ts`.
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
 - Keep formatting and linting in Biome, type checking in `tsc --noEmit`, and behavior checks in `bun test`.
@@ -924,6 +962,8 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Test: `bun test`
 - Run: `bun run src/main.ts`
 - Run with app args: `bun run src/main.ts "example"`
+- Run with text logs: `LOG_LEVEL=info bun run src/main.ts`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts`
 - Beans prime: `./scripts/agent-beans prime`
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`
@@ -936,6 +976,8 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
 - Keep runtime and dev dependencies in `package.json`, with the resolved lock in `bun.lock`.
 - Keep CLI behavior in `src/cli.ts` and entrypoint glue in `src/main.ts`.
+- Keep runtime logging in `src/logging.ts`.
+{generated_logging_agent_rules()}
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.
@@ -944,6 +986,24 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Extend the sample CLI into real behavior early, and keep tests updated with that change.
 - Prefer clean new-project conventions over compatibility with starter mistakes.
 """
+
+
+def logging_runtime_implementation(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "java-gradle-cli":
+        return "Java uses SLF4J with Logback configured by `LoggingConfig`."
+    if plan.manifest.template_type == "python-uv-cli":
+        return "Python uses the standard `logging` package configured by `logging_config.py`."
+    return "TypeScript uses Pino configured by `src/logging.ts`."
+
+
+def generated_logging_contract(plan: BootstrapPlan) -> str:
+    return f"""{logging_runtime_implementation(plan)}
+
+- `LOG_LEVEL`: `trace`, `debug`, `info`, `warn`, `error`, or `off`; default `warn`.
+- `LOG_FORMAT`: `text` or `json`; default `text`.
+- Logs are written to stderr and normal command output stays on stdout.
+- Invalid logging configuration fails before command execution with exit code 2.
+- The starter emits an `info` log after command completion with `exitCode` when info logging is enabled."""
 
 
 def generated_architecture(plan: BootstrapPlan) -> str:
@@ -955,6 +1015,10 @@ def generated_architecture(plan: BootstrapPlan) -> str:
 {render_doc_text(plan, docs.summary)}
 
 {render_doc_text(plan, docs.runtime)}
+
+## Runtime Logging
+
+{generated_logging_contract(plan)}
 
 ## Entrypoints
 
@@ -987,6 +1051,10 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ## Run
 
 {markdown_code_list(render_doc_items(plan, docs.run_commands))}
+
+## Logging
+
+{generated_logging_contract(plan)}
 
 ## Backlog
 
@@ -1025,6 +1093,12 @@ This file contains active project decisions only. When a decision is superseded,
 - Status: active
 - Decision: {first_useful_edit}
 - Reason: The starter exists to become real product code quickly; sample behavior should not survive longer than necessary.
+
+### Runtime Logging Contract
+
+- Status: active
+- Decision: Runtime logs use `LOG_LEVEL` and `LOG_FORMAT`, default to quiet text logs on stderr, and fail fast with exit code 2 when logging configuration is invalid.
+- Reason: Generated projects should start with production-shaped observability while preserving predictable CLI output.
 """
 
 

@@ -9,6 +9,8 @@ This is a copyable starter, not a long-lived framework.
 - Java lint from repo root: `./scripts/agent-gradle templates/java-gradle-cli checkstyleMain checkstyleTest`
 - Run from repo root: `./scripts/agent-gradle templates/java-gradle-cli run`
 - Run with app args from repo root: `./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"`
+- Run with text logs: `cd templates/java-gradle-cli && LOG_LEVEL=info ../../scripts/agent-gradle . run`
+- Run with JSON logs: `cd templates/java-gradle-cli && LOG_LEVEL=info LOG_FORMAT=json ../../scripts/agent-gradle . run`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
@@ -22,8 +24,11 @@ This is a copyable starter, not a long-lived framework.
 
 - Keep Java version changes in `gradle.properties`.
 - Keep Lombok version changes in `gradle.properties`.
+- Keep SLF4J, Logback, and logstash-logback-encoder version changes in `gradle.properties`.
 - Leave `useExactJavaToolchain=false` for normal agent runs; it avoids slow JDK provisioning while still compiling with `--release`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
+- Keep runtime logging configured through `LoggingConfig`; `LOG_LEVEL` and `LOG_FORMAT` are the public knobs.
+- Keep logs on stderr and normal command output on stdout.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Use wildcard imports where feasible.

@@ -1,6 +1,7 @@
 # Java Gradle CLI Template
 
 This template is a minimal Java command-line application with Gradle, JUnit tests, and a Codex-friendly verification path.
+It includes first-class runtime logging through SLF4J and Logback with quiet text logs by default and JSON logs available through environment configuration.
 
 It can be materialized from the catalog root with:
 
@@ -53,6 +54,15 @@ Run Java lint directly:
 ```bash
 ./gradlew checkstyleMain checkstyleTest
 ```
+
+Enable runtime logs:
+
+```bash
+LOG_LEVEL=info ./gradlew run
+LOG_LEVEL=info LOG_FORMAT=json ./gradlew run
+```
+
+`LOG_LEVEL` accepts `trace`, `debug`, `info`, `warn`, `error`, or `off`. `LOG_FORMAT` accepts `text` or `json`. Logs always go to stderr, and normal command output stays on stdout unless the CLI is reporting a user-facing error.
 
 Agent-safe runs from the repository root:
 
@@ -108,6 +118,14 @@ lombokVersion=1.18.44
 
 Lombok is wired as a compile-only dependency and annotation processor for main and test source sets.
 
+Change the logging dependency baselines in the same file:
+
+```properties
+slf4jVersion=2.0.17
+logbackVersion=1.5.32
+logstashLogbackEncoderVersion=9.0
+```
+
 When you need tests to run on an exact matching JDK, opt into Gradle toolchains:
 
 ```properties
@@ -134,7 +152,9 @@ The manifest also declares generated-doc metadata used to write `docs/ARCHITECTU
 
 ```text
 src/main/java/com/example/App.java
+src/main/java/com/example/LoggingConfig.java
 src/test/java/com/example/AppTest.java
+src/test/java/com/example/LoggingConfigTest.java
 ```
 
 Replace `com.example` and extend the CLI behavior before starting real product work.

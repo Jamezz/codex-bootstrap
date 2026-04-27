@@ -2,7 +2,10 @@ package com.example;
 
 import java.io.*;
 
+import static net.logstash.logback.argument.StructuredArguments.*;
+
 import lombok.*;
+import org.slf4j.*;
 
 @RequiredArgsConstructor
 public final class App {
@@ -27,7 +30,18 @@ public final class App {
     }
 
     public static void main(String[] args) {
+        Logger logger;
+        try {
+            LoggingConfig.configureFromEnvironment();
+            logger = LoggerFactory.getLogger(App.class);
+        } catch (IllegalArgumentException error) {
+            System.err.println("Logging configuration error: " + error.getMessage());
+            System.exit(2);
+            return;
+        }
+
         int exitCode = new App(DEFAULT_NAME).run(args, System.out, System.err);
+        logger.info("command completed {}", keyValue("exitCode", exitCode));
         if (exitCode != 0) {
             System.exit(exitCode);
         }

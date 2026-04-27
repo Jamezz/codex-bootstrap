@@ -12,6 +12,15 @@ val javaVersion = providers.gradleProperty("javaVersion")
 val lombokVersion = providers.gradleProperty("lombokVersion")
     .orElse("1.18.44")
 
+val logbackVersion = providers.gradleProperty("logbackVersion")
+    .orElse("1.5.32")
+
+val logstashLogbackEncoderVersion = providers.gradleProperty("logstashLogbackEncoderVersion")
+    .orElse("9.0")
+
+val slf4jVersion = providers.gradleProperty("slf4jVersion")
+    .orElse("2.0.17")
+
 val useExactJavaToolchain = providers.gradleProperty("useExactJavaToolchain")
     .map(String::toBoolean)
     .orElse(false)
@@ -36,6 +45,10 @@ checkstyle {
 }
 
 dependencies {
+    implementation("org.slf4j:slf4j-api:${slf4jVersion.get()}")
+    implementation("ch.qos.logback:logback-classic:${logbackVersion.get()}")
+    implementation("net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion.get()}")
+
     compileOnly("org.projectlombok:lombok:${lombokVersion.get()}")
     annotationProcessor("org.projectlombok:lombok:${lombokVersion.get()}")
 

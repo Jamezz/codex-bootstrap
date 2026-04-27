@@ -1,6 +1,7 @@
 # TypeScript Bun CLI Template
 
 This template is a minimal TypeScript command-line application with Bun, Biome, TypeScript type checking, Bun tests, and a Codex-friendly verification path.
+It includes first-class runtime logging through Pino with quiet text logs by default and JSON logs available through environment configuration.
 
 It can be materialized from the catalog root with:
 
@@ -56,6 +57,15 @@ bun run src/main.ts
 bun run src/main.ts "Ada Lovelace"
 ```
 
+Enable runtime logs:
+
+```bash
+LOG_LEVEL=info bun run src/main.ts
+LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts
+```
+
+`LOG_LEVEL` accepts `trace`, `debug`, `info`, `warn`, `error`, or `off`. `LOG_FORMAT` accepts `text` or `json`. Logs always go to stderr, and normal command output stays on stdout unless the CLI is reporting a user-facing error.
+
 Stuck-task diagnostics from the repository root:
 
 ```bash
@@ -88,6 +98,7 @@ The manifest also declares generated-doc metadata used to write `docs/ARCHITECTU
 
 ```text
 src/cli.ts
+src/logging.ts
 src/main.ts
 tests/cli.test.ts
 ```
