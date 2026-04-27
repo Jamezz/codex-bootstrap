@@ -22,6 +22,7 @@ SUPPORTED_TEMPLATE_TYPES = {
     "java-gradle-cli",
     "python-uv-cli",
     "typescript-bun-cli",
+    "typescript-bun-mcp-server",
 }
 CATALOG_TOP_LEVEL_PATHS = {
     ".git",
@@ -394,6 +395,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
         "java-gradle-cli": rewrite_java_template,
         "python-uv-cli": rewrite_python_template,
         "typescript-bun-cli": rewrite_typescript_template,
+        "typescript-bun-mcp-server": rewrite_typescript_template,
     }.get(plan.manifest.template_type)
     if rewriter is None:
         raise UsageError(f"unsupported template type '{plan.manifest.template_type}'")
@@ -457,8 +459,8 @@ def rewrite_python_template(plan: BootstrapPlan, staged_root: Path) -> None:
 
 def rewrite_typescript_template(plan: BootstrapPlan, staged_root: Path) -> None:
     replacements = common_replacements(plan) | {
-        "typescript-bun-cli": plan.config.project_name,
-        "TypeScript Bun CLI Template": plan.project_title,
+        plan.manifest.template_id: plan.config.project_name,
+        f"{plan.manifest.display_name} Template": plan.project_title,
     }
     rewrite_text_files(staged_root, replacements)
     write_generated_docs(plan, staged_root)
@@ -622,6 +624,8 @@ def generated_logging_agent_rules() -> str:
 def generated_readme(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
+    if plan.manifest.template_type == "typescript-bun-mcp-server":
+        return generated_typescript_mcp_readme(plan)
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_readme(plan)
     return generated_java_readme(plan)
@@ -715,6 +719,8 @@ Agents should start by reading `AGENTS.md`, then run:
 def generated_agents(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_agents(plan)
+    if plan.manifest.template_type == "typescript-bun-mcp-server":
+        return generated_typescript_mcp_agents(plan)
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_agents(plan)
     return generated_java_agents(plan)
@@ -988,6 +994,134 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 """
 
 
+def generated_typescript_mcp_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title}
+
+{title} is a compact TypeScript Bun MCP server with stdio, Streamable HTTP, typed state stores, tests, type checking, first-class runtime logging, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- `bun` on PATH;
+- network access on first run so Bun can install dependencies.
+
+## Usage
+
+Install locked dependencies:
+
+```bash
+bun install --frozen-lockfile
+```
+
+Run the full verification lifecycle:
+
+```bash
+./scripts/check
+```
+
+Run tests directly:
+
+```bash
+bun test
+```
+
+Show server options:
+
+```bash
+bun run src/main.ts --help
+```
+
+Run the local stdio MCP server:
+
+```bash
+bun run src/main.ts
+```
+
+Run the HTTP MCP server:
+
+```bash
+bun run src/main.ts --transport http
+```
+
+Use JSON file state:
+
+```bash
+bun run src/main.ts --state file --state-file .mcp/state.json
+```
+
+{generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts --transport http")}
+
+## Customization
+
+- MCP tool, prompt, and resource registration lives in `src/mcp.ts`.
+- Transport startup lives in `src/stdio.ts`, `src/http.ts`, and `src/main.ts`.
+- State behavior lives behind the `StateStore` interface in `src/state.ts`.
+- Runtime logging lives in `src/logging.ts`.
+- Keep stdio output clean: logs and diagnostics go to stderr, never stdout.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
+- Keep formatting and linting in Biome, type checking in `tsc --noEmit`, and behavior checks in `bun test`.
+- Keep TypeScript and Biome package scripts invoked through Bun so the project does not depend on a separate Node install.
+
+## First Useful Edit
+
+Replace or extend the stub tools in `src/mcp.ts`, update the protocol tests first or in the same change, then run:
+
+```bash
+./scripts/check
+bun run src/main.ts --help
+```
+
+{generated_project_docs_section()}
+"""
+
+
+def generated_typescript_mcp_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title} Agent Notes
+
+This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Install locked dependencies: `bun install --frozen-lockfile`
+- Verify: `./scripts/check`
+- Type check: `bun run typecheck`
+- Lint and format check: `bun run lint`
+- Test: `bun test`
+- Show server help: `bun run src/main.ts --help`
+- Run stdio server: `bun run src/main.ts`
+- Run HTTP server: `bun run src/main.ts --transport http`
+- Run with file state: `bun run src/main.ts --state file --state-file .mcp/state.json`
+- Run with text logs: `LOG_LEVEL=info bun run src/main.ts --transport http`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts --transport http`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
+- Inspect Bun processes: `./scripts/agent-task ps --match bun`
+- Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
+
+{generated_agent_beans_section()}
+## Rules
+
+- Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
+- Keep runtime and dev dependencies in `package.json`, with the resolved lock in `bun.lock`.
+- Keep MCP tool, prompt, and resource registration in `src/mcp.ts`.
+- Keep transport startup out of `src/mcp.ts` so protocol tests can exercise the server without stdio or HTTP.
+- Keep state behind `StateStore`; do not bind tool handlers directly to a persistence implementation.
+- Keep stdio output clean: logs and diagnostics go to stderr, never stdout.
+- Keep runtime logging in `src/logging.ts`.
+{generated_logging_agent_rules()}
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.
+- Keep the `typecheck`, `lint`, and `format` package scripts Bun-invoked so a stale global Node install cannot break verification.
+- Use `./scripts/check` for agent verification unless debugging one tool directly.
+- Replace the stub MCP capabilities with real product behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
+"""
+
+
 def logging_runtime_implementation(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "java-gradle-cli":
         return "Java uses SLF4J with Logback configured by `LoggingConfig`."
@@ -997,13 +1131,18 @@ def logging_runtime_implementation(plan: BootstrapPlan) -> str:
 
 
 def generated_logging_contract(plan: BootstrapPlan) -> str:
+    event_line = (
+        "- The starter emits transport startup logs when info logging is enabled."
+        if plan.manifest.template_type == "typescript-bun-mcp-server"
+        else "- The starter emits an `info` log after command completion with `exitCode` when info logging is enabled."
+    )
     return f"""{logging_runtime_implementation(plan)}
 
 - `LOG_LEVEL`: `trace`, `debug`, `info`, `warn`, `error`, or `off`; default `warn`.
 - `LOG_FORMAT`: `text` or `json`; default `text`.
 - Logs are written to stderr and normal command output stays on stdout.
 - Invalid logging configuration fails before command execution with exit code 2.
-- The starter emits an `info` log after command completion with `exitCode` when info logging is enabled."""
+{event_line}"""
 
 
 def generated_architecture(plan: BootstrapPlan) -> str:

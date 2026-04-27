@@ -75,6 +75,14 @@ jobs:
         working-directory: templates/typescript-bun-cli
         run: bun run src/main.ts
 
+      - name: Check TypeScript Bun MCP server template
+        working-directory: templates/typescript-bun-mcp-server
+        run: ./scripts/check
+
+      - name: Run TypeScript Bun MCP server help
+        working-directory: templates/typescript-bun-mcp-server
+        run: bun run src/main.ts --help
+
       - name: Build Pages artifact
         run: python3 tools/pages/build_pages.py --output build/pages
 

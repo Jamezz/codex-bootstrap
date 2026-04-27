@@ -176,7 +176,7 @@ PY
 derive_java_package() {
   local segment
   segment=${project_slug//-/}
-  local derived="com.example.$segment"
+  local derived="com.generated.$segment"
   if ! validate_java_package "$derived"; then
     die "cannot derive a valid Java package from '$project_slug'; pass --package"
   fi
@@ -224,7 +224,7 @@ fi
 validate_project_slug "$project_slug"
 
 case "$template" in
-  java-gradle-cli|python-uv-cli|typescript-bun-cli)
+  java-gradle-cli|python-uv-cli|typescript-bun-cli|typescript-bun-mcp-server)
     ;;
   *)
     die "unknown template '$template'; run --list-templates"

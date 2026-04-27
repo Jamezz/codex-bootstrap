@@ -1,0 +1,54 @@
+{
+  "id": "typescript-bun-mcp-server",
+  "displayName": "TypeScript Bun MCP Server",
+  "description": "A compact TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
+  "type": "typescript-bun-mcp-server",
+  "requiredInputs": ["name"],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-beans",
+      "destination": "scripts/agent-beans"
+    },
+    {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-beans",
+      "destination": "tools/supermeta-beans"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    }
+  ],
+  "verificationCommands": ["./scripts/check", "bun run src/main.ts --help"],
+  "generatedDocs": {
+    "summary": "This is a compact TypeScript Bun MCP server with local stdio, Bun-native Streamable HTTP, typed state stores, tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": "Bun owns package installation, runtime execution, and tests. The MCP server is constructed separately from transport startup so tests can exercise tools through an in-memory MCP client. `stdio` is the default transport for local agent-spawned servers, while `http` exposes `/health` and `/mcp` through Bun's native server. State defaults to memory and can be switched to an atomic JSON file store. Runtime logging uses Pino on stderr, Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
+    "entrypoints": [
+      "src/main.ts",
+      "src/mcp.ts",
+      "src/config.ts",
+      "src/state.ts",
+      "src/http.ts",
+      "src/stdio.ts",
+      "src/logging.ts",
+      "package.json scripts"
+    ],
+    "sourceRoots": ["src", "tools/supermeta-rules"],
+    "testRoots": ["tests", "supermeta-rules.json"],
+    "verificationCommands": ["./scripts/check"],
+    "runCommands": [
+      "bun run src/main.ts --help",
+      "bun run src/main.ts",
+      "bun run src/main.ts --transport http",
+      "bun run src/main.ts --transport http --state file --state-file .mcp/state.json"
+    ],
+    "firstUsefulEdit": "Replace or extend the stub tools in `src/mcp.ts`, update the protocol tests first or in the same change, then rerun `./scripts/check`."
+  }
+}

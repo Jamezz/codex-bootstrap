@@ -8,6 +8,7 @@ The repo currently ships:
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, first-class runtime logging, and a deterministic verification path.
+- `templates/typescript-bun-mcp-server/`: a TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Bun tests, and a deterministic verification path.
 - `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
 - `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
@@ -48,6 +49,9 @@ Other starter variants:
 
 ./bootstrap --template typescript-bun-cli --name my-service
 ./scripts/check
+
+./bootstrap --template typescript-bun-mcp-server --name my-mcp-server
+./scripts/check
 ```
 
 The launcher is intentionally destructive. It stages the selected template, rewrites the project identity, removes catalog-only files, deletes the cloned Git metadata, runs `git init`, and leaves the generated project uncommitted with no remote.
@@ -58,6 +62,7 @@ Use `--dry-run` to inspect the plan first:
 ./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice --dry-run
 ./bootstrap --template python-uv-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-cli --name my-service --dry-run
+./bootstrap --template typescript-bun-mcp-server --name my-mcp-server --dry-run
 ```
 
 Use `--yes` for non-interactive agent runs.
@@ -104,6 +109,7 @@ templates/
   java-gradle-cli/
   python-uv-cli/
   typescript-bun-cli/
+  typescript-bun-mcp-server/
 tools/
   bootstrap/
   pages/
@@ -153,7 +159,15 @@ cd templates/typescript-bun-cli
 bun run src/main.ts
 ```
 
-The TypeScript starter requires `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
+Verify the TypeScript Bun MCP server starter in catalog form with:
+
+```bash
+cd templates/typescript-bun-mcp-server
+./scripts/check
+bun run src/main.ts --help
+```
+
+The TypeScript starters require `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
 
 The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
 

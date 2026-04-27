@@ -1,0 +1,10 @@
+node_modules/
+coverage/
+dist/
+.mcp/
+
+*.log
+*.tsbuildinfo
+
+.idea/
+.vscode/

@@ -69,6 +69,10 @@ class InstallerTest(unittest.TestCase):
             self.assertIn("java-gradle-cli: Java Gradle CLI", result.stdout)
             self.assertIn("python-uv-cli: Python uv CLI", result.stdout)
             self.assertIn("typescript-bun-cli: TypeScript Bun CLI", result.stdout)
+            self.assertIn(
+                "typescript-bun-mcp-server: TypeScript Bun MCP Server",
+                result.stdout,
+            )
 
     def test_dry_run_prints_local_clone_plan(self) -> None:
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-install-") as temp_dir:
@@ -99,6 +103,7 @@ class InstallerTest(unittest.TestCase):
             ("java-gradle-cli", "java-app"),
             ("python-uv-cli", "python-app"),
             ("typescript-bun-cli", "typescript-app"),
+            ("typescript-bun-mcp-server", "mcp-app"),
         ]
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-install-") as temp_dir:
             temp_root = Path(temp_dir)
@@ -141,7 +146,7 @@ class InstallerTest(unittest.TestCase):
                     / "main"
                     / "java"
                     / "com"
-                    / "example"
+                    / "generated"
                     / "javaapp"
                     / "App.java"
                 ).is_file()
@@ -150,6 +155,7 @@ class InstallerTest(unittest.TestCase):
                 (install_root / "python-app" / "src" / "python_app" / "cli.py").is_file()
             )
             self.assertTrue((install_root / "typescript-app" / "src" / "cli.ts").is_file())
+            self.assertTrue((install_root / "mcp-app" / "src" / "mcp.ts").is_file())
 
 
 def run_checked(

@@ -123,6 +123,28 @@ class ManifestTest(unittest.TestCase):
             [path.source for path in manifest.support_paths],
         )
 
+    def test_loads_typescript_mcp_server_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-mcp-server")
+
+        self.assertEqual("typescript-bun-mcp-server", manifest.template_id)
+        self.assertEqual("typescript-bun-mcp-server", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("bun run src/main.ts --help", manifest.verification_commands)
+        self.assertIn("TypeScript Bun MCP", manifest.generated_docs.summary)
+        self.assertIn("src/mcp.ts", manifest.generated_docs.entrypoints)
+        self.assertIn("src/state.ts", manifest.generated_docs.entrypoints)
+        self.assertEqual(
+            [
+                "scripts/agent-beans",
+                "scripts/agent-task",
+                "tools/supermeta-beans",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+            ],
+            [path.source for path in manifest.support_paths],
+        )
+
 
 class SafetyTest(unittest.TestCase):
     def test_refuses_to_clear_filesystem_root(self) -> None:
@@ -492,6 +514,72 @@ class BootstrapSmokeTest(unittest.TestCase):
                 timeout=360,
             )
             self.assertIn("Hello, Ada!", example_run.stdout)
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_typescript_mcp_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-typescript-mcp-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "typescript-bun-mcp-server",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+
+            package_json = read_text(checkout / "package.json")
+            self.assertIn('"name": "sample-app"', package_json)
+            self.assertIn('"@modelcontextprotocol/sdk": "^1.29.0"', package_json)
+            self.assertIn('"zod": "^4.3.6"', package_json)
+            self.assertIn('"name": "sample-app"', read_text(checkout / "bun.lock"))
+            self.assertTrue((checkout / "src" / "config.ts").is_file())
+            self.assertTrue((checkout / "src" / "http.ts").is_file())
+            self.assertTrue((checkout / "src" / "mcp.ts").is_file())
+            self.assertTrue((checkout / "src" / "state.ts").is_file())
+            self.assertTrue((checkout / "src" / "stdio.ts").is_file())
+
+            config_source = read_text(checkout / "src" / "config.ts")
+            mcp_source = read_text(checkout / "src" / "mcp.ts")
+            self.assertIn("Usage: sample-app [options]", config_source)
+            self.assertIn('DEFAULT_SERVER_NAME = "sample-app"', mcp_source)
+
+            readme = read_text(checkout / "README.md")
+            agents = read_text(checkout / "AGENTS.md")
+            self.assertIn("# Sample App", readme)
+            self.assertIn("TypeScript Bun MCP server", readme)
+            self.assertIn("./scripts/check", readme)
+            self.assertIn("bun run src/main.ts --transport http", readme)
+            self.assertIn("Keep stdio output clean", agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertNotIn("codex-bootstrap", readme.lower())
+            self.assertNotIn("codex-bootstrap", agents.lower())
+            assert_generated_operational_baseline(self, checkout)
+
+            if shutil.which("bun") is None:
+                self.skipTest("bun is required for TypeScript MCP check/run verification")
+
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            generated_help = run_checked(
+                ["bun", "run", "src/main.ts", "--help"],
+                cwd=checkout,
+                timeout=360,
+            )
+            self.assertIn("Usage: sample-app [options]", generated_help.stdout)
 
 
 def copy_bootstrap_checkout(destination: Path) -> None:
