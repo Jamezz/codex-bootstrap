@@ -6,6 +6,9 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
+import shlex
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,14 +22,14 @@ class Finding:
     message: str
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     config_path = args.config.resolve()
     root = args.root.resolve() if args.root else config_path.parent
 
     try:
         config = load_config(config_path)
-        findings = run_rules(config, root)
+        findings = run_rules(config, root, skip_callouts=args.skip_callouts)
     except ValueError as error:
         print(f"supermeta-rules: {error}", file=sys.stderr)
         return 2
@@ -41,7 +44,7 @@ def main() -> int:
     return 0
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Supermeta template rules.")
     parser.add_argument(
         "--config",
@@ -54,7 +57,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Root directory used to resolve rule paths. Defaults to the config directory.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--skip-callouts",
+        action="store_true",
+        help="Skip project callouts that invoke language-specific tooling.",
+    )
+    return parser.parse_args(argv)
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
@@ -72,13 +80,23 @@ def load_config(config_path: Path) -> dict[str, Any]:
     return data
 
 
-def run_rules(config: dict[str, Any], root: Path) -> list[Finding]:
+def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -> list[Finding]:
+    root = root.resolve()
     if not root.is_dir():
         raise ValueError(f"root directory does not exist: {root}")
 
     findings: list[Finding] = []
     findings.extend(run_line_count_rules(config.get("line_count", []), root))
-    unknown_rules = sorted(set(config) - {"line_count"})
+    findings.extend(run_java_package_file_count_rules(config.get("java_package_file_count", []), root))
+    findings.extend(
+        run_project_callout_rules(
+            config.get("project_callouts", []),
+            root,
+            execute=not project_callouts_are_skipped(skip_callouts),
+        )
+    )
+
+    unknown_rules = sorted(set(config) - {"java_package_file_count", "line_count", "project_callouts"})
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
     return findings
@@ -111,6 +129,97 @@ def run_line_count_rules(rules: Any, root: Path) -> list[Finding]:
     return findings
 
 
+def run_java_package_file_count_rules(rules: Any, root: Path) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("java_package_file_count must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"java_package_file_count[{index}]")
+        name = require_string(rule, "name", default=f"java_package_file_count[{index}]")
+        max_files = require_positive_int(rule, "max_files")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.java"])
+        exclude = require_string_list(rule, "exclude", default=[])
+
+        files_by_package: dict[Path, list[Path]] = {}
+        for source_file in iter_matching_files(root, paths, include, exclude):
+            files_by_package.setdefault(source_file.parent, []).append(source_file)
+
+        for package_dir, source_files in sorted(files_by_package.items()):
+            if len(source_files) > max_files:
+                findings.append(
+                    Finding(
+                        rule=name,
+                        path=package_dir.relative_to(root),
+                        message=(
+                            f"{len(source_files)} Java source files exceeds package limit "
+                            f"of {max_files}; split the package into subpackages"
+                        ),
+                    )
+                )
+
+    return findings
+
+
+def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("project_callouts must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"project_callouts[{index}]")
+        name = require_string(rule, "name", default=f"project_callouts[{index}]")
+        language = require_string(rule, "language")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*"])
+        exclude = require_string_list(rule, "exclude", default=[])
+        command = require_non_empty_string_list(rule, "command")
+
+        if not execute or not iter_matching_files(root, paths, include, exclude):
+            continue
+
+        try:
+            result = subprocess.run(
+                command,
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+            )
+        except OSError as error:
+            findings.append(
+                Finding(
+                    rule=name,
+                    path=Path("."),
+                    message=f"{language} callout could not start: {shlex.join(command)}\n{error}",
+                )
+            )
+            continue
+        if result.returncode != 0:
+            findings.append(
+                Finding(
+                    rule=name,
+                    path=Path("."),
+                    message=(
+                        f"{language} callout failed with exit {result.returncode}: "
+                        f"{shlex.join(command)}\n{trim_output(result.stdout)}"
+                    ),
+                )
+            )
+
+    return findings
+
+
+def project_callouts_are_skipped(skip_callouts: bool) -> bool:
+    return skip_callouts or os.environ.get("SUPERMETA_SKIP_PROJECT_CALLOUTS") in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
 def iter_matching_files(
     root: Path,
     paths: list[str],
@@ -138,6 +247,7 @@ def iter_matching_files(
 
 
 def resolve_under_root(root: Path, configured_path: str) -> Path:
+    root = root.resolve()
     candidate = (root / configured_path).resolve()
     try:
         candidate.relative_to(root)
@@ -149,6 +259,13 @@ def resolve_under_root(root: Path, configured_path: str) -> Path:
 def count_lines(path: Path) -> int:
     with path.open("r", encoding="utf-8") as source:
         return sum(1 for _ in source)
+
+
+def trim_output(output: str, max_characters: int = 4000) -> str:
+    stripped = output.strip()
+    if len(stripped) <= max_characters:
+        return stripped
+    return f"{stripped[:max_characters]}... [truncated]"
 
 
 def require_object(value: Any, field: str) -> dict[str, Any]:
@@ -179,6 +296,13 @@ def require_string_list(
     value = rule.get(key, default)
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise ValueError(f"{key} must be an array of non-empty strings")
+    return value
+
+
+def require_non_empty_string_list(rule: dict[str, Any], key: str) -> list[str]:
+    value = require_string_list(rule, key)
+    if not value:
+        raise ValueError(f"{key} must contain at least one string")
     return value
 
 

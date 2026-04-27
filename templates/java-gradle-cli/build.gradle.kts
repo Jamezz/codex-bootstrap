@@ -1,5 +1,8 @@
+import org.gradle.api.plugins.quality.Checkstyle
+
 plugins {
     application
+    checkstyle
 }
 
 val javaVersion = providers.gradleProperty("javaVersion")
@@ -24,6 +27,11 @@ application {
     mainClass = "com.example.App"
 }
 
+checkstyle {
+    toolVersion = "13.3.0"
+    configDirectory = layout.projectDirectory.dir("config/checkstyle")
+}
+
 dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -38,12 +46,20 @@ tasks.withType<JavaCompile>().configureEach {
     options.release = javaVersion
 }
 
+tasks.withType<Checkstyle>().configureEach {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
 tasks.register<Exec>("verifySupermetaRules") {
     description = "Runs shared Supermeta rules for this template."
     group = "verification"
 
     inputs.file("supermeta-rules.json")
     inputs.files(fileTree("src/main"))
+    inputs.files(fileTree("src/test"))
 
     commandLine(
         "python3",
@@ -52,6 +68,7 @@ tasks.register<Exec>("verifySupermetaRules") {
         layout.projectDirectory.file("supermeta-rules.json").asFile.absolutePath,
         "--root",
         layout.projectDirectory.asFile.absolutePath,
+        "--skip-callouts",
     )
 }
 

@@ -6,6 +6,7 @@ This is a copyable starter, not a long-lived framework.
 
 - Verify from repo root: `./scripts/agent-gradle templates/java-gradle-cli test`
 - Full check from repo root: `./scripts/agent-gradle templates/java-gradle-cli check`
+- Java lint from repo root: `./scripts/agent-gradle templates/java-gradle-cli checkstyleMain checkstyleTest`
 - Run from repo root: `./scripts/agent-gradle templates/java-gradle-cli run`
 - Run with app args from repo root: `./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"`
 - If already inside this template: `../../scripts/agent-gradle . test`
@@ -16,8 +17,10 @@ This is a copyable starter, not a long-lived framework.
 - Leave `useExactJavaToolchain=false` for normal agent runs; it avoids slow JDK provisioning while still compiling with `--release`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep product source files under `src/main` at 1000 lines or less.
+- Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Use wildcard imports where feasible.
-- Keep reusable checks in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Keep Java lint in Gradle Checkstyle with config under `config/checkstyle/`.
 - Use the Supermeta Gradle harness for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the template is runnable without a global Gradle install.
 - Keep `bootstrap-template.json` aligned with generated-project support paths and verification commands.

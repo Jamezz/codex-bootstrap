@@ -48,11 +48,18 @@ Run the full check lifecycle:
 ./gradlew check
 ```
 
+Run Java lint directly:
+
+```bash
+./gradlew checkstyleMain checkstyleTest
+```
+
 Agent-safe runs from the repository root:
 
 ```bash
 ./scripts/agent-gradle templates/java-gradle-cli test
 ./scripts/agent-gradle templates/java-gradle-cli check
+./scripts/agent-gradle templates/java-gradle-cli checkstyleMain checkstyleTest
 ./scripts/agent-gradle templates/java-gradle-cli run
 ./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"
 ```
@@ -80,10 +87,11 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 ## Conventions
 
 - production source files under `src/main` are checked for a 1000-line maximum;
+- Java package directories are checked for an 8-source-file maximum before they should be split into subpackages;
 - wildcard imports are acceptable and preferred when they keep Java files cleaner;
 - if you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 
-The source limit is configured in `supermeta-rules.json` and executed by Gradle through the shared `tools/supermeta-rules/check.py` helper.
+The source limits and project callouts are configured in `supermeta-rules.json` and executed through the shared `tools/supermeta-rules/check.py` helper. Java lint uses Gradle Checkstyle with config in `config/checkstyle/checkstyle.xml`.
 
 `bootstrap-template.json` declares the generated-project inputs, local support paths, and verification commands used by the root launcher.
 

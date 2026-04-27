@@ -45,6 +45,8 @@ Runnable templates should also include a `bootstrap-template.json` manifest desc
 General source rules:
 
 - keep non-generated product source files at 1000 lines or less;
+- keep Java package directories to 8 source files or fewer before nesting into subpackages;
+- route language-specific lint through `tools/supermeta-rules/` project callouts;
 - use wildcard imports where feasible, especially when they reduce import churn without hiding meaning.
 
 Prefer compatibility-breaking cleanup over preserving early template mistakes. These templates exist to start new projects cleanly, so change the contract when the new contract is better.

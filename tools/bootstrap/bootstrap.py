@@ -369,6 +369,7 @@ def rewrite_java_template(plan: BootstrapPlan, staged_root: Path) -> None:
         "com.example": plan.config.package_name,
         "Hello from java-gradle-cli!": f"Hello from {plan.config.project_name}!",
         "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
+        "../../scripts/agent-gradle": "./scripts/agent-gradle",
         "../../scripts/agent-gradle .": "./scripts/agent-gradle .",
     }
     rewrite_text_files(staged_root, replacements)
@@ -478,6 +479,8 @@ Run the full verification lifecycle:
 - Product source lives under `src/main/java/{package_name.replace(".", "/")}`.
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
+- Keep each Java package directory to 8 source files or fewer; split larger packages into subpackages.
+- Java lint runs through Gradle Checkstyle, with configuration in `config/checkstyle/checkstyle.xml`.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through the build.
 
 ## First Useful Edit
@@ -517,8 +520,10 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 
 - Keep Java version changes in `gradle.properties`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
+- Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Use wildcard imports where feasible.
+- Keep Java lint in Gradle Checkstyle and project callouts in `supermeta-rules.json`.
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the project is runnable without a global Gradle install.

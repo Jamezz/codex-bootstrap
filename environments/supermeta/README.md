@@ -36,6 +36,8 @@ When adding a new environment or template, include:
 Meta source rules:
 
 - non-generated product source files must stay at 1000 lines or less;
+- Java package directories should contain at most 8 source files before nesting into subpackages;
+- language-specific lint should be routed through `tools/supermeta-rules/` project callouts;
 - wildcard imports are preferred where they are feasible and keep the source cleaner.
 
 ## Agent Workflow

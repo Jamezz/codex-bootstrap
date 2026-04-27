@@ -10,7 +10,9 @@ When editing this environment:
 - require every runnable template to document verification;
 - require runnable templates to declare generated-project behavior in `bootstrap-template.json`;
 - carry the 1000-line product source limit into new starters;
+- carry the Java 8-files-per-package limit into Java starters;
 - prefer wildcard imports where feasible;
 - route reusable checks through `tools/supermeta-rules/`;
+- route language-specific lint through `project_callouts`;
 - route Gradle agent commands through `scripts/agent-gradle`;
 - prefer better new-project defaults over compatibility with older template shapes.

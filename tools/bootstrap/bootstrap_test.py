@@ -113,6 +113,12 @@ class BootstrapSmokeTest(unittest.TestCase):
                 'layout.projectDirectory.file("tools/supermeta-rules/check.py")',
                 read_text(checkout / "build.gradle.kts"),
             )
+            self.assertIn("checkstyle", read_text(checkout / "build.gradle.kts"))
+            self.assertTrue((checkout / "config" / "checkstyle" / "checkstyle.xml").is_file())
+            rules_config = read_text(checkout / "supermeta-rules.json")
+            self.assertIn('"java_package_file_count"', rules_config)
+            self.assertIn('"project_callouts"', rules_config)
+            self.assertIn('"command": ["./scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]', rules_config)
 
             app_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "App.java"
             test_source = checkout / "src" / "test" / "java" / "com" / "acme" / "sample" / "AppTest.java"
@@ -135,6 +141,18 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertNotIn("codex-bootstrap", agents.lower())
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
+            run_checked(
+                [
+                    "python3",
+                    "tools/supermeta-rules/check.py",
+                    "--config",
+                    "supermeta-rules.json",
+                    "--root",
+                    ".",
+                ],
+                cwd=checkout,
+                timeout=360,
+            )
             generated_run = run_checked(["./scripts/agent-gradle", ".", "run"], cwd=checkout, timeout=360)
             self.assertIn("Hello from sample-app!", generated_run.stdout)
 

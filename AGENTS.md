@@ -13,6 +13,8 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Add or update `bootstrap-template.json` when a template's generated contract changes.
 - Keep generated starters compact but production-shaped: docs, tests, agent notes, and a real build path.
 - Keep non-generated product source files at 1000 lines or less.
+- Keep Java packages at 8 source files or fewer before splitting into subpackages.
+- Route language-specific lint through `tools/supermeta-rules/` project callouts before duplicating checks in templates.
 - Use wildcard imports where feasible.
 - Put reusable template checks in `tools/supermeta-rules/` before duplicating them in individual starters.
 - For Gradle examples, route agent verification through `scripts/agent-gradle` instead of raw wrapper calls.
