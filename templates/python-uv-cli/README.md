@@ -20,7 +20,7 @@ uv run my-service
 - `uv` on PATH;
 - network access on first run so uv can download development dependencies.
 
-The template supports Python 3.9 and newer so it can run on a broad set of developer machines while still using a modern typed `src/` layout.
+The template targets Python 3.14 and uses a typed `src/` layout.
 
 ## Usage
 

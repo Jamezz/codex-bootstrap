@@ -19,6 +19,7 @@ This is a copyable starter, not a long-lived framework.
 ## Rules
 
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
+- Keep the Python baseline at 3.14 unless the project intentionally chooses a different runtime floor.
 - Keep CLI behavior in `src/python_uv_cli/cli.py` and entrypoint glue in `src/python_uv_cli/__main__.py`.
 - Keep product source files under `src/` at 1000 lines or less.
 - Preserve `py.typed` so the package advertises inline types.

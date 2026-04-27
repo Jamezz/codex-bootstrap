@@ -669,6 +669,8 @@ def generated_python_readme(plan: BootstrapPlan) -> str:
 - `uv` on PATH;
 - network access on first run so uv can resolve and download development dependencies.
 
+The project targets Python 3.14.
+
 ## Usage
 
 Install the locked project environment:
@@ -749,6 +751,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 ## Rules
 
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
+- Keep the Python baseline at 3.14 unless the project intentionally chooses a different runtime floor.
 - Keep CLI behavior in `src/{module_name}/cli.py` and entrypoint glue in `src/{module_name}/__main__.py`.
 - Keep product source files under `src/` at 1000 lines or less.
 - Preserve `py.typed` so the package advertises inline types.
