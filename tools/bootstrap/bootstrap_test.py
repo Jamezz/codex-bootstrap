@@ -113,6 +113,8 @@ class BootstrapSmokeTest(unittest.TestCase):
                 'layout.projectDirectory.file("tools/supermeta-rules/check.py")',
                 read_text(checkout / "build.gradle.kts"),
             )
+            self.assertIn("org.projectlombok:lombok", read_text(checkout / "build.gradle.kts"))
+            self.assertIn("lombokVersion=1.18.44", read_text(checkout / "gradle.properties"))
             self.assertIn("checkstyle", read_text(checkout / "build.gradle.kts"))
             self.assertTrue((checkout / "config" / "checkstyle" / "checkstyle.xml").is_file())
             rules_config = read_text(checkout / "supermeta-rules.json")
@@ -125,6 +127,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue(app_source.is_file())
             self.assertTrue(test_source.is_file())
             self.assertIn("package com.acme.sample;", read_text(app_source))
+            self.assertIn("import lombok.*;", read_text(app_source))
+            self.assertIn("@RequiredArgsConstructor", read_text(app_source))
             self.assertIn('DEFAULT_NAME = "sample-app"', read_text(app_source))
             self.assertIn("Usage: sample-app [name]", read_text(app_source))
             self.assertIn("package com.acme.sample;", read_text(test_source))

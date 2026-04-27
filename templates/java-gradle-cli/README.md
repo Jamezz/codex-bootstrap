@@ -76,6 +76,14 @@ javaVersion=21
 
 That value lives in `gradle.properties` and feeds `javac --release` in `build.gradle.kts`.
 
+Change the Lombok baseline in the same file:
+
+```properties
+lombokVersion=1.18.44
+```
+
+Lombok is wired as a compile-only dependency and annotation processor for main and test source sets.
+
 When you need tests to run on an exact matching JDK, opt into Gradle toolchains:
 
 ```properties
@@ -89,6 +97,7 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 - production source files under `src/main` are checked for a 1000-line maximum;
 - Java package directories are checked for an 8-source-file maximum before they should be split into subpackages;
 - wildcard imports are acceptable and preferred when they keep Java files cleaner;
+- Lombok is available by default and should be used where it keeps Java source compact;
 - if you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 
 The source limits and project callouts are configured in `supermeta-rules.json` and executed through the shared `tools/supermeta-rules/check.py` helper. Java lint uses Gradle Checkstyle with config in `config/checkstyle/checkstyle.xml`.

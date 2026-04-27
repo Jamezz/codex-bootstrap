@@ -475,6 +475,7 @@ Run the full verification lifecycle:
 ## Customization
 
 - Change the Java baseline in `gradle.properties`.
+- Change the Lombok baseline in `gradle.properties`.
 - Leave `useExactJavaToolchain=false` for normal agent runs unless the runtime JDK version itself is under test.
 - Product source lives under `src/main/java/{package_name.replace(".", "/")}`.
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
@@ -519,10 +520,12 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.
+- Keep Lombok version changes in `gradle.properties`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Use wildcard imports where feasible.
+- Use Lombok where it keeps Java source compact, and keep it as compile-only plus annotation-processor wiring.
 - Keep Java lint in Gradle Checkstyle and project callouts in `supermeta-rules.json`.
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.

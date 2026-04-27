@@ -47,7 +47,7 @@ final class AppTest {
     private CliResult runApp(String... args) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        int exitCode = new App().run(
+        int exitCode = new App("java-gradle-cli").run(
             args,
             new PrintStream(out, true, StandardCharsets.UTF_8),
             new PrintStream(err, true, StandardCharsets.UTF_8)

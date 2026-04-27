@@ -9,6 +9,9 @@ val javaVersion = providers.gradleProperty("javaVersion")
     .map(String::toInt)
     .orElse(21)
 
+val lombokVersion = providers.gradleProperty("lombokVersion")
+    .orElse("1.18.44")
+
 val useExactJavaToolchain = providers.gradleProperty("useExactJavaToolchain")
     .map(String::toBoolean)
     .orElse(false)
@@ -33,8 +36,13 @@ checkstyle {
 }
 
 dependencies {
+    compileOnly("org.projectlombok:lombok:${lombokVersion.get()}")
+    annotationProcessor("org.projectlombok:lombok:${lombokVersion.get()}")
+
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testCompileOnly("org.projectlombok:lombok:${lombokVersion.get()}")
+    testAnnotationProcessor("org.projectlombok:lombok:${lombokVersion.get()}")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

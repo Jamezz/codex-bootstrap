@@ -14,11 +14,13 @@ This is a copyable starter, not a long-lived framework.
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.
+- Keep Lombok version changes in `gradle.properties`.
 - Leave `useExactJavaToolchain=false` for normal agent runs; it avoids slow JDK provisioning while still compiling with `--release`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Use wildcard imports where feasible.
+- Use Lombok where it keeps Java source compact; preserve compile-only and annotation-processor wiring.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Keep Java lint in Gradle Checkstyle with config under `config/checkstyle/`.
 - Use the Supermeta Gradle harness for agent verification unless debugging raw Gradle behavior.
