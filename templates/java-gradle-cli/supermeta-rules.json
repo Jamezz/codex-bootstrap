@@ -1,0 +1,11 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["src/main"],
+      "include": ["**/*.java"],
+      "exclude": ["**/generated/**"]
+    }
+  ]
+}
