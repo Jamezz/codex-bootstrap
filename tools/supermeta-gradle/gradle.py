@@ -12,15 +12,33 @@ import sys
 import time
 from pathlib import Path
 
+TASK_TOOL_DIR = Path(__file__).resolve().parents[1] / "supermeta-task"
+if TASK_TOOL_DIR.is_dir():
+    sys.path.insert(0, str(TASK_TOOL_DIR))
+
+from task import command_matches
+from task import kill_matching_processes
+from task import print_matching_processes
+from task import print_recent_logs as print_task_recent_logs
+
 
 DEFAULT_COLD_MAX_WORKERS = "2"
+GRADLE_PROCESS_MATCHES = (
+    "supermeta-gradle/gradle.py",
+    "gradle-launcher",
+    "gradle.daemon",
+    "/gradlew",
+    " gradlew",
+)
 
 
 def main() -> int:
     args = parse_args()
     project_dir = args.project.resolve()
-    gradle_args = normalize_gradle_args(args.gradle_args)
+    if args.diagnostics_command:
+        return run_diagnostics_command(args, project_dir)
 
+    gradle_args = normalize_gradle_args(args.gradle_args)
     if not gradle_args:
         print("supermeta-gradle: no Gradle arguments supplied", file=sys.stderr)
         return 2
@@ -94,8 +112,57 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Do not serialize runs for this project.",
     )
+    parser.add_argument(
+        "--ps",
+        action="store_const",
+        const="ps",
+        dest="diagnostics_command",
+        help="List likely Gradle/Java processes for stuck-build diagnostics.",
+    )
+    parser.add_argument(
+        "--logs",
+        action="store_const",
+        const="logs",
+        dest="diagnostics_command",
+        help="List recent Supermeta Gradle harness logs for this project.",
+    )
+    parser.add_argument(
+        "--stop",
+        action="store_const",
+        const="stop",
+        dest="diagnostics_command",
+        help="Ask this project's Gradle daemon to stop.",
+    )
+    parser.add_argument(
+        "--kill",
+        action="store_const",
+        const="kill",
+        dest="diagnostics_command",
+        help="Terminate likely stuck Gradle/Java processes owned by this user.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of recent logs to list with --logs.",
+    )
     parser.add_argument("gradle_args", nargs=argparse.REMAINDER)
     return parser.parse_args()
+
+
+def run_diagnostics_command(args: argparse.Namespace, project_dir: Path) -> int:
+    command = args.diagnostics_command
+    gradle_home = resolve_gradle_home(args.gradle_user_home, project_dir)
+    if command == "ps":
+        return print_processes()
+    if command == "logs":
+        return print_recent_logs(project_dir, args.limit)
+    if command == "stop":
+        return stop_gradle_daemon(project_dir, gradle_home)
+    if command == "kill":
+        return kill_gradle_processes()
+    print(f"supermeta-gradle: unknown diagnostics command: {command}", file=sys.stderr)
+    return 2
 
 
 def normalize_gradle_args(raw_args: list[str]) -> list[str]:
@@ -113,6 +180,47 @@ def resolve_gradle_home(configured_home: Path | None, project_dir: Path) -> Path
         return Path(env_home).expanduser().resolve()
 
     return Path("/tmp") / "supermeta-gradle" / "gradle-user-home"
+
+
+def print_processes() -> int:
+    return print_matching_processes(GRADLE_PROCESS_MATCHES, "likely Gradle/Java processes", True)
+
+
+def print_recent_logs(project_dir: Path, limit: int) -> int:
+    log_dir = project_dir / ".gradle" / "supermeta-gradle" / "logs"
+    return print_task_recent_logs(log_dir, limit)
+
+
+def stop_gradle_daemon(project_dir: Path, gradle_home: Path) -> int:
+    wrapper = project_dir / "gradlew"
+    if not wrapper.is_file():
+        print(f"supermeta-gradle: missing Gradle wrapper at {wrapper}", file=sys.stderr)
+        return 2
+
+    command = [str(wrapper)] if os.access(wrapper, os.X_OK) else ["sh", str(wrapper)]
+    command.append("--stop")
+    env = os.environ.copy()
+    env["GRADLE_USER_HOME"] = str(gradle_home)
+    print(f"supermeta-gradle: stopping Gradle daemon with {shlex.join(command)}")
+    result = subprocess.run(
+        command,
+        cwd=project_dir,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    print(result.stdout, end="")
+    return result.returncode
+
+
+def kill_gradle_processes() -> int:
+    return kill_matching_processes(GRADLE_PROCESS_MATCHES, "likely Gradle/Java processes")
+
+
+def is_gradle_process(command: str) -> bool:
+    return command_matches(command, GRADLE_PROCESS_MATCHES)
 
 
 def build_command(

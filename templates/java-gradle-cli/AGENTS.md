@@ -9,6 +9,11 @@ This is a copyable starter, not a long-lived framework.
 - Java lint from repo root: `./scripts/agent-gradle templates/java-gradle-cli checkstyleMain checkstyleTest`
 - Run from repo root: `./scripts/agent-gradle templates/java-gradle-cli run`
 - Run with app args from repo root: `./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"`
+- Inspect generic task processes: `./scripts/agent-task ps --match gradle`
+- List generic task logs: `./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs`
+- Inspect stuck Gradle processes: `./scripts/agent-gradle templates/java-gradle-cli --ps`
+- List harness logs: `./scripts/agent-gradle templates/java-gradle-cli --logs`
+- Stop scoped Gradle daemon: `./scripts/agent-gradle templates/java-gradle-cli --stop`
 - If already inside this template: `../../scripts/agent-gradle . test`
 
 ## Rules

@@ -64,6 +64,16 @@ Agent-safe runs from the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"
 ```
 
+Stuck-build diagnostics from the repository root:
+
+```bash
+./scripts/agent-task ps --match gradle
+./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs
+./scripts/agent-gradle templates/java-gradle-cli --ps
+./scripts/agent-gradle templates/java-gradle-cli --logs
+./scripts/agent-gradle templates/java-gradle-cli --stop
+```
+
 Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs under `.gradle/supermeta-gradle/logs/`, and warm Gradle performance by default.
 
 For parallel Gradle execution inside one build:

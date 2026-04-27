@@ -54,7 +54,13 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(("name", "package"), manifest.required_inputs)
         self.assertIn("./scripts/agent-gradle . check", manifest.verification_commands)
         self.assertEqual(
-            ["scripts/agent-gradle", "tools/supermeta-gradle", "tools/supermeta-rules"],
+            [
+                "scripts/agent-gradle",
+                "scripts/agent-task",
+                "tools/supermeta-gradle",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+            ],
             [path.source for path in manifest.support_paths],
         )
 
@@ -93,7 +99,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertFalse((checkout / "bootstrap").exists())
             self.assertFalse((checkout / "tools" / "bootstrap").exists())
             self.assertTrue((checkout / "scripts" / "agent-gradle").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
             remotes = run_checked(["git", "remote"], cwd=checkout).stdout.strip()
@@ -137,14 +145,29 @@ class BootstrapSmokeTest(unittest.TestCase):
             agents = read_text(checkout / "AGENTS.md")
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/agent-gradle . check", readme)
+            self.assertIn("./scripts/agent-task ps --match gradle", readme)
+            self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", readme)
             self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
             self.assertIn("update `application.mainClass` in `build.gradle.kts`", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
+            self.assertIn("./scripts/agent-task ps --match gradle", agents)
+            self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", agents)
+            self.assertIn("./scripts/agent-gradle . --ps", agents)
+            self.assertIn("./scripts/agent-gradle . --logs", agents)
+            self.assertIn("./scripts/agent-gradle . --stop", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
+            run_checked(
+                ["./scripts/agent-task", "logs", ".gradle/supermeta-gradle/logs"],
+                cwd=checkout,
+                timeout=120,
+            )
+            run_checked(["./scripts/agent-task", "ps", "--match", "gradle"], cwd=checkout, timeout=120)
+            run_checked(["./scripts/agent-gradle", ".", "--logs"], cwd=checkout, timeout=120)
+            run_checked(["./scripts/agent-gradle", ".", "--ps"], cwd=checkout, timeout=120)
             run_checked(
                 [
                     "python3",

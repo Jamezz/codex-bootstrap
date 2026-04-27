@@ -87,3 +87,18 @@ Verify the first runnable template in catalog form with:
 The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
 
 For parallel Gradle execution inside one build, pass `--parallel --max-workers=<n>` to the Gradle args or set `SUPERMETA_GRADLE_PARALLEL=1` with `SUPERMETA_GRADLE_MAX_WORKERS=<n>`.
+
+Generated projects can also carry a general stuck-task helper for process and log inspection:
+
+```bash
+./scripts/agent-task ps --match gradle
+./scripts/agent-task logs .gradle/supermeta-gradle/logs
+```
+
+The Gradle harness exposes shorter Gradle-specific recovery commands on top of that helper:
+
+```bash
+./scripts/agent-gradle templates/java-gradle-cli --ps
+./scripts/agent-gradle templates/java-gradle-cli --logs
+./scripts/agent-gradle templates/java-gradle-cli --stop
+```

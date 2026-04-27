@@ -78,6 +78,17 @@ class BuildCommandTest(unittest.TestCase):
         )
 
 
+class DiagnosticsTest(unittest.TestCase):
+    def test_matches_gradle_processes(self) -> None:
+        self.assertTrue(gradle.is_gradle_process("/tmp/project/gradlew check"))
+        self.assertTrue(gradle.is_gradle_process("java -classpath gradle-launcher-9.2.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon"))
+        self.assertTrue(gradle.is_gradle_process("python3 tools/supermeta-gradle/gradle.py --project . -- check"))
+
+    def test_ignores_unrelated_java_processes(self) -> None:
+        self.assertFalse(gradle.is_gradle_process("java -jar app.jar"))
+        self.assertFalse(gradle.is_gradle_process("python3 scripts/tool.py"))
+
+
 class patched_env:
     def __init__(self, **values: str) -> None:
         self.values = values

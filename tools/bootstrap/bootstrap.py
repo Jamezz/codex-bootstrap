@@ -472,6 +472,14 @@ Run the full verification lifecycle:
 ./scripts/agent-gradle . check
 ```
 
+Inspect stuck task state:
+
+```bash
+./scripts/agent-task ps --match gradle
+./scripts/agent-task logs .gradle/supermeta-gradle/logs
+./scripts/agent-gradle . --stop
+```
+
 ## Customization
 
 - Change the Java baseline in `gradle.properties`.
@@ -515,6 +523,11 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Test: `./scripts/agent-gradle . test`
 - Run: `./scripts/agent-gradle . run`
 - Run with app args: `./scripts/agent-gradle . run --args="example"`
+- Inspect generic task processes: `./scripts/agent-task ps --match gradle`
+- List generic task logs: `./scripts/agent-task logs .gradle/supermeta-gradle/logs`
+- Inspect stuck Gradle processes: `./scripts/agent-gradle . --ps`
+- List harness logs: `./scripts/agent-gradle . --logs`
+- Stop scoped Gradle daemon: `./scripts/agent-gradle . --stop`
 - If debugging raw Gradle behavior only: `./gradlew check`
 
 ## Rules

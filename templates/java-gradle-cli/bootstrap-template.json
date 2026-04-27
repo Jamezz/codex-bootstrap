@@ -13,8 +13,16 @@
       "destination": "scripts/agent-gradle"
     },
     {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
       "source": "tools/supermeta-gradle",
       "destination": "tools/supermeta-gradle"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
     },
     {
       "source": "tools/supermeta-rules",

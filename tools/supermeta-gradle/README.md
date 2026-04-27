@@ -28,6 +28,26 @@ Direct invocation:
 python3 tools/supermeta-gradle/gradle.py --project templates/java-gradle-cli -- test
 ```
 
+## Stuck Build Diagnostics
+
+These helpers wrap the shared `agent-task` process/log diagnostics with Gradle defaults:
+
+```bash
+./scripts/agent-task ps --match gradle
+./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs
+./scripts/agent-gradle templates/java-gradle-cli --ps
+./scripts/agent-gradle templates/java-gradle-cli --logs
+./scripts/agent-gradle templates/java-gradle-cli --stop
+./scripts/agent-gradle templates/java-gradle-cli --kill
+```
+
+- `--ps` lists likely Gradle/Java build processes.
+- `--logs` lists recent harness logs for the project.
+- `--stop` asks the scoped Gradle daemon to stop with the project wrapper.
+- `--kill` sends `SIGTERM` to likely stuck Gradle processes owned by the current user.
+
+Prefer `--stop` before `--kill` unless a process is clearly wedged.
+
 Set `SUPERMETA_GRADLE_USER_HOME` to override the cache root. Pass `--no-default-flags` before `--` when you are intentionally debugging raw Gradle behavior.
 
 For parallel Gradle execution inside one build, either pass Gradle flags directly:
