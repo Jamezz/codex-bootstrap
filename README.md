@@ -6,10 +6,13 @@ The repo currently ships:
 
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests and a deterministic verification path.
+- `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, and a deterministic verification path.
+- `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, and a deterministic verification path.
 - `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
+- `tools/supermeta-task/`: a language-agnostic stuck-task diagnostic helper copied into generated projects.
 
 ## Quick Start
 
@@ -20,12 +23,24 @@ cd my-service
 ./scripts/agent-gradle . check
 ```
 
+Other starter variants:
+
+```bash
+./bootstrap --template python-uv-cli --name my-service
+./scripts/check
+
+./bootstrap --template typescript-bun-cli --name my-service
+./scripts/check
+```
+
 The launcher is intentionally destructive. It stages the selected template, rewrites the project identity, removes catalog-only files, deletes the cloned Git metadata, runs `git init`, and leaves the generated project uncommitted with no remote.
 
 Use `--dry-run` to inspect the plan first:
 
 ```bash
 ./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice --dry-run
+./bootstrap --template python-uv-cli --name my-service --dry-run
+./bootstrap --template typescript-bun-cli --name my-service --dry-run
 ```
 
 Use `--yes` for non-interactive agent runs.
@@ -45,6 +60,7 @@ Runnable templates should also include a `bootstrap-template.json` manifest desc
 General source rules:
 
 - keep non-generated product source files at 1000 lines or less;
+- exception: `tools/bootstrap/bootstrap.py` may exceed 1000 lines because the destructive launcher, template rewrite dispatch, and generated-project docs are intentionally kept in one audited control surface;
 - keep Java package directories to 8 source files or fewer before nesting into subpackages;
 - route language-specific lint through `tools/supermeta-rules/` project callouts;
 - use wildcard imports where feasible, especially when they reduce import churn without hiding meaning.
@@ -59,12 +75,16 @@ environments/
   supermeta/
 scripts/
   agent-gradle
+  agent-task
 templates/
   java-gradle-cli/
+  python-uv-cli/
+  typescript-bun-cli/
 tools/
   bootstrap/
   supermeta-gradle/
   supermeta-rules/
+  supermeta-task/
 ```
 
 Use `environments/` for meta or workflow environments. Use `templates/` for copyable project starters.
@@ -83,6 +103,24 @@ Verify the first runnable template in catalog form with:
 ./scripts/agent-gradle templates/java-gradle-cli test
 ./scripts/agent-gradle templates/java-gradle-cli run
 ```
+
+Verify the Python starter in catalog form with:
+
+```bash
+cd templates/python-uv-cli
+UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache ./scripts/check
+UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache uv run python-uv-cli
+```
+
+Verify the TypeScript starter in catalog form with:
+
+```bash
+cd templates/typescript-bun-cli
+./scripts/check
+bun run src/main.ts
+```
+
+The TypeScript starter requires `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
 
 The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
 

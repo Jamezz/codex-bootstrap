@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import keyword
 import re
 import shutil
 import subprocess
@@ -17,6 +18,11 @@ from typing import Any
 
 DEFAULT_TEMPLATE = "java-gradle-cli"
 TEMPLATE_MANIFEST = "bootstrap-template.json"
+SUPPORTED_TEMPLATE_TYPES = {
+    "java-gradle-cli",
+    "python-uv-cli",
+    "typescript-bun-cli",
+}
 CATALOG_TOP_LEVEL_PATHS = {
     ".git",
     ".gitattributes",
@@ -31,28 +37,56 @@ CATALOG_TOP_LEVEL_PATHS = {
 }
 IGNORED_TOP_LEVEL_PATHS = {
     ".DS_Store",
+    ".bun",
     ".gradle",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tsbuildinfo",
+    ".venv",
     "__pycache__",
     "build",
+    "coverage",
+    "dist",
+    "node_modules",
 }
 IGNORED_COPY_NAMES = {
+    ".bun",
     ".gradle",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tsbuildinfo",
+    ".venv",
     "__pycache__",
     "build",
+    "coverage",
+    "dist",
+    "node_modules",
     TEMPLATE_MANIFEST,
 }
 TEXT_SUFFIXES = {
     ".bat",
+    ".cjs",
+    ".cts",
     ".editorconfig",
     ".gitignore",
     ".java",
+    ".js",
     ".json",
+    ".jsonc",
     ".kts",
+    ".lock",
     ".md",
+    ".mjs",
+    ".mts",
     ".properties",
     ".py",
     ".sh",
     ".txt",
+    ".toml",
+    ".ts",
+    ".tsx",
     ".xml",
     ".yaml",
     ".yml",
@@ -174,7 +208,7 @@ class TemplateManifest:
 class BootstrapConfig:
     template_id: str
     project_name: str
-    package_name: str
+    package_name: str | None
     yes: bool
     dry_run: bool
     force: bool
@@ -240,14 +274,22 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def build_config(args: argparse.Namespace, manifest: TemplateManifest) -> BootstrapConfig:
-    if manifest.template_type != "java-gradle-cli":
+    if manifest.template_type not in SUPPORTED_TEMPLATE_TYPES:
         raise UsageError(f"unsupported template type '{manifest.template_type}'")
 
     project_name = args.name or prompt_required("Project slug", "sample-app")
-    package_name = args.package_name or prompt_required("Java package", "com.example.sample")
-
     validate_project_name(project_name)
-    validate_java_package(package_name)
+
+    package_name = None
+    if manifest.template_type == "java-gradle-cli":
+        package_name = args.package_name or prompt_required("Java package", "com.example.sample")
+        validate_java_package(package_name)
+    elif manifest.template_type == "python-uv-cli":
+        python_module_from_slug(project_name)
+        if args.package_name:
+            raise UsageError("--package is only supported by Java templates")
+    elif args.package_name:
+        raise UsageError("--package is only supported by Java templates")
 
     return BootstrapConfig(
         template_id=manifest.template_id,
@@ -331,7 +373,14 @@ def execute_plan(plan: BootstrapPlan) -> None:
 def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     copy_template(plan.template_dir, staged_root)
     copy_support_paths(plan, staged_root)
-    rewrite_java_template(plan, staged_root)
+    rewriter = {
+        "java-gradle-cli": rewrite_java_template,
+        "python-uv-cli": rewrite_python_template,
+        "typescript-bun-cli": rewrite_typescript_template,
+    }.get(plan.manifest.template_type)
+    if rewriter is None:
+        raise UsageError(f"unsupported template type '{plan.manifest.template_type}'")
+    rewriter(plan, staged_root)
 
 
 def copy_template(template_dir: Path, staged_root: Path) -> None:
@@ -361,19 +410,50 @@ def ignore_runtime_names(_path: str, names: list[str]) -> list[str]:
 
 
 def rewrite_java_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    if plan.config.package_name is None:
+        raise UsageError("Java template requires --package")
+
     move_java_package(staged_root, "com.example", plan.config.package_name)
 
-    replacements = {
+    replacements = common_replacements(plan) | {
         "java-gradle-cli": plan.config.project_name,
         "Java Gradle CLI Template": plan.project_title,
         "com.example": plan.config.package_name,
         "Hello from java-gradle-cli!": f"Hello from {plan.config.project_name}!",
-        "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
-        "../../scripts/agent-gradle": "./scripts/agent-gradle",
-        "../../scripts/agent-gradle .": "./scripts/agent-gradle .",
     }
     rewrite_text_files(staged_root, replacements)
     write_generated_docs(plan, staged_root)
+
+
+def rewrite_python_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    module_name = python_module_from_slug(plan.config.project_name)
+    move_python_module(staged_root, "python_uv_cli", module_name)
+
+    replacements = common_replacements(plan) | {
+        "python-uv-cli": plan.config.project_name,
+        "Python uv CLI Template": plan.project_title,
+        "python_uv_cli": module_name,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
+def rewrite_typescript_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    replacements = common_replacements(plan) | {
+        "typescript-bun-cli": plan.config.project_name,
+        "TypeScript Bun CLI Template": plan.project_title,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
+def common_replacements(plan: BootstrapPlan) -> dict[str, str]:
+    return {
+        "../../scripts/agent-gradle .": "./scripts/agent-gradle .",
+        "../../scripts/agent-gradle": "./scripts/agent-gradle",
+        "../../scripts/agent-task": "./scripts/agent-task",
+        "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
+    }
 
 
 def move_java_package(staged_root: Path, old_package: str, new_package: str) -> None:
@@ -393,6 +473,17 @@ def move_java_package(staged_root: Path, old_package: str, new_package: str) -> 
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source), str(destination))
         prune_empty_parents(source.parent, java_root)
+
+
+def move_python_module(staged_root: Path, old_module: str, new_module: str) -> None:
+    source = staged_root / "src" / old_module
+    if not source.exists() or old_module == new_module:
+        return
+
+    destination = staged_root / "src" / new_module
+    if destination.exists():
+        raise UsageError(f"destination Python module already exists: {destination}")
+    shutil.move(str(source), str(destination))
 
 
 def prune_empty_parents(path: Path, stop_at: Path) -> None:
@@ -433,7 +524,17 @@ def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
 
 
 def generated_readme(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "python-uv-cli":
+        return generated_python_readme(plan)
+    if plan.manifest.template_type == "typescript-bun-cli":
+        return generated_typescript_readme(plan)
+    return generated_java_readme(plan)
+
+
+def generated_java_readme(plan: BootstrapPlan) -> str:
     title = plan.project_title
+    if plan.config.package_name is None:
+        raise UsageError("Java template requires --package")
     package_name = plan.config.package_name
     return f"""# {title}
 
@@ -512,6 +613,14 @@ Agents should start by reading `AGENTS.md`, then run:
 
 
 def generated_agents(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "python-uv-cli":
+        return generated_python_agents(plan)
+    if plan.manifest.template_type == "typescript-bun-cli":
+        return generated_typescript_agents(plan)
+    return generated_java_agents(plan)
+
+
+def generated_java_agents(plan: BootstrapPlan) -> str:
     title = plan.project_title
     return f"""# {title} Agent Notes
 
@@ -543,6 +652,202 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the project is runnable without a global Gradle install.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
+"""
+
+
+def generated_python_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    module_name = python_module_from_slug(plan.config.project_name)
+    return f"""# {title}
+
+{title} is a compact Python uv command-line project with tests, type checking, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- `uv` on PATH;
+- network access on first run so uv can resolve and download development dependencies.
+
+## Usage
+
+Install the locked project environment:
+
+```bash
+uv sync --locked
+```
+
+Run the full verification lifecycle:
+
+```bash
+./scripts/check
+```
+
+Run tests directly:
+
+```bash
+uv run pytest
+```
+
+Run the app through the console script:
+
+```bash
+uv run {plan.config.project_name}
+uv run {plan.config.project_name} "Ada Lovelace"
+```
+
+Run the app through the module entrypoint:
+
+```bash
+uv run python -m {module_name}
+uv run python -m {module_name} "Ada Lovelace"
+```
+
+## Customization
+
+- Product source lives under `src/{module_name}`.
+- Test source lives under `tests/`.
+- CLI behavior starts in `src/{module_name}/cli.py`.
+- The console script is declared in `pyproject.toml`.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
+- Keep Python lint and formatting in Ruff, type checking in mypy, and behavior checks in pytest.
+
+## First Useful Edit
+
+Extend the CLI behavior in `cli.py`, update `tests/test_cli.py` first or in the same change, then run:
+
+```bash
+./scripts/check
+uv run {plan.config.project_name} example
+```
+
+"""
+
+
+def generated_python_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    module_name = python_module_from_slug(plan.config.project_name)
+    return f"""# {title} Agent Notes
+
+This is a standalone Python uv CLI project. Keep it compact, typed, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Install locked environment: `uv sync --locked`
+- Verify: `./scripts/check`
+- Test: `uv run pytest`
+- Format check: `uv run ruff format --check src tests`
+- Lint: `uv run ruff check src tests`
+- Type check: `uv run mypy src tests`
+- Run: `uv run {plan.config.project_name}`
+- Run with app args: `uv run {plan.config.project_name} "example"`
+- Run module entrypoint: `uv run python -m {module_name} "example"`
+- Inspect task processes: `./scripts/agent-task ps --match uv`
+- Inspect pytest processes: `./scripts/agent-task ps --match pytest`
+
+## Rules
+
+- Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
+- Keep CLI behavior in `src/{module_name}/cli.py` and entrypoint glue in `src/{module_name}/__main__.py`.
+- Keep product source files under `src/` at 1000 lines or less.
+- Preserve `py.typed` so the package advertises inline types.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Route Python lint through Ruff, type checking through mypy, and behavior checks through pytest.
+- Use `./scripts/check` for agent verification unless debugging one tool directly.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
+"""
+
+
+def generated_typescript_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title}
+
+{title} is a compact TypeScript Bun command-line project with tests, type checking, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- `bun` on PATH;
+- network access on first run so Bun can install development dependencies.
+
+## Usage
+
+Install locked dependencies:
+
+```bash
+bun install --frozen-lockfile
+```
+
+Run the full verification lifecycle:
+
+```bash
+./scripts/check
+```
+
+Run tests directly:
+
+```bash
+bun test
+```
+
+Run the app:
+
+```bash
+bun run src/main.ts
+bun run src/main.ts "Ada Lovelace"
+```
+
+## Customization
+
+- Product source lives under `src/`.
+- Test source lives under `tests/`.
+- CLI behavior starts in `src/cli.ts`.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
+- Keep formatting and linting in Biome, type checking in `tsc --noEmit`, and behavior checks in `bun test`.
+- Keep TypeScript and Biome package scripts invoked through Bun so the project does not depend on a separate Node install.
+
+## First Useful Edit
+
+Extend the CLI behavior in `src/cli.ts`, update `tests/cli.test.ts` first or in the same change, then run:
+
+```bash
+./scripts/check
+bun run src/main.ts example
+```
+
+"""
+
+
+def generated_typescript_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title} Agent Notes
+
+This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Install locked dependencies: `bun install --frozen-lockfile`
+- Verify: `./scripts/check`
+- Type check: `bun run typecheck`
+- Lint and format check: `bun run lint`
+- Test: `bun test`
+- Run: `bun run src/main.ts`
+- Run with app args: `bun run src/main.ts "example"`
+- Inspect Bun processes: `./scripts/agent-task ps --match bun`
+- Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
+
+## Rules
+
+- Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
+- Keep runtime and dev dependencies in `package.json`, with the resolved lock in `bun.lock`.
+- Keep CLI behavior in `src/cli.ts` and entrypoint glue in `src/main.ts`.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.
+- Keep the `typecheck`, `lint`, and `format` package scripts Bun-invoked so a stale global Node install cannot break verification.
+- Use `./scripts/check` for agent verification unless debugging one tool directly.
 - Extend the sample CLI into real behavior early, and keep tests updated with that change.
 - Prefer clean new-project conventions over compatibility with starter mistakes.
 """
@@ -584,7 +889,10 @@ def print_plan(plan: BootstrapPlan) -> None:
     print("Bootstrap plan:")
     print(f"  template: {plan.manifest.template_id} ({plan.manifest.display_name})")
     print(f"  project: {plan.config.project_name}")
-    print(f"  package: {plan.config.package_name}")
+    if plan.config.package_name is not None:
+        print(f"  package: {plan.config.package_name}")
+    if plan.manifest.template_type == "python-uv-cli":
+        print(f"  python module: {python_module_from_slug(plan.config.project_name)}")
     print(f"  root: {plan.repo_root}")
     print("  action: replace this checkout with the generated project")
     print("  git: delete existing Git metadata and run git init")
@@ -622,6 +930,14 @@ def validate_java_package(value: str) -> None:
 def java_package_to_path(package_name: str) -> Path:
     validate_java_package(package_name)
     return Path(*package_name.split("."))
+
+
+def python_module_from_slug(slug: str) -> str:
+    validate_project_name(slug)
+    module_name = slug.replace("-", "_")
+    if keyword.iskeyword(module_name):
+        raise UsageError(f"project name would create a Python keyword module: '{module_name}'")
+    return module_name
 
 
 def title_from_slug(slug: str) -> str:

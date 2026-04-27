@@ -1,0 +1,22 @@
+{
+  "id": "typescript-bun-cli",
+  "displayName": "TypeScript Bun CLI",
+  "description": "A compact TypeScript command-line project with Bun, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
+  "type": "typescript-bun-cli",
+  "requiredInputs": ["name"],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    }
+  ],
+  "verificationCommands": ["./scripts/check", "bun run src/main.ts"]
+}

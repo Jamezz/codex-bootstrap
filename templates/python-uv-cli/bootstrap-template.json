@@ -1,0 +1,27 @@
+{
+  "id": "python-uv-cli",
+  "displayName": "Python uv CLI",
+  "description": "A compact Python command-line project with uv, pytest, Ruff, mypy, agent notes, and a deterministic verification path.",
+  "type": "python-uv-cli",
+  "requiredInputs": [
+    "name"
+  ],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    }
+  ],
+  "verificationCommands": [
+    "./scripts/check",
+    "uv run python-uv-cli"
+  ]
+}

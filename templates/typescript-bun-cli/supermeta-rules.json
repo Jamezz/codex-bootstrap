@@ -1,0 +1,37 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["src"],
+      "include": ["**/*.ts"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "project_callouts": [
+    {
+      "name": "typescript-typecheck",
+      "language": "typescript",
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts"],
+      "exclude": ["**/generated/**"],
+      "command": ["bun", "run", "typecheck"]
+    },
+    {
+      "name": "typescript-lint",
+      "language": "typescript",
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts"],
+      "exclude": ["**/generated/**"],
+      "command": ["bun", "run", "lint"]
+    },
+    {
+      "name": "typescript-tests",
+      "language": "typescript",
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts"],
+      "exclude": ["**/generated/**"],
+      "command": ["bun", "test"]
+    }
+  ]
+}

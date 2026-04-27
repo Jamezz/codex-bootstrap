@@ -1,0 +1,45 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["src"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "project_callouts": [
+    {
+      "name": "python-format",
+      "language": "python",
+      "paths": ["src", "tests"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"],
+      "command": ["uv", "run", "ruff", "format", "--check", "src", "tests"]
+    },
+    {
+      "name": "python-lint",
+      "language": "python",
+      "paths": ["src", "tests"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"],
+      "command": ["uv", "run", "ruff", "check", "src", "tests"]
+    },
+    {
+      "name": "python-typecheck",
+      "language": "python",
+      "paths": ["src", "tests"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"],
+      "command": ["uv", "run", "mypy", "src", "tests"]
+    },
+    {
+      "name": "python-tests",
+      "language": "python",
+      "paths": ["src", "tests"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"],
+      "command": ["uv", "run", "pytest"]
+    }
+  ]
+}

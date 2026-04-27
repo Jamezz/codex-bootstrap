@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from tools.bootstrap.bootstrap import (  # noqa: E402
     UsageError,
     assert_safe_clear_path,
     java_package_to_path,
+    python_module_from_slug,
     title_from_slug,
     validate_java_package,
     validate_project_name,
@@ -44,6 +46,14 @@ class ValidationTest(unittest.TestCase):
                 with self.assertRaises(UsageError):
                     validate_java_package(value)
 
+    def test_derives_python_module_from_project_name(self) -> None:
+        self.assertEqual("sample_app", python_module_from_slug("sample-app"))
+        self.assertEqual("a1_service2", python_module_from_slug("a1-service2"))
+
+    def test_rejects_python_keyword_module_names(self) -> None:
+        with self.assertRaises(UsageError):
+            python_module_from_slug("class")
+
 
 class ManifestTest(unittest.TestCase):
     def test_loads_java_template_manifest(self) -> None:
@@ -61,6 +71,32 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
             ],
+            [path.source for path in manifest.support_paths],
+        )
+
+    def test_loads_python_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "python-uv-cli")
+
+        self.assertEqual("python-uv-cli", manifest.template_id)
+        self.assertEqual("python-uv-cli", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("uv run python-uv-cli", manifest.verification_commands)
+        self.assertEqual(
+            ["scripts/agent-task", "tools/supermeta-task", "tools/supermeta-rules"],
+            [path.source for path in manifest.support_paths],
+        )
+
+    def test_loads_typescript_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
+
+        self.assertEqual("typescript-bun-cli", manifest.template_id)
+        self.assertEqual("typescript-bun-cli", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("bun run src/main.ts", manifest.verification_commands)
+        self.assertEqual(
+            ["scripts/agent-task", "tools/supermeta-task", "tools/supermeta-rules"],
             [path.source for path in manifest.support_paths],
         )
 
@@ -192,6 +228,139 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             self.assertIn("Hello, Ada!", example_run.stdout)
 
+    @unittest.skipIf(shutil.which("uv") is None, "uv is required for Python template smoke test")
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_python_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-python-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "python-uv-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+
+            self.assertIn('name = "sample-app"', read_text(checkout / "pyproject.toml"))
+            self.assertIn('sample-app = "sample_app.cli:main"', read_text(checkout / "pyproject.toml"))
+            self.assertIn('name = "sample-app"', read_text(checkout / "uv.lock"))
+            self.assertTrue((checkout / "src" / "sample_app" / "cli.py").is_file())
+            self.assertTrue((checkout / "src" / "sample_app" / "__main__.py").is_file())
+            self.assertTrue((checkout / "src" / "sample_app" / "py.typed").is_file())
+            self.assertFalse((checkout / "src" / "python_uv_cli").exists())
+
+            app_source = read_text(checkout / "src" / "sample_app" / "cli.py")
+            test_source = read_text(checkout / "tests" / "test_cli.py")
+            self.assertIn('DEFAULT_NAME = "sample-app"', app_source)
+            self.assertIn("Usage: sample-app [name]", app_source)
+            self.assertIn("from sample_app.cli import", test_source)
+
+            readme = read_text(checkout / "README.md")
+            agents = read_text(checkout / "AGENTS.md")
+            self.assertIn("# Sample App", readme)
+            self.assertIn("uv sync --locked", readme)
+            self.assertIn("./scripts/check", readme)
+            self.assertIn("uv run sample-app", readme)
+            self.assertIn("uv run python -m sample_app", readme)
+            self.assertIn("# Sample App Agent Notes", agents)
+            self.assertIn("uv run sample-app", agents)
+            self.assertNotIn("codex-bootstrap", readme.lower())
+            self.assertNotIn("codex-bootstrap", agents.lower())
+
+            env = {"UV_CACHE_DIR": "/tmp/codex-bootstrap-uv-cache"}
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360, env=env)
+            generated_run = run_checked(["uv", "run", "sample-app"], cwd=checkout, timeout=360, env=env)
+            self.assertIn("Hello from sample-app!", generated_run.stdout)
+
+            write_example_python_cli(checkout)
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360, env=env)
+            example_run = run_checked(
+                ["uv", "run", "sample-app", "Ada"],
+                cwd=checkout,
+                timeout=360,
+                env=env,
+            )
+            self.assertIn("Hello, Ada!", example_run.stdout)
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_typescript_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-typescript-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "typescript-bun-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+
+            package_json = read_text(checkout / "package.json")
+            self.assertIn('"name": "sample-app"', package_json)
+            self.assertIn("bun node_modules/typescript/lib/tsc.js --noEmit", package_json)
+            self.assertIn("bun node_modules/@biomejs/biome/bin/biome check .", package_json)
+            self.assertIn('"name": "sample-app"', read_text(checkout / "bun.lock"))
+            self.assertTrue((checkout / "src" / "cli.ts").is_file())
+            self.assertTrue((checkout / "src" / "main.ts").is_file())
+
+            app_source = read_text(checkout / "src" / "cli.ts")
+            test_source = read_text(checkout / "tests" / "cli.test.ts")
+            self.assertIn('DEFAULT_NAME = "sample-app"', app_source)
+            self.assertIn("Usage: sample-app [name]", app_source)
+            self.assertIn('stdout: "Hello from sample-app!"', test_source)
+
+            readme = read_text(checkout / "README.md")
+            agents = read_text(checkout / "AGENTS.md")
+            self.assertIn("# Sample App", readme)
+            self.assertIn("bun install --frozen-lockfile", readme)
+            self.assertIn("./scripts/check", readme)
+            self.assertIn("bun run src/main.ts", readme)
+            self.assertIn("# Sample App Agent Notes", agents)
+            self.assertIn("Bun is the only package-manager/runtime contract", agents)
+            self.assertNotIn("codex-bootstrap", readme.lower())
+            self.assertNotIn("codex-bootstrap", agents.lower())
+
+            if shutil.which("bun") is None:
+                self.skipTest("bun is required for TypeScript check/run verification")
+
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            generated_run = run_checked(["bun", "run", "src/main.ts"], cwd=checkout, timeout=360)
+            self.assertIn("Hello from sample-app!", generated_run.stdout)
+
+            write_example_typescript_cli(checkout)
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            example_run = run_checked(
+                ["bun", "run", "src/main.ts", "Ada"],
+                cwd=checkout,
+                timeout=360,
+            )
+            self.assertIn("Hello, Ada!", example_run.stdout)
+
 
 def copy_bootstrap_checkout(destination: Path) -> None:
     shutil.copytree(
@@ -199,10 +368,19 @@ def copy_bootstrap_checkout(destination: Path) -> None:
         destination,
         ignore=shutil.ignore_patterns(
             ".git",
+            ".bun",
             ".gradle",
+            ".mypy_cache",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".venv",
             "__pycache__",
             "build",
+            "coverage",
+            "dist",
+            "node_modules",
             "*.pyc",
+            "*.tsbuildinfo",
         ),
     )
 
@@ -268,10 +446,153 @@ final class AppTest {
     )
 
 
-def run_checked(command: list[str], cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def write_example_python_cli(checkout: Path) -> None:
+    app_source = checkout / "src" / "sample_app" / "cli.py"
+    test_source = checkout / "tests" / "test_cli.py"
+
+    app_source.write_text(
+        """from __future__ import annotations
+
+import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TextIO
+
+USAGE = "Usage: sample-app <name>"
+
+
+@dataclass(frozen=True)
+class CliResult:
+    exit_code: int
+    stdout: str
+    stderr: str
+
+
+def render(args: Sequence[str]) -> CliResult:
+    name = " ".join(args).strip()
+    if not name:
+        return CliResult(2, "", USAGE)
+    return CliResult(0, f"Hello, {name}!", "")
+
+
+def write_result(result: CliResult, stdout: TextIO, stderr: TextIO) -> None:
+    if result.stdout:
+        print(result.stdout, file=stdout)
+    if result.stderr:
+        print(result.stderr, file=stderr)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else list(argv)
+    result = render(args)
+    write_result(result, sys.stdout, sys.stderr)
+    return result.exit_code
+""",
+        encoding="utf-8",
+    )
+    test_source.write_text(
+        """from sample_app.cli import CliResult, render
+
+
+def test_renders_usage_without_name() -> None:
+    assert render([]) == CliResult(2, "", "Usage: sample-app <name>")
+
+
+def test_greets_provided_name() -> None:
+    assert render(["Ada", "Lovelace"]) == CliResult(0, "Hello, Ada Lovelace!", "")
+""",
+        encoding="utf-8",
+    )
+
+
+def write_example_typescript_cli(checkout: Path) -> None:
+    app_source = checkout / "src" / "cli.ts"
+    test_source = checkout / "tests" / "cli.test.ts"
+
+    app_source.write_text(
+        """export interface CliResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export const USAGE = "Usage: sample-app <name>";
+
+export function render(args: readonly string[]): CliResult {
+  const name = args.join(" ").trim();
+  if (name.length === 0) {
+    return {
+      exitCode: 2,
+      stdout: "",
+      stderr: USAGE,
+    };
+  }
+  return {
+    exitCode: 0,
+    stdout: `Hello, ${name}!`,
+    stderr: "",
+  };
+}
+""",
+        encoding="utf-8",
+    )
+    test_source.write_text(
+        """import { expect, test } from "bun:test";
+
+import { render } from "../src/cli";
+
+test("renders usage without name", () => {
+  expect(render([])).toEqual({
+    exitCode: 2,
+    stdout: "",
+    stderr: "Usage: sample-app <name>",
+  });
+});
+
+test("greets provided name", () => {
+  expect(render(["Ada", "Lovelace"])).toEqual({
+    exitCode: 0,
+    stdout: "Hello, Ada Lovelace!",
+    stderr: "",
+  });
+});
+""",
+        encoding="utf-8",
+    )
+
+
+def assert_catalog_removed(test_case: unittest.TestCase, checkout: Path) -> None:
+    test_case.assertFalse((checkout / "templates").exists())
+    test_case.assertFalse((checkout / "environments").exists())
+    test_case.assertFalse((checkout / "bootstrap").exists())
+    test_case.assertFalse((checkout / "tools" / "bootstrap").exists())
+
+    remotes = run_checked(["git", "remote"], cwd=checkout).stdout.strip()
+    test_case.assertEqual("", remotes)
+    head = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=checkout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    test_case.assertNotEqual(0, head.returncode)
+
+
+def run_checked(
+    command: list[str],
+    cwd: Path,
+    timeout: int = 120,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    run_env = os.environ.copy()
+    if env is not None:
+        run_env.update(env)
     result = subprocess.run(
         command,
         cwd=cwd,
+        env=run_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

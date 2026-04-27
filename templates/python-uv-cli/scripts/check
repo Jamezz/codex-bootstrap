@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+project_root=$(CDPATH= cd "$script_dir/.." && pwd)
+cd "$project_root"
+
+rules_script=tools/supermeta-rules/check.py
+if [ ! -f "$rules_script" ]; then
+  rules_script=../../tools/supermeta-rules/check.py
+fi
+
+python3 "$rules_script" --config supermeta-rules.json --root . --skip-callouts
+uv run ruff format --check src tests
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest

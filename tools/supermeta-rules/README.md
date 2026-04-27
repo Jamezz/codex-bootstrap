@@ -6,6 +6,8 @@ Run it from the repo root:
 
 ```bash
 python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/supermeta-rules.json --root templates/java-gradle-cli
+python3 tools/supermeta-rules/check.py --config templates/python-uv-cli/supermeta-rules.json --root templates/python-uv-cli
+python3 tools/supermeta-rules/check.py --config templates/typescript-bun-cli/supermeta-rules.json --root templates/typescript-bun-cli
 ```
 
 ## Supported Rules
@@ -60,6 +62,31 @@ Runs project-specific language tooling when matching files exist. Commands run f
       "include": ["**/*.java"],
       "exclude": ["**/generated/**"],
       "command": ["../../scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]
+    }
+  ]
+}
+```
+
+Python and TypeScript templates use the same rule shape for language-specific checks:
+
+```json
+{
+  "project_callouts": [
+    {
+      "name": "python-typecheck",
+      "language": "python",
+      "paths": ["src", "tests"],
+      "include": ["**/*.py"],
+      "exclude": ["**/generated/**"],
+      "command": ["uv", "run", "mypy", "src", "tests"]
+    },
+    {
+      "name": "typescript-typecheck",
+      "language": "typescript",
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts"],
+      "exclude": ["**/generated/**"],
+      "command": ["bun", "run", "typecheck"]
     }
   ]
 }

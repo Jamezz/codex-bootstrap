@@ -6,6 +6,8 @@ From a generated repo:
 
 ```bash
 ./scripts/agent-task ps --match gradle
+./scripts/agent-task ps --match uv
+./scripts/agent-task ps --match bun
 ./scripts/agent-task logs .gradle/supermeta-gradle/logs
 ./scripts/agent-task kill --match gradle
 ```
