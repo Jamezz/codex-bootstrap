@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: scripts/agent-gradle <gradle-project-dir> <gradle-args...>" >&2
+  echo "example: scripts/agent-gradle templates/java-gradle-cli test" >&2
+  exit 2
+fi
+
+project_dir=$1
+shift
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+
+exec python3 "$repo_root/tools/supermeta-gradle/gradle.py" --project "$project_dir" -- "$@"

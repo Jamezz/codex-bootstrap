@@ -16,6 +16,8 @@ The goal is not to preserve every possible option. The goal is to make the good 
 
 `tools/supermeta-rules/check.py` is the shared helper for rules that examples should not reimplement, starting with product source line-count checks.
 
+`tools/supermeta-gradle/gradle.py` is the shared Gradle harness. Gradle templates should document `scripts/agent-gradle` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, and parallel output collisions while still keeping warm Gradle performance by default.
+
 ## Environment Checklist
 
 When adding a new environment or template, include:

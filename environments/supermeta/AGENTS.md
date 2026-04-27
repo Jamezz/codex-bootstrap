@@ -10,4 +10,5 @@ When editing this environment:
 - carry the 1000-line product source limit into new starters;
 - prefer wildcard imports where feasible;
 - route reusable checks through `tools/supermeta-rules/`;
+- route Gradle agent commands through `scripts/agent-gradle`;
 - prefer better new-project defaults over compatibility with older template shapes.

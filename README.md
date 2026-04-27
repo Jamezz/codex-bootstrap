@@ -7,6 +7,7 @@ The repo starts with two pieces:
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests and a deterministic verification path.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
+- `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 
 ## Environment Contract
 
@@ -33,6 +34,7 @@ environments/
 templates/
   java-gradle-cli/
 tools/
+  supermeta-gradle/
   supermeta-rules/
 ```
 
@@ -43,9 +45,8 @@ Use `environments/` for meta or workflow environments. Use `templates/` for copy
 The catalog itself is mostly documentation today. Verify the first runnable template with:
 
 ```bash
-cd templates/java-gradle-cli
-./gradlew test
-./gradlew run
+./scripts/agent-gradle templates/java-gradle-cli test
+./scripts/agent-gradle templates/java-gradle-cli run
 ```
 
-`./gradlew test` is the minimum acceptance gate for the Java template.
+The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under the template build directory. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.

@@ -13,6 +13,7 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Keep non-generated product source files at 1000 lines or less.
 - Use wildcard imports where feasible.
 - Put reusable template checks in `tools/supermeta-rules/` before duplicating them in individual starters.
+- For Gradle examples, route agent verification through `scripts/agent-gradle` instead of raw wrapper calls.
 - Do not add licenses, publishing coordinates, or organization-specific identifiers until they are chosen intentionally.
 
 ## Naming

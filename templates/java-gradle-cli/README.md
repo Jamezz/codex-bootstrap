@@ -5,9 +5,9 @@ This template is a minimal Java command-line application with Gradle, JUnit test
 ## Prerequisites
 
 - a shell environment that can run the Gradle wrapper;
-- network access on first run so Gradle can download dependencies and, if needed, a matching Java toolchain.
+- network access on first run so Gradle can download its distribution and dependencies.
 
-The template defaults to Java 21.
+The template defaults to Java 21 source/API compatibility and uses the installed JDK by default to avoid slow toolchain provisioning during agent runs.
 
 ## Usage
 
@@ -29,6 +29,16 @@ Run the full check lifecycle:
 ./gradlew check
 ```
 
+Agent-safe runs from the repository root:
+
+```bash
+./scripts/agent-gradle templates/java-gradle-cli test
+./scripts/agent-gradle templates/java-gradle-cli check
+./scripts/agent-gradle templates/java-gradle-cli run
+```
+
+Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs, and warm Gradle performance by default.
+
 ## Customizing Java
 
 Change the Java baseline in one place:
@@ -37,7 +47,15 @@ Change the Java baseline in one place:
 javaVersion=21
 ```
 
-That value lives in `gradle.properties` and feeds the Gradle toolchain configuration in `build.gradle.kts`.
+That value lives in `gradle.properties` and feeds `javac --release` in `build.gradle.kts`.
+
+When you need tests to run on an exact matching JDK, opt into Gradle toolchains:
+
+```properties
+useExactJavaToolchain=true
+```
+
+Leave exact toolchains off for normal agent verification unless the runtime JDK version itself is under test.
 
 ## Conventions
 

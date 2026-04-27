@@ -6,11 +6,17 @@ val javaVersion = providers.gradleProperty("javaVersion")
     .map(String::toInt)
     .orElse(21)
 
+val useExactJavaToolchain = providers.gradleProperty("useExactJavaToolchain")
+    .map(String::toBoolean)
+    .orElse(false)
+
 val supermetaRulesScript = layout.projectDirectory.file("../../tools/supermeta-rules/check.py")
 
 java {
-    toolchain {
-        languageVersion = javaVersion.map(JavaLanguageVersion::of)
+    if (useExactJavaToolchain.get()) {
+        toolchain {
+            languageVersion = javaVersion.map(JavaLanguageVersion::of)
+        }
     }
 }
 
@@ -26,6 +32,10 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release = javaVersion
 }
 
 tasks.register<Exec>("verifySupermetaRules") {
