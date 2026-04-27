@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import fcntl
-import hashlib
 import os
 import shlex
 import subprocess
@@ -34,9 +33,8 @@ def main() -> int:
     gradle_home = resolve_gradle_home(args.gradle_user_home, project_dir)
     gradle_home.mkdir(parents=True, exist_ok=True)
 
-    log_dir = project_dir / "build" / "supermeta-gradle"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    run_id = time.strftime("%Y%m%d-%H%M%S")
+    log_dir = project_dir / ".gradle" / "supermeta-gradle" / "logs"
+    run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.time_ns() % 1_000_000_000:09d}"
     log_path = log_dir / f"{run_id}-{safe_name(gradle_args)}.log"
 
     cold_mode = args.cold or os.environ.get("SUPERMETA_GRADLE_COLD") in {"1", "true", "yes"}
@@ -45,13 +43,27 @@ def main() -> int:
     env["GRADLE_USER_HOME"] = str(gradle_home)
 
     lock_path = gradle_home / "supermeta-gradle.lock"
+    total_start_time = time.monotonic()
+    lock_wait_seconds = 0.0
 
     with lock_path.open("w", encoding="utf-8") as lock_file:
         if not args.no_lock:
             print(f"supermeta-gradle: waiting for Gradle home lock {lock_path}", flush=True)
+            lock_start_time = time.monotonic()
             fcntl.flock(lock_file, fcntl.LOCK_EX)
+            lock_wait_seconds = time.monotonic() - lock_start_time
 
-        return run_gradle(command, project_dir, env, log_path, gradle_home, cold_mode)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return run_gradle(
+            command,
+            project_dir,
+            env,
+            log_path,
+            gradle_home,
+            cold_mode,
+            lock_wait_seconds,
+            total_start_time,
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -119,9 +131,13 @@ def build_command(
     if cold_mode:
         add_flag_pair(defaults, gradle_args, "--no-daemon", "--daemon")
         add_flag_pair(defaults, gradle_args, "--no-parallel", "--parallel")
-        if not any(arg == "--max-workers" or arg.startswith("--max-workers=") for arg in gradle_args):
+        if not has_max_workers(gradle_args):
             max_workers = os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS", DEFAULT_COLD_MAX_WORKERS)
             defaults.append(f"--max-workers={max_workers}")
+    elif os.environ.get("SUPERMETA_GRADLE_PARALLEL") in {"1", "true", "yes"}:
+        add_flag_pair(defaults, gradle_args, "--parallel", "--no-parallel")
+        if not has_max_workers(gradle_args) and os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS"):
+            defaults.append(f"--max-workers={os.environ['SUPERMETA_GRADLE_MAX_WORKERS']}")
 
     return [*executable, *defaults, *gradle_args]
 
@@ -131,6 +147,10 @@ def add_flag_pair(defaults: list[str], gradle_args: list[str], off_flag: str, on
         defaults.append(off_flag)
 
 
+def has_max_workers(gradle_args: list[str]) -> bool:
+    return any(arg == "--max-workers" or arg.startswith("--max-workers=") for arg in gradle_args)
+
+
 def run_gradle(
     command: list[str],
     project_dir: Path,
@@ -138,12 +158,15 @@ def run_gradle(
     log_path: Path,
     gradle_home: Path,
     cold_mode: bool,
+    lock_wait_seconds: float,
+    total_start_time: float,
 ) -> int:
-    start_time = time.monotonic()
+    run_start_time = time.monotonic()
     print("supermeta-gradle:", flush=True)
     print(f"  mode: {'cold' if cold_mode else 'warm'}", flush=True)
     print(f"  project: {project_dir}", flush=True)
     print(f"  gradle_user_home: {gradle_home}", flush=True)
+    print(f"  lock_wait: {lock_wait_seconds:.1f}s", flush=True)
     print(f"  log: {log_path}", flush=True)
     print(f"  command: {shlex.join(command)}", flush=True)
 
@@ -151,6 +174,7 @@ def run_gradle(
         log_file.write(f"project: {project_dir}\n")
         log_file.write(f"mode: {'cold' if cold_mode else 'warm'}\n")
         log_file.write(f"gradle_user_home: {gradle_home}\n")
+        log_file.write(f"lock_wait: {lock_wait_seconds:.1f}s\n")
         log_file.write(f"command: {shlex.join(command)}\n\n")
         log_file.flush()
 
@@ -170,16 +194,18 @@ def run_gradle(
             log_file.write(line)
 
         exit_code = process.wait()
-        elapsed_seconds = time.monotonic() - start_time
-        summary = f"\nsupermeta-gradle: exit={exit_code} elapsed={elapsed_seconds:.1f}s log={log_path}\n"
+        run_elapsed_seconds = time.monotonic() - run_start_time
+        total_elapsed_seconds = time.monotonic() - total_start_time
+        summary = (
+            f"\nsupermeta-gradle: exit={exit_code} "
+            f"run_elapsed={run_elapsed_seconds:.1f}s "
+            f"total_elapsed={total_elapsed_seconds:.1f}s "
+            f"lock_wait={lock_wait_seconds:.1f}s "
+            f"log={log_path}\n"
+        )
         print(summary, end="", flush=True)
         log_file.write(summary)
         return exit_code
-
-
-def project_fingerprint(project_dir: Path) -> str:
-    digest = hashlib.sha256(str(project_dir.resolve()).encode("utf-8")).hexdigest()[:16]
-    return f"{project_dir.name}-{digest}"
 
 
 def safe_name(gradle_args: list[str]) -> str:

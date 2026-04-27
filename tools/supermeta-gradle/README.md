@@ -6,9 +6,13 @@
 - isolate `GRADLE_USER_HOME` under `/tmp/supermeta-gradle/gradle-user-home`;
 - disable file watching;
 - serialize runs that share that Gradle home;
-- tee output to `build/supermeta-gradle/`.
+- tee output to `.gradle/supermeta-gradle/logs/`.
 
 The default mode is warm: it keeps Gradle daemon/cache benefits inside the isolated shared Gradle home so repeated agent runs are not painfully slow, and different templates can reuse downloaded Gradle distributions, dependencies, and toolchains.
+
+Logs live under `.gradle/` so `clean` tasks cannot delete the active run log. Log names include the process id and a nanosecond suffix so concurrent `--no-lock` runs do not collide.
+
+The summary reports both `run_elapsed` and `total_elapsed`. When another agent run is holding the shared Gradle-home lock, `lock_wait` makes that queue time explicit.
 
 From the repository root:
 
@@ -25,6 +29,20 @@ python3 tools/supermeta-gradle/gradle.py --project templates/java-gradle-cli -- 
 ```
 
 Set `SUPERMETA_GRADLE_USER_HOME` to override the cache root. Pass `--no-default-flags` before `--` when you are intentionally debugging raw Gradle behavior.
+
+For parallel Gradle execution inside one build, either pass Gradle flags directly:
+
+```bash
+./scripts/agent-gradle templates/java-gradle-cli check --parallel --max-workers=4
+```
+
+or opt into parallel defaults for repeated agent commands:
+
+```bash
+SUPERMETA_GRADLE_PARALLEL=1 SUPERMETA_GRADLE_MAX_WORKERS=4 ./scripts/agent-gradle templates/java-gradle-cli check
+```
+
+The shared Gradle-home lock still serializes separate harness processes by default. Use `--no-lock` only for intentional concurrent experiments where the projects or tasks will not delete each other's outputs.
 
 For wedged or diagnostic runs, use cold mode:
 

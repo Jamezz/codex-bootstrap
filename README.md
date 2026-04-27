@@ -84,4 +84,6 @@ Verify the first runnable template in catalog form with:
 ./scripts/agent-gradle templates/java-gradle-cli run
 ```
 
-The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under the template build directory. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
+The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
+
+For parallel Gradle execution inside one build, pass `--parallel --max-workers=<n>` to the Gradle args or set `SUPERMETA_GRADLE_PARALLEL=1` with `SUPERMETA_GRADLE_MAX_WORKERS=<n>`.

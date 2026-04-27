@@ -64,7 +64,13 @@ Agent-safe runs from the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"
 ```
 
-Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs, and warm Gradle performance by default.
+Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs under `.gradle/supermeta-gradle/logs/`, and warm Gradle performance by default.
+
+For parallel Gradle execution inside one build:
+
+```bash
+./scripts/agent-gradle templates/java-gradle-cli check --parallel --max-workers=4
+```
 
 ## Customizing Java
 
