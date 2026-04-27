@@ -20,7 +20,7 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 
 ## Verification
 
-- Bootstrap launcher and generated-project smoke: `python3 -m unittest discover -s tools/bootstrap -p '*_test.py'`
+- Bootstrap launcher, generated-project smoke, and post-bootstrap example loop: `python3 -m unittest discover -s tools/bootstrap -p '*_test.py'`
 - Java template check: `./scripts/agent-gradle templates/java-gradle-cli check`
 - Java template run: `./scripts/agent-gradle templates/java-gradle-cli run`
 

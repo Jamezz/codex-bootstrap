@@ -453,6 +453,12 @@ Run the app:
 ./scripts/agent-gradle . run
 ```
 
+Pass application arguments:
+
+```bash
+./scripts/agent-gradle . run --args="Ada Lovelace"
+```
+
 Run tests:
 
 ```bash
@@ -471,7 +477,17 @@ Run the full verification lifecycle:
 - Leave `useExactJavaToolchain=false` for normal agent runs unless the runtime JDK version itself is under test.
 - Product source lives under `src/main/java/{package_name.replace(".", "/")}`.
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
+- If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through the build.
+
+## First Useful Edit
+
+Extend the CLI behavior in `App.java`, update `AppTest.java` first or in the same change, then run:
+
+```bash
+./scripts/agent-gradle . check
+./scripts/agent-gradle . run --args='example'
+```
 
 ## Agent Workflow
 
@@ -494,17 +510,19 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Verify: `./scripts/agent-gradle . check`
 - Test: `./scripts/agent-gradle . test`
 - Run: `./scripts/agent-gradle . run`
+- Run with app args: `./scripts/agent-gradle . run --args="example"`
 - If debugging raw Gradle behavior only: `./gradlew check`
 
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.
+- If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Use wildcard imports where feasible.
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the project is runnable without a global Gradle install.
-- Keep the sample app small and test-covered until real product behavior replaces it.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
 - Prefer clean new-project conventions over compatibility with starter mistakes.
 """
 

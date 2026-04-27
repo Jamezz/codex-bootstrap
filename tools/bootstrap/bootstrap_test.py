@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -120,19 +119,33 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue(app_source.is_file())
             self.assertTrue(test_source.is_file())
             self.assertIn("package com.acme.sample;", read_text(app_source))
-            self.assertIn("Hello from sample-app!", read_text(app_source))
+            self.assertIn('DEFAULT_NAME = "sample-app"', read_text(app_source))
+            self.assertIn("Usage: sample-app [name]", read_text(app_source))
             self.assertIn("package com.acme.sample;", read_text(test_source))
 
             readme = read_text(checkout / "README.md")
             agents = read_text(checkout / "AGENTS.md")
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/agent-gradle . check", readme)
+            self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
+            self.assertIn("update `application.mainClass` in `build.gradle.kts`", readme)
             self.assertIn("# Sample App Agent Notes", agents)
+            self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
-            run_checked(["./scripts/agent-gradle", ".", "run"], cwd=checkout, timeout=360)
+            generated_run = run_checked(["./scripts/agent-gradle", ".", "run"], cwd=checkout, timeout=360)
+            self.assertIn("Hello from sample-app!", generated_run.stdout)
+
+            write_example_cli(checkout)
+            run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
+            example_run = run_checked(
+                ["./scripts/agent-gradle", ".", "run", "--args=Ada"],
+                cwd=checkout,
+                timeout=360,
+            )
+            self.assertIn("Hello, Ada!", example_run.stdout)
 
 
 def copy_bootstrap_checkout(destination: Path) -> None:
@@ -152,6 +165,62 @@ def copy_bootstrap_checkout(destination: Path) -> None:
 def initialize_fake_origin(checkout: Path) -> None:
     run_checked(["git", "init"], cwd=checkout)
     run_checked(["git", "remote", "add", "origin", "https://example.com/bootstrap.git"], cwd=checkout)
+
+
+def write_example_cli(checkout: Path) -> None:
+    app_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "App.java"
+    test_source = checkout / "src" / "test" / "java" / "com" / "acme" / "sample" / "AppTest.java"
+
+    app_source.write_text(
+        """package com.acme.sample;
+
+public final class App {
+    private static final String USAGE = "Usage: sample-app <name>";
+
+    private App() {
+    }
+
+    public static String render(String[] args) {
+        if (args.length == 0) {
+            return USAGE;
+        }
+
+        String name = String.join(" ", args).trim();
+        if (name.isEmpty()) {
+            return USAGE;
+        }
+
+        return "Hello, " + name + "!";
+    }
+
+    public static void main(String[] args) {
+        System.out.println(render(args));
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    test_source.write_text(
+        """package com.acme.sample;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import org.junit.jupiter.api.*;
+
+final class AppTest {
+    @Test
+    void rendersUsageWithoutName() {
+        assertEquals("Usage: sample-app <name>", App.render(new String[0]));
+    }
+
+    @Test
+    void greetsProvidedName() {
+        assertEquals("Hello, Ada Lovelace!", App.render(new String[] {"Ada", "Lovelace"}));
+    }
+}
+""",
+        encoding="utf-8",
+    )
 
 
 def run_checked(command: list[str], cwd: Path, timeout: int = 120) -> subprocess.CompletedProcess[str]:

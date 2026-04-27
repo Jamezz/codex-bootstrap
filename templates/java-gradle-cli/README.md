@@ -30,6 +30,12 @@ Run the app:
 ./gradlew run
 ```
 
+Pass application arguments through Gradle:
+
+```bash
+./gradlew run --args="Ada Lovelace"
+```
+
 Run tests:
 
 ```bash
@@ -48,6 +54,7 @@ Agent-safe runs from the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli test
 ./scripts/agent-gradle templates/java-gradle-cli check
 ./scripts/agent-gradle templates/java-gradle-cli run
+./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"
 ```
 
 Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs, and warm Gradle performance by default.
@@ -73,7 +80,8 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 ## Conventions
 
 - production source files under `src/main` are checked for a 1000-line maximum;
-- wildcard imports are acceptable and preferred when they keep Java files cleaner.
+- wildcard imports are acceptable and preferred when they keep Java files cleaner;
+- if you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 
 The source limit is configured in `supermeta-rules.json` and executed by Gradle through the shared `tools/supermeta-rules/check.py` helper.
 
@@ -86,4 +94,4 @@ src/main/java/com/example/App.java
 src/test/java/com/example/AppTest.java
 ```
 
-Replace `com.example` and the greeting before starting real product work.
+Replace `com.example` and extend the CLI behavior before starting real product work.

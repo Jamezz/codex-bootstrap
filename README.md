@@ -69,7 +69,7 @@ Use `environments/` for meta or workflow environments. Use `templates/` for copy
 
 ## Verification
 
-Verify the bootstrap launcher and generated-project smoke path with:
+Verify the bootstrap launcher, generated-project smoke path, and post-bootstrap example development loop with:
 
 ```bash
 python3 -m unittest discover -s tools/bootstrap -p '*_test.py'

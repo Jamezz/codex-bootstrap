@@ -16,7 +16,7 @@ The goal is not to preserve every possible option. The goal is to make the good 
 
 `bootstrap` is the in-place launcher. It materializes a template into the current checkout, removes catalog-only files, deletes cloned Git metadata, and initializes a fresh standalone project.
 
-`tools/bootstrap/` owns the launcher implementation and tests. Its smoke test copies the catalog to a temp directory, runs the destructive launcher, and verifies the generated project.
+`tools/bootstrap/` owns the launcher implementation and tests. Its smoke test copies the catalog to a temp directory, runs the destructive launcher, verifies the generated project, then develops and verifies a tiny generated CLI example.
 
 `tools/supermeta-rules/check.py` is the shared helper for rules that examples should not reimplement, starting with product source line-count checks.
 
