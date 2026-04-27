@@ -85,7 +85,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual("python-uv-cli", manifest.template_type)
         self.assertEqual(("name",), manifest.required_inputs)
         self.assertIn("./scripts/check", manifest.verification_commands)
-        self.assertIn("uv run python-uv-cli", manifest.verification_commands)
+        self.assertIn("uv run --no-editable python-uv-cli", manifest.verification_commands)
         self.assertIn("Python uv", manifest.generated_docs.summary)
         self.assertIn("src/python_uv_cli/cli.py", manifest.generated_docs.entrypoints)
         self.assertEqual(
@@ -152,6 +152,8 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             self.assertFalse((checkout / "templates").exists())
             self.assertFalse((checkout / "environments").exists())
+            self.assertFalse((checkout / ".github").exists())
+            self.assertFalse((checkout / "site").exists())
             self.assertFalse((checkout / "bootstrap").exists())
             self.assertFalse((checkout / "tools" / "bootstrap").exists())
             self.assertTrue((checkout / "scripts" / "agent-gradle").is_file())
@@ -305,27 +307,35 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App", readme)
             self.assertIn("uv sync --locked", readme)
             self.assertIn("./scripts/check", readme)
-            self.assertIn("uv run sample-app", readme)
-            self.assertIn("uv run python -m sample_app", readme)
+            self.assertIn("uv run --no-editable sample-app", readme)
+            self.assertIn("uv run --no-editable python -m sample_app", readme)
             self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
-            self.assertIn("uv run sample-app", agents)
+            self.assertIn("uv run --no-editable sample-app", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
             assert_generated_operational_baseline(self, checkout)
             self.assertIn("src/sample_app/cli.py", read_text(checkout / "docs" / "ARCHITECTURE.md"))
-            self.assertIn("uv run sample-app", read_text(checkout / "docs" / "OPERATIONS.md"))
+            self.assertIn(
+                "uv run --no-editable sample-app",
+                read_text(checkout / "docs" / "OPERATIONS.md"),
+            )
 
             env = {"UV_CACHE_DIR": "/tmp/codex-bootstrap-uv-cache"}
             run_checked(["./scripts/check"], cwd=checkout, timeout=360, env=env)
-            generated_run = run_checked(["uv", "run", "sample-app"], cwd=checkout, timeout=360, env=env)
+            generated_run = run_checked(
+                ["uv", "run", "--no-editable", "sample-app"],
+                cwd=checkout,
+                timeout=360,
+                env=env,
+            )
             self.assertIn("Hello from sample-app!", generated_run.stdout)
 
             write_example_python_cli(checkout)
             run_checked(["./scripts/check"], cwd=checkout, timeout=360, env=env)
             example_run = run_checked(
-                ["uv", "run", "sample-app", "Ada"],
+                ["uv", "run", "--no-editable", "sample-app", "Ada"],
                 cwd=checkout,
                 timeout=360,
                 env=env,
@@ -606,6 +616,8 @@ test("greets provided name", () => {
 def assert_catalog_removed(test_case: unittest.TestCase, checkout: Path) -> None:
     test_case.assertFalse((checkout / "templates").exists())
     test_case.assertFalse((checkout / "environments").exists())
+    test_case.assertFalse((checkout / ".github").exists())
+    test_case.assertFalse((checkout / "site").exists())
     test_case.assertFalse((checkout / "bootstrap").exists())
     test_case.assertFalse((checkout / "tools" / "bootstrap").exists())
 

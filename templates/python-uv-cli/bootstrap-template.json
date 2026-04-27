@@ -30,7 +30,7 @@
   ],
   "verificationCommands": [
     "./scripts/check",
-    "uv run python-uv-cli"
+    "uv run --no-editable python-uv-cli"
   ],
   "generatedDocs": {
     "summary": "This is a compact Python uv command-line project with tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
@@ -52,9 +52,9 @@
       "./scripts/check"
     ],
     "runCommands": [
-      "uv run python-uv-cli",
-      "uv run python-uv-cli \"Ada Lovelace\"",
-      "uv run python -m python_uv_cli \"Ada Lovelace\""
+      "uv run --no-editable python-uv-cli",
+      "uv run --no-editable python-uv-cli \"Ada Lovelace\"",
+      "uv run --no-editable python -m python_uv_cli \"Ada Lovelace\""
     ],
     "firstUsefulEdit": "Extend `src/python_uv_cli/cli.py`, update `tests/test_cli.py` first or in the same change, then rerun `./scripts/check`."
   }

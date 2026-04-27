@@ -6,13 +6,13 @@ This is a copyable starter, not a long-lived framework.
 
 - Install locked environment from repo root: `cd templates/python-uv-cli && uv sync --locked`
 - Verify from repo root: `cd templates/python-uv-cli && ./scripts/check`
-- Test from repo root: `cd templates/python-uv-cli && uv run pytest`
-- Format check from repo root: `cd templates/python-uv-cli && uv run ruff format --check src tests`
-- Lint from repo root: `cd templates/python-uv-cli && uv run ruff check src tests`
-- Type check from repo root: `cd templates/python-uv-cli && uv run mypy src tests`
-- Run from repo root: `cd templates/python-uv-cli && uv run python-uv-cli`
-- Run with app args from repo root: `cd templates/python-uv-cli && uv run python-uv-cli "Ada Lovelace"`
-- Run module entrypoint from repo root: `cd templates/python-uv-cli && uv run python -m python_uv_cli "Ada Lovelace"`
+- Test from repo root: `cd templates/python-uv-cli && uv run --no-editable pytest`
+- Format check from repo root: `cd templates/python-uv-cli && uv run --no-editable ruff format --check src tests`
+- Lint from repo root: `cd templates/python-uv-cli && uv run --no-editable ruff check src tests`
+- Type check from repo root: `cd templates/python-uv-cli && uv run --no-editable mypy src tests`
+- Run from repo root: `cd templates/python-uv-cli && uv run --no-editable python-uv-cli`
+- Run with app args from repo root: `cd templates/python-uv-cli && uv run --no-editable python-uv-cli "Ada Lovelace"`
+- Run module entrypoint from repo root: `cd templates/python-uv-cli && uv run --no-editable python -m python_uv_cli "Ada Lovelace"`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
 - Inspect task processes: `./scripts/agent-task ps --match uv`

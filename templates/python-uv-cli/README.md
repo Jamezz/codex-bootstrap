@@ -12,7 +12,7 @@ After materialization, the generated project is standalone and uses:
 
 ```bash
 ./scripts/check
-uv run my-service
+uv run --no-editable my-service
 ```
 
 ## Prerequisites
@@ -39,29 +39,29 @@ Run the full check lifecycle:
 Run tests:
 
 ```bash
-uv run pytest
+uv run --no-editable pytest
 ```
 
 Run Python lint and format checks directly:
 
 ```bash
-uv run ruff format --check src tests
-uv run ruff check src tests
-uv run mypy src tests
+uv run --no-editable ruff format --check src tests
+uv run --no-editable ruff check src tests
+uv run --no-editable mypy src tests
 ```
 
 Run the app:
 
 ```bash
-uv run python-uv-cli
-uv run python-uv-cli "Ada Lovelace"
+uv run --no-editable python-uv-cli
+uv run --no-editable python-uv-cli "Ada Lovelace"
 ```
 
 Run the module entrypoint:
 
 ```bash
-uv run python -m python_uv_cli
-uv run python -m python_uv_cli "Ada Lovelace"
+uv run --no-editable python -m python_uv_cli
+uv run --no-editable python -m python_uv_cli "Ada Lovelace"
 ```
 
 Stuck-task diagnostics from the repository root:

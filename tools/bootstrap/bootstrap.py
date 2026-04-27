@@ -25,6 +25,7 @@ SUPPORTED_TEMPLATE_TYPES = {
 }
 CATALOG_TOP_LEVEL_PATHS = {
     ".git",
+    ".github",
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
@@ -32,6 +33,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     "bootstrap",
     "environments",
     "scripts",
+    "site",
     "templates",
     "tools",
 }
@@ -486,9 +488,29 @@ def move_java_package(staged_root: Path, old_package: str, new_package: str) -> 
         destination = java_root / new_path
         if destination.exists():
             raise UsageError(f"destination package path already exists: {destination}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(source), str(destination))
+        move_package_directory(source, destination)
         prune_empty_parents(source.parent, java_root)
+
+
+def move_package_directory(source: Path, destination: Path) -> None:
+    if is_relative_to(destination, source):
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-package-") as temp_dir:
+            temp_source = Path(temp_dir) / source.name
+            shutil.move(str(source), str(temp_source))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(temp_source), str(destination))
+        return
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source), str(destination))
+
+
+def is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def move_python_module(staged_root: Path, old_module: str, new_module: str) -> None:
@@ -746,21 +768,21 @@ Run the full verification lifecycle:
 Run tests directly:
 
 ```bash
-uv run pytest
+uv run --no-editable pytest
 ```
 
 Run the app through the console script:
 
 ```bash
-uv run {plan.config.project_name}
-uv run {plan.config.project_name} "Ada Lovelace"
+uv run --no-editable {plan.config.project_name}
+uv run --no-editable {plan.config.project_name} "Ada Lovelace"
 ```
 
 Run the app through the module entrypoint:
 
 ```bash
-uv run python -m {module_name}
-uv run python -m {module_name} "Ada Lovelace"
+uv run --no-editable python -m {module_name}
+uv run --no-editable python -m {module_name} "Ada Lovelace"
 ```
 
 ## Customization
@@ -779,7 +801,7 @@ Extend the CLI behavior in `cli.py`, update `tests/test_cli.py` first or in the 
 
 ```bash
 ./scripts/check
-uv run {plan.config.project_name} example
+uv run --no-editable {plan.config.project_name} example
 ```
 
 {generated_project_docs_section()}
@@ -797,13 +819,13 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 
 - Install locked environment: `uv sync --locked`
 - Verify: `./scripts/check`
-- Test: `uv run pytest`
-- Format check: `uv run ruff format --check src tests`
-- Lint: `uv run ruff check src tests`
-- Type check: `uv run mypy src tests`
-- Run: `uv run {plan.config.project_name}`
-- Run with app args: `uv run {plan.config.project_name} "example"`
-- Run module entrypoint: `uv run python -m {module_name} "example"`
+- Test: `uv run --no-editable pytest`
+- Format check: `uv run --no-editable ruff format --check src tests`
+- Lint: `uv run --no-editable ruff check src tests`
+- Type check: `uv run --no-editable mypy src tests`
+- Run: `uv run --no-editable {plan.config.project_name}`
+- Run with app args: `uv run --no-editable {plan.config.project_name} "example"`
+- Run module entrypoint: `uv run --no-editable python -m {module_name} "example"`
 - Beans prime: `./scripts/agent-beans prime`
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`

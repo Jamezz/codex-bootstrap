@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex Bootstrap Installer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        background: Canvas;
+        color: CanvasText;
+      }
+
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 48px 20px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 7vw, 4rem);
+        line-height: 1;
+      }
+
+      p {
+        max-width: 68ch;
+        margin: 0 0 24px;
+      }
+
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+
+      pre {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+        border-radius: 8px;
+        background: color-mix(in srgb, CanvasText 6%, Canvas);
+      }
+
+      a {
+        color: LinkText;
+      }
+
+      section {
+        margin-top: 36px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Codex Bootstrap</h1>
+      <p>Agent-ready project starters with a destructive, explicit bootstrap flow.</p>
+
+      <pre><code>curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-app --template python-uv-cli</code></pre>
+
+      <section>
+        <h2>Templates</h2>
+        <pre><code>curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- --list-templates</code></pre>
+      </section>
+
+      <section>
+        <h2>Java</h2>
+        <pre><code>curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-service --template java-gradle-cli --package com.acme.myservice</code></pre>
+      </section>
+
+      <section>
+        <h2>Artifacts</h2>
+        <p>
+          <a href="install.sh">install.sh</a>,
+          <a href="templates.json">templates.json</a>,
+          <a href="install.sh.sha256">install.sh.sha256</a>,
+          <a href="checksums.txt">checksums.txt</a>
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

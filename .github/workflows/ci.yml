@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify bootstrap catalog
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: templates/python-uv-cli/uv.lock
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run tool unit tests
+        run: python3 -m unittest discover -s tools -p '*_test.py'
+
+      - name: Check Java Gradle template
+        run: ./scripts/agent-gradle templates/java-gradle-cli check
+
+      - name: Run Java Gradle template
+        run: ./scripts/agent-gradle templates/java-gradle-cli run
+
+      - name: Check Python uv template
+        working-directory: templates/python-uv-cli
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/codex-bootstrap-uv-cache
+        run: ./scripts/check
+
+      - name: Run Python uv template
+        working-directory: templates/python-uv-cli
+        env:
+          UV_CACHE_DIR: ${{ runner.temp }}/codex-bootstrap-uv-cache
+        run: uv run --no-editable python-uv-cli
+
+      - name: Check TypeScript Bun template
+        working-directory: templates/typescript-bun-cli
+        run: ./scripts/check
+
+      - name: Run TypeScript Bun template
+        working-directory: templates/typescript-bun-cli
+        run: bun run src/main.ts
+
+      - name: Build Pages artifact
+        run: python3 tools/pages/build_pages.py --output build/pages
+
+      - name: Validate installer entrypoints
+        run: |
+          bash -n site/install.sh
+          site/install.sh --help
+          site/install.sh --list-templates --templates-file build/pages/templates.json
+          mkdir -p "$RUNNER_TEMP/codex-bootstrap-dry-run"
+          site/install.sh sample-app \
+            --template python-uv-cli \
+            --repo "file://$PWD" \
+            --ref HEAD \
+            --dir "$RUNNER_TEMP/codex-bootstrap-dry-run" \
+            --dry-run

@@ -5,12 +5,33 @@ script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 project_root=$(CDPATH= cd "$script_dir/.." && pwd)
 cd "$project_root"
 
+export UV_NO_EDITABLE=1
+
+project_name=$(python3 - <<'PY'
+from pathlib import Path
+
+pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import re
+
+    match = re.search(r'(?m)^name = "([^"]+)"$', pyproject)
+    if match is None:
+        raise SystemExit("project name not found in pyproject.toml")
+    print(match.group(1))
+else:
+    print(tomllib.loads(pyproject)["project"]["name"])
+PY
+)
+
 rules_script=tools/supermeta-rules/check.py
 if [ ! -f "$rules_script" ]; then
   rules_script=../../tools/supermeta-rules/check.py
 fi
 
 python3 "$rules_script" --config supermeta-rules.json --root . --skip-callouts
+uv sync --locked --no-editable --reinstall-package "$project_name"
 uv run ruff format --check src tests
 uv run ruff check src tests
 uv run mypy src tests

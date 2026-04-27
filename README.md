@@ -9,13 +9,29 @@ The repo currently ships:
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, and a deterministic verification path.
 - `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, and a deterministic verification path.
 - `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
+- `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
+- `tools/pages/`: the GitHub Pages installer-site builder and tests.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
 - `tools/supermeta-task/`: a language-agnostic stuck-task diagnostic helper copied into generated projects.
 
 ## Quick Start
+
+Install directly from GitHub Pages:
+
+```bash
+curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-service --template python-uv-cli
+```
+
+List published starters:
+
+```bash
+curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- --list-templates
+```
+
+Or clone the catalog manually:
 
 ```bash
 git clone <codex-bootstrap-repo-url> my-service
@@ -80,12 +96,16 @@ scripts/
   agent-beans
   agent-gradle
   agent-task
+site/
+  install.sh
+  index.html
 templates/
   java-gradle-cli/
   python-uv-cli/
   typescript-bun-cli/
 tools/
   bootstrap/
+  pages/
   supermeta-gradle/
   supermeta-beans/
   supermeta-rules/
@@ -99,7 +119,14 @@ Use `environments/` for meta or workflow environments. Use `templates/` for copy
 Verify the bootstrap launcher, generated-project smoke path, and post-bootstrap example development loop with:
 
 ```bash
-python3 -m unittest discover -s tools/bootstrap -p '*_test.py'
+python3 -m unittest discover -s tools -p '*_test.py'
+```
+
+Build the GitHub Pages installer artifact locally with:
+
+```bash
+python3 tools/pages/build_pages.py --output build/pages
+bash -n build/pages/install.sh
 ```
 
 Verify the first runnable template in catalog form with:
@@ -114,7 +141,7 @@ Verify the Python starter in catalog form with:
 ```bash
 cd templates/python-uv-cli
 UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache ./scripts/check
-UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache uv run python-uv-cli
+UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache uv run --no-editable python-uv-cli
 ```
 
 Verify the TypeScript starter in catalog form with:
