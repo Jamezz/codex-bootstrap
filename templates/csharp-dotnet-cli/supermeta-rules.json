@@ -1,0 +1,37 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["src"],
+      "include": ["**/*.cs"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "project_callouts": [
+    {
+      "name": "csharp-format",
+      "language": "csharp",
+      "paths": ["src", "tests"],
+      "include": ["**/*.cs"],
+      "exclude": ["**/generated/**"],
+      "command": ["../../scripts/agent-dotnet", ".", "format", "CsharpDotnetCli.slnx", "--verify-no-changes", "--no-restore"]
+    },
+    {
+      "name": "csharp-build",
+      "language": "csharp",
+      "paths": ["src", "tests"],
+      "include": ["**/*.cs"],
+      "exclude": ["**/generated/**"],
+      "command": ["../../scripts/agent-dotnet", ".", "build", "CsharpDotnetCli.slnx", "--configuration", "Release", "--no-restore"]
+    },
+    {
+      "name": "csharp-tests",
+      "language": "csharp",
+      "paths": ["src", "tests"],
+      "include": ["**/*.cs"],
+      "exclude": ["**/generated/**"],
+      "command": ["../../scripts/agent-dotnet", ".", "test", "CsharpDotnetCli.slnx", "--configuration", "Release", "--no-build"]
+    }
+  ]
+}

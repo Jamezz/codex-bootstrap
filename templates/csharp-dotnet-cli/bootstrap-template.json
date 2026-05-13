@@ -1,0 +1,64 @@
+{
+  "id": "csharp-dotnet-cli",
+  "displayName": "C# .NET CLI",
+  "description": "A compact C# .NET command-line project with xUnit tests, first-class runtime logging, agent notes, and a deterministic verification path.",
+  "type": "csharp-dotnet-cli",
+  "requiredInputs": ["name"],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-dotnet",
+      "destination": "scripts/agent-dotnet"
+    },
+    {
+      "source": "scripts/agent-beans",
+      "destination": "scripts/agent-beans"
+    },
+    {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
+      "source": "tools/supermeta-beans",
+      "destination": "tools/supermeta-beans"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    }
+  ],
+  "verificationCommands": [
+    "./scripts/check",
+    "./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --"
+  ],
+  "generatedDocs": {
+    "summary": "This is a compact C# .NET command-line project with xUnit tests, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": ".NET owns restore, formatting, build, runtime execution, and tests. The root namespace is `Generated.CsharpDotnetCli`. Runtime logging is implemented in the starter with quiet text logs on stderr by default and JSON logs controlled by `LOG_LEVEL` and `LOG_FORMAT`. Agent verification goes through `scripts/agent-dotnet` so dotnet home, NuGet package state, and sandbox behavior are predictable.",
+    "entrypoints": [
+      "src/CsharpDotnetCli/Program.cs",
+      "src/CsharpDotnetCli/App.cs",
+      "src/CsharpDotnetCli/LoggingConfig.cs",
+      "CsharpDotnetCli.slnx"
+    ],
+    "sourceRoots": [
+      "src/CsharpDotnetCli",
+      "tools/supermeta-rules"
+    ],
+    "testRoots": [
+      "tests/CsharpDotnetCli.Tests",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
+    "runCommands": [
+      "./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --",
+      "./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj -- \"Ada Lovelace\"",
+      "LOG_LEVEL=info LOG_FORMAT=json ./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --"
+    ],
+    "firstUsefulEdit": "Extend `App.cs`, update `AppTests.cs` first or in the same change, then rerun `./scripts/check`."
+  }
+}

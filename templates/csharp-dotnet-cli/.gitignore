@@ -1,0 +1,11 @@
+bin/
+obj/
+TestResults/
+.dotnet/
+.nuget/
+
+*.log
+
+.idea/
+.vs/
+.vscode/

@@ -67,6 +67,7 @@ class InstallerTest(unittest.TestCase):
             )
 
             self.assertIn("java-gradle-cli: Java Gradle CLI", result.stdout)
+            self.assertIn("csharp-dotnet-cli: C# .NET CLI", result.stdout)
             self.assertIn("python-uv-cli: Python uv CLI", result.stdout)
             self.assertIn("typescript-bun-cli: TypeScript Bun CLI", result.stdout)
             self.assertIn(
@@ -100,6 +101,7 @@ class InstallerTest(unittest.TestCase):
     @unittest.skipIf(shutil.which("git") is None, "git is required for installer smoke test")
     def test_installs_each_template_from_local_repo(self) -> None:
         cases = [
+            ("csharp-dotnet-cli", "csharp-app"),
             ("java-gradle-cli", "java-app"),
             ("python-uv-cli", "python-app"),
             ("typescript-bun-cli", "typescript-app"),
@@ -138,6 +140,9 @@ class InstallerTest(unittest.TestCase):
                     self.assertFalse((checkout / "site").exists())
                     self.assertTrue((checkout / "README.md").is_file())
 
+            self.assertTrue(
+                (install_root / "csharp-app" / "src" / "CsharpApp" / "CsharpApp.csproj").is_file()
+            )
             self.assertTrue(
                 (
                     install_root
@@ -186,8 +191,10 @@ def copy_bootstrap_source(destination: Path) -> None:
         ignore=shutil.ignore_patterns(
             ".git",
             ".bun",
+            ".dotnet",
             ".gradle",
             ".mypy_cache",
+            ".nuget",
             ".pytest_cache",
             ".ruff_cache",
             ".venv",

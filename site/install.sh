@@ -40,6 +40,7 @@ Options:
 
 Examples:
   curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-app --template python-uv-cli
+  curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-app --template csharp-dotnet-cli
   curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-app --template java-gradle-cli --package com.acme.myapp
 USAGE
 }
@@ -224,7 +225,7 @@ fi
 validate_project_slug "$project_slug"
 
 case "$template" in
-  java-gradle-cli|python-uv-cli|typescript-bun-cli|typescript-bun-mcp-server)
+  csharp-dotnet-cli|java-gradle-cli|python-uv-cli|typescript-bun-cli|typescript-bun-mcp-server)
     ;;
   *)
     die "unknown template '$template'; run --list-templates"

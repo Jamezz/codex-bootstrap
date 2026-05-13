@@ -5,6 +5,7 @@ Codex Bootstrap is a GitHub-hosted launchpad for starting software projects with
 The repo currently ships:
 
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
+- `templates/csharp-dotnet-cli/`: a C# .NET command-line starter with xUnit tests, first-class runtime logging, and a deterministic verification path.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, first-class runtime logging, and a deterministic verification path.
@@ -13,6 +14,7 @@ The repo currently ships:
 - `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/pages/`: the GitHub Pages installer-site builder and tests.
+- `scripts/agent-dotnet`: a .NET CLI wrapper that keeps dotnet home and NuGet package state local to the project during agent runs.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
@@ -52,6 +54,9 @@ Other starter variants:
 
 ./bootstrap --template typescript-bun-mcp-server --name my-mcp-server
 ./scripts/check
+
+./bootstrap --template csharp-dotnet-cli --name my-service
+./scripts/check
 ```
 
 The launcher is intentionally destructive. It stages the selected template, rewrites the project identity, removes catalog-only files, deletes the cloned Git metadata, runs `git init`, and leaves the generated project uncommitted with no remote.
@@ -63,6 +68,7 @@ Use `--dry-run` to inspect the plan first:
 ./bootstrap --template python-uv-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-mcp-server --name my-mcp-server --dry-run
+./bootstrap --template csharp-dotnet-cli --name my-service --dry-run
 ```
 
 Use `--yes` for non-interactive agent runs.
@@ -100,12 +106,14 @@ environments/
   supermeta/
 scripts/
   agent-beans
+  agent-dotnet
   agent-gradle
   agent-task
 site/
   install.sh
   index.html
 templates/
+  csharp-dotnet-cli/
   java-gradle-cli/
   python-uv-cli/
   typescript-bun-cli/
@@ -167,7 +175,16 @@ cd templates/typescript-bun-mcp-server
 bun run src/main.ts --help
 ```
 
+Verify the C# .NET starter in catalog form with:
+
+```bash
+cd templates/csharp-dotnet-cli
+./scripts/check
+../../scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --
+```
+
 The TypeScript starters require `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
+The C# starter requires .NET SDK 10 on PATH. `scripts/agent-dotnet` keeps `DOTNET_CLI_HOME` and `NUGET_PACKAGES` under the project by default so sandboxed agent runs do not write to the user home directory.
 
 The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
 

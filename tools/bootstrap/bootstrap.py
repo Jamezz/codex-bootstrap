@@ -19,6 +19,7 @@ from typing import Any
 DEFAULT_TEMPLATE = "java-gradle-cli"
 TEMPLATE_MANIFEST = "bootstrap-template.json"
 SUPPORTED_TEMPLATE_TYPES = {
+    "csharp-dotnet-cli",
     "java-gradle-cli",
     "python-uv-cli",
     "typescript-bun-cli",
@@ -41,12 +42,14 @@ CATALOG_TOP_LEVEL_PATHS = {
 IGNORED_TOP_LEVEL_PATHS = {
     ".DS_Store",
     ".bun",
+    ".dotnet",
     ".gradle",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".tsbuildinfo",
     ".venv",
+    ".nuget",
     "__pycache__",
     "build",
     "coverage",
@@ -55,12 +58,14 @@ IGNORED_TOP_LEVEL_PATHS = {
 }
 IGNORED_COPY_NAMES = {
     ".bun",
+    ".dotnet",
     ".gradle",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
     ".tsbuildinfo",
     ".venv",
+    ".nuget",
     "__pycache__",
     "build",
     "coverage",
@@ -71,8 +76,11 @@ IGNORED_COPY_NAMES = {
 TEXT_SUFFIXES = {
     ".bat",
     ".cjs",
+    ".cs",
+    ".csproj",
     ".cts",
     ".editorconfig",
+    ".props",
     ".gitignore",
     ".java",
     ".js",
@@ -86,6 +94,8 @@ TEXT_SUFFIXES = {
     ".properties",
     ".py",
     ".sh",
+    ".slnx",
+    ".targets",
     ".txt",
     ".toml",
     ".ts",
@@ -142,6 +152,85 @@ JAVA_KEYWORDS = {
     "throws",
     "transient",
     "try",
+    "void",
+    "volatile",
+    "while",
+}
+CSHARP_KEYWORDS = {
+    "abstract",
+    "as",
+    "base",
+    "bool",
+    "break",
+    "byte",
+    "case",
+    "catch",
+    "char",
+    "checked",
+    "class",
+    "const",
+    "continue",
+    "decimal",
+    "default",
+    "delegate",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "event",
+    "explicit",
+    "extern",
+    "false",
+    "finally",
+    "fixed",
+    "float",
+    "for",
+    "foreach",
+    "goto",
+    "if",
+    "implicit",
+    "in",
+    "int",
+    "interface",
+    "internal",
+    "is",
+    "lock",
+    "long",
+    "namespace",
+    "new",
+    "null",
+    "object",
+    "operator",
+    "out",
+    "override",
+    "params",
+    "private",
+    "protected",
+    "public",
+    "readonly",
+    "ref",
+    "return",
+    "sbyte",
+    "sealed",
+    "short",
+    "sizeof",
+    "stackalloc",
+    "static",
+    "string",
+    "struct",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "uint",
+    "ulong",
+    "unchecked",
+    "unsafe",
+    "ushort",
+    "using",
+    "virtual",
     "void",
     "volatile",
     "while",
@@ -306,6 +395,10 @@ def build_config(args: argparse.Namespace, manifest: TemplateManifest) -> Bootst
         python_module_from_slug(project_name)
         if args.package_name:
             raise UsageError("--package is only supported by Java templates")
+    elif manifest.template_type == "csharp-dotnet-cli":
+        csharp_project_name_from_slug(project_name)
+        if args.package_name:
+            raise UsageError("--package is only supported by Java templates")
     elif args.package_name:
         raise UsageError("--package is only supported by Java templates")
 
@@ -392,6 +485,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     copy_template(plan.template_dir, staged_root)
     copy_support_paths(plan, staged_root)
     rewriter = {
+        "csharp-dotnet-cli": rewrite_csharp_template,
         "java-gradle-cli": rewrite_java_template,
         "python-uv-cli": rewrite_python_template,
         "typescript-bun-cli": rewrite_typescript_template,
@@ -457,6 +551,20 @@ def rewrite_python_template(plan: BootstrapPlan, staged_root: Path) -> None:
     write_generated_docs(plan, staged_root)
 
 
+def rewrite_csharp_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    project_name = csharp_project_name_from_slug(plan.config.project_name)
+    move_csharp_project(staged_root, "CsharpDotnetCli", project_name)
+
+    replacements = common_replacements(plan) | {
+        "csharp-dotnet-cli": plan.config.project_name,
+        "csharpdotnetcli": project_name.lower(),
+        "C# .NET CLI Template": plan.project_title,
+        "CsharpDotnetCli": project_name,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
 def rewrite_typescript_template(plan: BootstrapPlan, staged_root: Path) -> None:
     replacements = common_replacements(plan) | {
         plan.manifest.template_id: plan.config.project_name,
@@ -470,6 +578,8 @@ def common_replacements(plan: BootstrapPlan) -> dict[str, str]:
     return {
         "../../scripts/agent-gradle .": "./scripts/agent-gradle .",
         "../../scripts/agent-gradle": "./scripts/agent-gradle",
+        "../../scripts/agent-dotnet .": "./scripts/agent-dotnet .",
+        "../../scripts/agent-dotnet": "./scripts/agent-dotnet",
         "../../scripts/agent-beans": "./scripts/agent-beans",
         "../../scripts/agent-task": "./scripts/agent-task",
         "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
@@ -526,6 +636,31 @@ def move_python_module(staged_root: Path, old_module: str, new_module: str) -> N
     shutil.move(str(source), str(destination))
 
 
+def move_csharp_project(staged_root: Path, old_name: str, new_name: str) -> None:
+    if old_name == new_name:
+        return
+
+    moves = (
+        (staged_root / f"{old_name}.slnx", staged_root / f"{new_name}.slnx"),
+        (staged_root / "src" / old_name, staged_root / "src" / new_name),
+        (staged_root / "tests" / f"{old_name}.Tests", staged_root / "tests" / f"{new_name}.Tests"),
+    )
+    for source, destination in moves:
+        if not source.exists():
+            continue
+        if destination.exists():
+            raise UsageError(f"destination C# project path already exists: {destination}")
+        shutil.move(str(source), str(destination))
+
+    source_project = staged_root / "src" / new_name / f"{old_name}.csproj"
+    if source_project.exists():
+        source_project.rename(staged_root / "src" / new_name / f"{new_name}.csproj")
+
+    test_project = staged_root / "tests" / f"{new_name}.Tests" / f"{old_name}.Tests.csproj"
+    if test_project.exists():
+        test_project.rename(staged_root / "tests" / f"{new_name}.Tests" / f"{new_name}.Tests.csproj")
+
+
 def prune_empty_parents(path: Path, stop_at: Path) -> None:
     current = path
     stop = stop_at.resolve()
@@ -555,7 +690,12 @@ def rewrite_text_files(root: Path, replacements: dict[str, str]) -> None:
 
 
 def should_rewrite_text(path: Path) -> bool:
-    return path.suffix in TEXT_SUFFIXES or path.name in {"gradlew", ".gitignore", ".editorconfig"}
+    return path.suffix in TEXT_SUFFIXES or path.name in {
+        "check",
+        "gradlew",
+        ".gitignore",
+        ".editorconfig",
+    }
 
 
 def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
@@ -622,6 +762,8 @@ def generated_logging_agent_rules() -> str:
 
 
 def generated_readme(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return generated_csharp_readme(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -717,6 +859,8 @@ Agents should start by reading `AGENTS.md`, then run:
 
 
 def generated_agents(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return generated_csharp_agents(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_agents(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -766,6 +910,134 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the project is runnable without a global Gradle install.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
+"""
+
+
+def generated_csharp_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    project_name = csharp_project_name_from_slug(plan.config.project_name)
+    project_path = f"src/{project_name}/{project_name}.csproj"
+    solution_path = f"{project_name}.slnx"
+    run_command = f"./scripts/agent-dotnet . run --project {project_path} --"
+    return f"""# {title}
+
+{title} is a compact C# .NET command-line project with xUnit tests, first-class runtime logging, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- .NET SDK 10 on PATH;
+- network access on first run so NuGet can restore test dependencies.
+
+The project targets `net10.0`.
+
+## Usage
+
+Restore locked dependencies:
+
+```bash
+./scripts/agent-dotnet . restore --locked-mode
+```
+
+Run the full verification lifecycle:
+
+```bash
+./scripts/check
+```
+
+Run tests directly:
+
+```bash
+./scripts/agent-dotnet . test {solution_path} --configuration Release
+```
+
+Run the app:
+
+```bash
+{run_command}
+{run_command} "Ada Lovelace"
+```
+
+{generated_logging_readme_section().replace("<run-command>", run_command)}
+
+Inspect stuck task state:
+
+```bash
+./scripts/agent-task ps --match dotnet
+```
+
+## Customization
+
+- Product source lives under `src/{project_name}`.
+- Test source lives under `tests/{project_name}.Tests`.
+- CLI behavior starts in `src/{project_name}/App.cs`.
+- Runtime logging lives in `src/{project_name}/LoggingConfig.cs`.
+- The process entrypoint is `src/{project_name}/Program.cs`.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable project checks in `tools/supermeta-rules/` and wire them through `scripts/check`.
+- Keep formatting in `dotnet format`, build checks in `dotnet build`, and behavior checks in xUnit.
+- Keep package versions in `Directory.Packages.props` and lock files checked in.
+
+## First Useful Edit
+
+Extend the CLI behavior in `App.cs`, update `AppTests.cs` first or in the same change, then run:
+
+```bash
+./scripts/check
+{run_command} example
+```
+
+{generated_project_docs_section()}
+## Agent Workflow
+
+Agents should start by reading `AGENTS.md`, then run:
+
+```bash
+./scripts/check
+```
+"""
+
+
+def generated_csharp_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    project_name = csharp_project_name_from_slug(plan.config.project_name)
+    project_path = f"src/{project_name}/{project_name}.csproj"
+    solution_path = f"{project_name}.slnx"
+    run_command = f"./scripts/agent-dotnet . run --project {project_path} --"
+    return f"""# {title} Agent Notes
+
+This is a standalone C# .NET CLI project. Keep it compact, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Restore locked dependencies: `./scripts/agent-dotnet . restore --locked-mode`
+- Verify: `./scripts/check`
+- Format check: `./scripts/agent-dotnet . format {solution_path} --verify-no-changes --no-restore`
+- Build: `./scripts/agent-dotnet . build {solution_path} --configuration Release --no-restore`
+- Test: `./scripts/agent-dotnet . test {solution_path} --configuration Release --no-build`
+- Run: `{run_command}`
+- Run with app args: `{run_command} "example"`
+- Run with text logs: `LOG_LEVEL=info {run_command}`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json {run_command}`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
+- Inspect dotnet processes: `./scripts/agent-task ps --match dotnet`
+
+{generated_agent_beans_section()}
+## Rules
+
+- Target .NET 10 through `net10.0` unless the project intentionally chooses a different runtime floor.
+- Keep runtime and test dependency versions centralized in `Directory.Packages.props`.
+- Keep package lock files checked in and use locked restore for verification.
+- Keep CLI behavior in `App.cs` and entrypoint glue in `Program.cs`.
+- Keep runtime logging in `LoggingConfig.cs`.
+{generated_logging_agent_rules()}
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Route formatting through `dotnet format`, build through `dotnet build`, and behavior checks through xUnit.
+- Use `scripts/agent-dotnet` for agent verification unless debugging raw dotnet behavior.
 - Extend the sample CLI into real behavior early, and keep tests updated with that change.
 - Prefer clean new-project conventions over compatibility with starter mistakes.
 """
@@ -1123,6 +1395,8 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 
 
 def logging_runtime_implementation(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return "C# uses the starter `LoggingConfig` and `RuntimeLogger` implementation."
     if plan.manifest.template_type == "java-gradle-cli":
         return "Java uses SLF4J with Logback configured by `LoggingConfig`."
     if plan.manifest.template_type == "python-uv-cli":
@@ -1342,6 +1616,10 @@ def render_doc_text(plan: BootstrapPlan, text: str) -> str:
         replacements["com/example"] = plan.config.package_name.replace(".", "/")
     if plan.manifest.template_type == "python-uv-cli":
         replacements["python_uv_cli"] = python_module_from_slug(plan.config.project_name)
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        project_name = csharp_project_name_from_slug(plan.config.project_name)
+        replacements["csharpdotnetcli"] = project_name.lower()
+        replacements["CsharpDotnetCli"] = project_name
 
     rendered = text
     for old, new in replacements.items():
@@ -1389,6 +1667,8 @@ def print_plan(plan: BootstrapPlan) -> None:
         print(f"  package: {plan.config.package_name}")
     if plan.manifest.template_type == "python-uv-cli":
         print(f"  python module: {python_module_from_slug(plan.config.project_name)}")
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        print(f"  C# namespace: Generated.{csharp_project_name_from_slug(plan.config.project_name)}")
     print(f"  root: {plan.repo_root}")
     print("  action: replace this checkout with the generated project")
     print("  git: delete existing Git metadata and run git init")
@@ -1434,6 +1714,14 @@ def python_module_from_slug(slug: str) -> str:
     if keyword.iskeyword(module_name):
         raise UsageError(f"project name would create a Python keyword module: '{module_name}'")
     return module_name
+
+
+def csharp_project_name_from_slug(slug: str) -> str:
+    validate_project_name(slug)
+    project_name = "".join(part[:1].upper() + part[1:] for part in slug.split("-"))
+    if project_name.lower() in CSHARP_KEYWORDS:
+        return f"{project_name}App"
+    return project_name
 
 
 def title_from_slug(slug: str) -> str:

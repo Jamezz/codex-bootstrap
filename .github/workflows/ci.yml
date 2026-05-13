@@ -46,6 +46,11 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - name: Run tool unit tests
         run: python3 -m unittest discover -s tools -p '*_test.py'
 
@@ -82,6 +87,13 @@ jobs:
       - name: Run TypeScript Bun MCP server help
         working-directory: templates/typescript-bun-mcp-server
         run: bun run src/main.ts --help
+
+      - name: Check C# .NET template
+        working-directory: templates/csharp-dotnet-cli
+        run: ./scripts/check
+
+      - name: Run C# .NET template
+        run: ./scripts/agent-dotnet templates/csharp-dotnet-cli run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --
 
       - name: Build Pages artifact
         run: python3 tools/pages/build_pages.py --output build/pages

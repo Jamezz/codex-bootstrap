@@ -16,6 +16,7 @@ from tools.bootstrap.bootstrap import (  # noqa: E402
     TemplateManifest,
     UsageError,
     assert_safe_clear_path,
+    csharp_project_name_from_slug,
     java_package_to_path,
     python_module_from_slug,
     title_from_slug,
@@ -54,8 +55,35 @@ class ValidationTest(unittest.TestCase):
         with self.assertRaises(UsageError):
             python_module_from_slug("class")
 
+    def test_derives_csharp_project_name_from_project_name(self) -> None:
+        self.assertEqual("SampleApp", csharp_project_name_from_slug("sample-app"))
+        self.assertEqual("A1Service2", csharp_project_name_from_slug("a1-service2"))
+        self.assertEqual("ClassApp", csharp_project_name_from_slug("class"))
+
 
 class ManifestTest(unittest.TestCase):
+    def test_loads_csharp_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "csharp-dotnet-cli")
+
+        self.assertEqual("csharp-dotnet-cli", manifest.template_id)
+        self.assertEqual("csharp-dotnet-cli", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("C# .NET", manifest.generated_docs.summary)
+        self.assertIn("src/CsharpDotnetCli/App.cs", manifest.generated_docs.entrypoints)
+        self.assertIn("src/CsharpDotnetCli/LoggingConfig.cs", manifest.generated_docs.entrypoints)
+        self.assertEqual(
+            [
+                "scripts/agent-dotnet",
+                "scripts/agent-beans",
+                "scripts/agent-task",
+                "tools/supermeta-beans",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+            ],
+            [path.source for path in manifest.support_paths],
+        )
+
     def test_loads_java_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "java-gradle-cli")
 
@@ -420,6 +448,156 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             self.assertIn("Hello, Ada!", example_run.stdout)
 
+    @unittest.skipIf(shutil.which("dotnet") is None, "dotnet is required for C# template smoke test")
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_csharp_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-csharp-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "csharp-dotnet-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-dotnet").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+
+            self.assertTrue((checkout / "SampleApp.slnx").is_file())
+            self.assertFalse((checkout / "CsharpDotnetCli.slnx").exists())
+            self.assertTrue((checkout / "src" / "SampleApp" / "SampleApp.csproj").is_file())
+            self.assertTrue((checkout / "src" / "SampleApp" / "App.cs").is_file())
+            self.assertTrue((checkout / "src" / "SampleApp" / "LoggingConfig.cs").is_file())
+            self.assertTrue((checkout / "src" / "SampleApp" / "Program.cs").is_file())
+            self.assertTrue((checkout / "tests" / "SampleApp.Tests" / "SampleApp.Tests.csproj").is_file())
+            self.assertTrue((checkout / "tests" / "SampleApp.Tests" / "AppTests.cs").is_file())
+            self.assertTrue((checkout / "tests" / "SampleApp.Tests" / "LoggingConfigTests.cs").is_file())
+            self.assertFalse((checkout / "src" / "CsharpDotnetCli").exists())
+            self.assertFalse((checkout / "tests" / "CsharpDotnetCli.Tests").exists())
+
+            solution = read_text(checkout / "SampleApp.slnx")
+            project = read_text(checkout / "src" / "SampleApp" / "SampleApp.csproj")
+            test_project = read_text(checkout / "tests" / "SampleApp.Tests" / "SampleApp.Tests.csproj")
+            self.assertIn("src/SampleApp/SampleApp.csproj", solution)
+            self.assertIn("tests/SampleApp.Tests/SampleApp.Tests.csproj", solution)
+            self.assertIn("<AssemblyName>SampleApp</AssemblyName>", project)
+            self.assertIn("<RootNamespace>Generated.SampleApp</RootNamespace>", project)
+            self.assertIn("<TargetFramework>net10.0</TargetFramework>", project)
+            self.assertIn("<RootNamespace>Generated.SampleApp.Tests</RootNamespace>", test_project)
+            self.assertIn(r"..\..\src\SampleApp\SampleApp.csproj", test_project)
+            self.assertIn(
+                '"sampleapp":',
+                read_text(checkout / "tests" / "SampleApp.Tests" / "packages.lock.json"),
+            )
+
+            app_source = read_text(checkout / "src" / "SampleApp" / "App.cs")
+            logging_source = read_text(checkout / "src" / "SampleApp" / "LoggingConfig.cs")
+            test_source = read_text(checkout / "tests" / "SampleApp.Tests" / "AppTests.cs")
+            self.assertIn("namespace Generated.SampleApp;", app_source)
+            self.assertIn('DefaultName = "sample-app"', app_source)
+            self.assertIn("Usage: sample-app [name]", app_source)
+            self.assertIn('LoggerName = "sample-app"', logging_source)
+            self.assertIn("namespace Generated.SampleApp.Tests;", test_source)
+
+            rules_config = read_text(checkout / "supermeta-rules.json")
+            self.assertIn('"csharp-format"', rules_config)
+            self.assertIn('"command": ["./scripts/agent-dotnet", ".", "format", "SampleApp.slnx"', rules_config)
+
+            readme = read_text(checkout / "README.md")
+            agents = read_text(checkout / "AGENTS.md")
+            self.assertIn("# Sample App", readme)
+            self.assertIn("./scripts/check", readme)
+            self.assertIn("./scripts/agent-dotnet . restore --locked-mode", readme)
+            self.assertIn("./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", readme)
+            self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
+            self.assertIn("./scripts/agent-task ps --match dotnet", readme)
+            self.assertIn("# Sample App Agent Notes", agents)
+            self.assertIn("Target .NET 10 through `net10.0`", agents)
+            self.assertIn("LOG_LEVEL=info ./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertNotIn("codex-bootstrap", readme.lower())
+            self.assertNotIn("codex-bootstrap", agents.lower())
+            assert_generated_operational_baseline(self, checkout)
+            self.assertIn("Generated.SampleApp", read_text(checkout / "docs" / "ARCHITECTURE.md"))
+            self.assertIn("src/SampleApp/App.cs", read_text(checkout / "docs" / "ARCHITECTURE.md"))
+
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            generated_run = run_checked(
+                [
+                    "./scripts/agent-dotnet",
+                    ".",
+                    "run",
+                    "--project",
+                    "src/SampleApp/SampleApp.csproj",
+                    "--",
+                ],
+                cwd=checkout,
+                timeout=360,
+            )
+            self.assertIn("Hello from sample-app!", generated_run.stdout)
+            self.assertNotIn("command completed", generated_run.stdout)
+            logged_run = run_checked(
+                [
+                    "./scripts/agent-dotnet",
+                    ".",
+                    "run",
+                    "--project",
+                    "src/SampleApp/SampleApp.csproj",
+                    "--",
+                ],
+                cwd=checkout,
+                timeout=360,
+                env={"LOG_LEVEL": "info", "LOG_FORMAT": "json"},
+            )
+            self.assertIn('"exitCode":0', logged_run.stdout)
+            self.assertIn('"message":"command completed"', logged_run.stdout)
+            bad_log_config = run_unchecked(
+                [
+                    "./scripts/agent-dotnet",
+                    ".",
+                    "run",
+                    "--project",
+                    "src/SampleApp/SampleApp.csproj",
+                    "--",
+                ],
+                cwd=checkout,
+                timeout=360,
+                env={"LOG_LEVEL": "verbose"},
+            )
+            self.assertEqual(2, bad_log_config.returncode)
+            self.assertIn("Logging configuration error: invalid LOG_LEVEL", bad_log_config.stdout)
+
+            write_example_csharp_cli(checkout)
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            example_run = run_checked(
+                [
+                    "./scripts/agent-dotnet",
+                    ".",
+                    "run",
+                    "--project",
+                    "src/SampleApp/SampleApp.csproj",
+                    "--",
+                    "Ada",
+                ],
+                cwd=checkout,
+                timeout=360,
+            )
+            self.assertIn("Hello, Ada!", example_run.stdout)
+
     @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
     def test_bootstrap_rewrites_typescript_template_into_standalone_project(self) -> None:
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-typescript-smoke-") as temp_dir:
@@ -589,8 +767,10 @@ def copy_bootstrap_checkout(destination: Path) -> None:
         ignore=shutil.ignore_patterns(
             ".git",
             ".bun",
+            ".dotnet",
             ".gradle",
             ".mypy_cache",
+            ".nuget",
             ".pytest_cache",
             ".ruff_cache",
             ".venv",
@@ -720,6 +900,80 @@ def test_renders_usage_without_name() -> None:
 
 def test_greets_provided_name() -> None:
     assert render(["Ada", "Lovelace"]) == CliResult(0, "Hello, Ada Lovelace!", "")
+""",
+        encoding="utf-8",
+    )
+
+
+def write_example_csharp_cli(checkout: Path) -> None:
+    app_source = checkout / "src" / "SampleApp" / "App.cs"
+    test_source = checkout / "tests" / "SampleApp.Tests" / "AppTests.cs"
+
+    app_source.write_text(
+        """namespace Generated.SampleApp;
+
+public sealed class App
+{
+    public const string DefaultName = "sample-app";
+    public const string Usage = "Usage: sample-app <name>";
+
+    private readonly string defaultName;
+
+    public App(string defaultName)
+    {
+        this.defaultName = defaultName;
+    }
+
+    public int Run(IReadOnlyList<string> args, TextWriter stdout, TextWriter stderr)
+    {
+        CliResult result = args.Count == 0 && !string.IsNullOrEmpty(defaultName)
+            ? new CliResult(2, string.Empty, Usage)
+            : Render(args);
+        if (!string.IsNullOrEmpty(result.Stdout))
+        {
+            stdout.WriteLine(result.Stdout);
+        }
+        if (!string.IsNullOrEmpty(result.Stderr))
+        {
+            stderr.WriteLine(result.Stderr);
+        }
+        return result.ExitCode;
+    }
+
+    public static CliResult Render(IReadOnlyList<string> args)
+    {
+        string name = string.Join(" ", args).Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            return new CliResult(2, string.Empty, Usage);
+        }
+        return new CliResult(0, $"Hello, {name}!", string.Empty);
+    }
+}
+
+public sealed record CliResult(int ExitCode, string Stdout, string Stderr);
+""",
+        encoding="utf-8",
+    )
+    test_source.write_text(
+        """using Generated.SampleApp;
+
+namespace Generated.SampleApp.Tests;
+
+public sealed class AppTests
+{
+    [Fact]
+    public void RendersUsageWithoutName()
+    {
+        Assert.Equal(new CliResult(2, string.Empty, "Usage: sample-app <name>"), App.Render([]));
+    }
+
+    [Fact]
+    public void GreetsProvidedName()
+    {
+        Assert.Equal(new CliResult(0, "Hello, Ada Lovelace!", string.Empty), App.Render(["Ada", "Lovelace"]));
+    }
+}
 """,
         encoding="utf-8",
     )
