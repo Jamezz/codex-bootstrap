@@ -12,6 +12,7 @@ from tools.pages.build_pages import build_pages
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = REPO_ROOT / "site" / "install.sh"
+WINDOWS_INSTALLER = REPO_ROOT / "site" / "install.ps1"
 
 
 class PagesBuildTest(unittest.TestCase):
@@ -23,12 +24,18 @@ class PagesBuildTest(unittest.TestCase):
 
             self.assertTrue((output / "index.html").is_file())
             self.assertTrue((output / "install.sh").is_file())
+            self.assertTrue((output / "install.ps1").is_file())
             self.assertTrue((output / "templates.json").is_file())
             self.assertTrue((output / "install.sh.sha256").is_file())
+            self.assertTrue((output / "install.ps1.sha256").is_file())
             self.assertTrue((output / "checksums.txt").is_file())
 
             templates = json.loads((output / "templates.json").read_text(encoding="utf-8"))
             self.assertEqual("java-gradle-cli", templates["defaultTemplate"])
+            self.assertEqual(
+                "https://jamezz.github.io/codex-bootstrap/install.ps1",
+                templates["windowsInstallUrl"],
+            )
             manifest_ids = sorted(
                 path.parent.name
                 for path in (REPO_ROOT / "templates").glob("*/bootstrap-template.json")
@@ -40,6 +47,7 @@ class PagesBuildTest(unittest.TestCase):
 
             checksums = (output / "checksums.txt").read_text(encoding="utf-8")
             self.assertIn("  install.sh\n", checksums)
+            self.assertIn("  install.ps1\n", checksums)
             self.assertIn("  templates.json\n", checksums)
             self.assertIn("  index.html\n", checksums)
 
@@ -51,6 +59,16 @@ class InstallerTest(unittest.TestCase):
 
         self.assertIn("Codex Bootstrap installer", help_result.stdout)
         self.assertIn("--list-templates", help_result.stdout)
+
+    def test_windows_installer_static_contract(self) -> None:
+        installer = WINDOWS_INSTALLER.read_text(encoding="utf-8")
+
+        self.assertIn("Codex Bootstrap Windows installer", installer)
+        self.assertIn("param(", installer)
+        self.assertIn("Install-CodexBootstrap", installer)
+        self.assertIn("git clone --depth 1", installer)
+        self.assertIn("python", installer)
+        self.assertIn("bootstrap", installer)
 
     def test_lists_templates_from_generated_metadata(self) -> None:
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-pages-") as temp_dir:

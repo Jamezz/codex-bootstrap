@@ -10,12 +10,24 @@
       "destination": "scripts/agent-dotnet"
     },
     {
+      "source": "scripts/agent-dotnet.ps1",
+      "destination": "scripts/agent-dotnet.ps1"
+    },
+    {
       "source": "scripts/agent-beans",
       "destination": "scripts/agent-beans"
     },
     {
+      "source": "scripts/agent-beans.ps1",
+      "destination": "scripts/agent-beans.ps1"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
+    },
+    {
+      "source": "scripts/agent-task.ps1",
+      "destination": "scripts/agent-task.ps1"
     },
     {
       "source": "tools/supermeta-beans",

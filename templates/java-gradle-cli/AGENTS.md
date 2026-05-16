@@ -20,6 +20,14 @@ This is a copyable starter, not a long-lived framework.
 - Stop scoped Gradle daemon: `./scripts/agent-gradle templates/java-gradle-cli --stop`
 - If already inside this template: `../../scripts/agent-gradle . test`
 
+## Windows
+
+- Verify from repo root: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli check`
+- Run from repo root: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli run`
+- Inspect task processes: `.\scripts\agent-task.ps1 ps --match gradle`
+- Stop scoped Gradle daemon: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop`
+- After materialization, verify with `.\scripts\agent-gradle.ps1 . check`
+
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.

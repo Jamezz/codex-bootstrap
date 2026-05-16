@@ -35,6 +35,17 @@ class BuildCommandTest(unittest.TestCase):
 
         self.assertEqual(["sh", "/tmp/gradlew", "--no-watch-fs", "check"], command)
 
+    def test_windows_uses_gradlew_bat(self) -> None:
+        command = gradle.build_command(
+            wrapper=Path("C:/repo/gradlew"),
+            gradle_args=["check"],
+            no_default_flags=False,
+            cold_mode=False,
+            platform_name="nt",
+        )
+
+        self.assertEqual(["C:/repo/gradlew.bat", "--no-watch-fs", "check"], command)
+
     def test_parallel_env_adds_parallel_defaults(self) -> None:
         with patched_env(SUPERMETA_GRADLE_PARALLEL="1", SUPERMETA_GRADLE_MAX_WORKERS="4"):
             command = gradle.build_command(

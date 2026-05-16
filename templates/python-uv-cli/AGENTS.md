@@ -20,6 +20,13 @@ This is a copyable starter, not a long-lived framework.
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
+## Windows
+
+- Verify from template root: `.\scripts\check.ps1`
+- Run from template root: `uv run --no-editable python-uv-cli`
+- Beans prime after materialization: `.\scripts\agent-beans.ps1 prime`
+- Inspect task processes after materialization: `.\scripts\agent-task.ps1 ps --match uv`
+
 ## Rules
 
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.

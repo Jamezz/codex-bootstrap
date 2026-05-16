@@ -81,6 +81,15 @@ Stuck-task diagnostics from the repository root:
 ./scripts/agent-task ps --match pytest
 ```
 
+PowerShell entrypoints are available for Windows agents:
+
+```powershell
+cd templates/python-uv-cli
+.\scripts\check.ps1
+uv run --no-editable python-uv-cli
+.\..\..\scripts\agent-task.ps1 ps --match uv
+```
+
 Generated projects also include a pinned Beans wrapper and seeded starter backlog:
 
 ```bash

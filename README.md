@@ -1,6 +1,6 @@
 # Codex Bootstrap
 
-Codex Bootstrap is a GitHub-hosted launchpad for starting software projects with an agent-ready baseline. Clone it into the directory that should become the new project, run `./bootstrap`, and the checkout rewrites itself into the selected starter with fresh Git metadata.
+Codex Bootstrap is a GitHub-hosted launchpad for starting software projects with an agent-ready baseline. Clone it into the directory that should become the new project, run `./bootstrap` or `.\bootstrap.ps1`, and the checkout rewrites itself into the selected starter with fresh Git metadata.
 
 The repo currently ships:
 
@@ -10,11 +10,11 @@ The repo currently ships:
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-mcp-server/`: a TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Bun tests, and a deterministic verification path.
-- `bootstrap`: the in-place launcher that materializes a template and removes the catalog from the generated project.
+- `bootstrap` and `bootstrap.ps1`: in-place launchers that materialize a template and remove the catalog from the generated project.
 - `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/pages/`: the GitHub Pages installer-site builder and tests.
-- `scripts/agent-dotnet`: a .NET CLI wrapper that keeps dotnet home and NuGet package state local to the project during agent runs.
+- `scripts/agent-dotnet` and `scripts/agent-dotnet.ps1`: .NET CLI wrappers that keep dotnet home and NuGet package state local to the project during agent runs.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
@@ -28,10 +28,22 @@ Install directly from GitHub Pages:
 curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- my-service --template python-uv-cli
 ```
 
+On Windows PowerShell:
+
+```powershell
+irm https://jamezz.github.io/codex-bootstrap/install.ps1 | iex
+Install-CodexBootstrap my-service -Template python-uv-cli
+```
+
 List published starters:
 
 ```bash
 curl -fsSL https://jamezz.github.io/codex-bootstrap/install.sh | bash -s -- --list-templates
+```
+
+```powershell
+irm https://jamezz.github.io/codex-bootstrap/install.ps1 | iex
+Install-CodexBootstrap -ListTemplates
 ```
 
 Or clone the catalog manually:
@@ -41,6 +53,15 @@ git clone <codex-bootstrap-repo-url> my-service
 cd my-service
 ./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice
 ./scripts/agent-gradle . check
+```
+
+PowerShell equivalents:
+
+```powershell
+git clone <codex-bootstrap-repo-url> my-service
+cd my-service
+.\bootstrap.ps1 --template java-gradle-cli --name my-service --package com.example.myservice
+.\scripts\agent-gradle.ps1 . check
 ```
 
 Other starter variants:
@@ -80,7 +101,7 @@ Every bootstrap environment should include:
 - a README that explains purpose, prerequisites, usage, verification, and customization;
 - an `AGENTS.md` with direct instructions for Codex-style agents working inside the environment;
 - a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
-- a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` wrapper;
+- a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` / `scripts/agent-beans.ps1` wrappers;
 - first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - a deterministic verification command that can be run before handoff;
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
@@ -102,15 +123,21 @@ Prefer compatibility-breaking cleanup over preserving early template mistakes. T
 
 ```text
 bootstrap
+bootstrap.ps1
 environments/
   supermeta/
 scripts/
   agent-beans
+  agent-beans.ps1
   agent-dotnet
+  agent-dotnet.ps1
   agent-gradle
+  agent-gradle.ps1
   agent-task
+  agent-task.ps1
 site/
   install.sh
+  install.ps1
   index.html
 templates/
   csharp-dotnet-cli/
@@ -142,6 +169,12 @@ Build the GitHub Pages installer artifact locally with:
 ```bash
 python3 tools/pages/build_pages.py --output build/pages
 bash -n build/pages/install.sh
+```
+
+`build/pages/install.ps1` is the Windows installer. If PowerShell is available locally, run it with `-Help` after the Pages build:
+
+```powershell
+.\build\pages\install.ps1 -Help
 ```
 
 Verify the first runnable template in catalog form with:
@@ -195,6 +228,13 @@ Generated projects can also carry a general stuck-task helper for process and lo
 ```bash
 ./scripts/agent-task ps --match gradle
 ./scripts/agent-task logs .gradle/supermeta-gradle/logs
+```
+
+On Windows PowerShell, use the `.ps1` entrypoints:
+
+```powershell
+.\scripts\agent-task.ps1 ps --match gradle
+.\scripts\agent-gradle.ps1 . check
 ```
 
 The Gradle harness exposes shorter Gradle-specific recovery commands on top of that helper:

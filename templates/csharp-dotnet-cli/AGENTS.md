@@ -18,6 +18,14 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect dotnet processes: `./scripts/agent-task ps --match dotnet`
 
+## Windows
+
+- Restore locked dependencies: `.\scripts\agent-dotnet.ps1 . restore --locked-mode`
+- Verify: `.\scripts\check.ps1`
+- Run: `.\scripts\agent-dotnet.ps1 . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --`
+- Beans prime: `.\scripts\agent-beans.ps1 prime`
+- Inspect dotnet processes: `.\scripts\agent-task.ps1 ps --match dotnet`
+
 ## Beans
 
 - Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.

@@ -11,4 +11,12 @@ From a generated repo:
 ./scripts/agent-beans roadmap
 ```
 
+Windows PowerShell:
+
+```powershell
+.\scripts\agent-beans.ps1 prime
+.\scripts\agent-beans.ps1 list --ready
+.\scripts\agent-beans.ps1 check
+```
+
 The wrapper requires Beans `0.4.2`. If the local CLI is absent or a different version is installed, it exits with install guidance instead of silently using an unknown schema.

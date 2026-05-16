@@ -73,6 +73,15 @@ Stuck-task diagnostics from the repository root:
 ./scripts/agent-task ps --match tsc
 ```
 
+PowerShell entrypoints are available for Windows agents:
+
+```powershell
+cd templates/typescript-bun-cli
+.\scripts\check.ps1
+bun run src/main.ts
+.\..\..\scripts\agent-task.ps1 ps --match bun
+```
+
 Generated projects also include a pinned Beans wrapper and seeded starter backlog:
 
 ```bash

@@ -84,6 +84,15 @@ Stuck-build diagnostics from the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli --stop
 ```
 
+PowerShell entrypoints are available for Windows agents:
+
+```powershell
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli check
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli run
+.\scripts\agent-task.ps1 ps --match gradle
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop
+```
+
 Generated projects also include a pinned Beans wrapper and seeded starter backlog:
 
 ```bash

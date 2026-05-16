@@ -14,13 +14,13 @@ Supermeta defines the minimum bar for a bootstrap environment:
 
 The goal is not to preserve every possible option. The goal is to make the good default path obvious.
 
-`bootstrap` is the in-place launcher. It materializes a template into the current checkout, removes catalog-only files, deletes cloned Git metadata, and initializes a fresh standalone project.
+`bootstrap` and `bootstrap.ps1` are the in-place launchers. They materialize a template into the current checkout, remove catalog-only files, delete cloned Git metadata, and initialize a fresh standalone project.
 
 `tools/bootstrap/` owns the launcher implementation and tests. Its smoke test copies the catalog to a temp directory, runs the destructive launcher, verifies the generated project, then develops and verifies a tiny generated CLI example.
 
 `tools/supermeta-rules/check.py` is the shared helper for rules that examples should not reimplement, starting with product source line-count checks.
 
-`tools/supermeta-gradle/gradle.py` is the shared Gradle harness. Gradle templates should document `scripts/agent-gradle` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, and parallel output collisions while still keeping warm Gradle performance by default.
+`tools/supermeta-gradle/gradle.py` is the shared Gradle harness. Gradle templates should document `scripts/agent-gradle` and `scripts/agent-gradle.ps1` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, and parallel output collisions while still keeping warm Gradle performance by default.
 
 ## Environment Checklist
 
@@ -29,7 +29,7 @@ When adding a new environment or template, include:
 - `README.md` with purpose, prerequisites, usage, verification, and customization;
 - `AGENTS.md` with repo-local instructions for agents;
 - generated-project docs metadata for `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
-- generated-project Beans support through `scripts/agent-beans`, `.beans.yml`, `.beans/.gitignore`, and starter backlog files;
+- generated-project Beans support through `scripts/agent-beans`, `scripts/agent-beans.ps1`, `.beans.yml`, `.beans/.gitignore`, and starter backlog files;
 - first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - `bootstrap-template.json` for runnable templates that can be materialized by the root launcher;
 - a deterministic validation command;

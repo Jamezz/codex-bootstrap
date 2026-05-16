@@ -20,6 +20,13 @@ This is a copyable MCP server starter, not a long-lived framework.
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
+## Windows
+
+- Verify from template root: `.\scripts\check.ps1`
+- Show server help from template root: `bun run src/main.ts --help`
+- Beans prime after materialization: `.\scripts\agent-beans.ps1 prime`
+- Inspect Bun processes after materialization: `.\scripts\agent-task.ps1 ps --match bun`
+
 ## Rules
 
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.

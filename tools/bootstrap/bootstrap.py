@@ -33,6 +33,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     "AGENTS.md",
     "README.md",
     "bootstrap",
+    "bootstrap.ps1",
     "environments",
     "scripts",
     "site",
@@ -92,6 +93,7 @@ TEXT_SUFFIXES = {
     ".mjs",
     ".mts",
     ".properties",
+    ".ps1",
     ".py",
     ".sh",
     ".slnx",
@@ -730,6 +732,80 @@ If the pinned Beans CLI is installed, inspect project task context with:
 """
 
 
+def windows_check_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "java-gradle-cli":
+        return ".\\scripts\\agent-gradle.ps1 . check"
+    return ".\\scripts\\check.ps1"
+
+
+def windows_run_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        project_name = csharp_project_name_from_slug(plan.config.project_name)
+        return f".\\scripts\\agent-dotnet.ps1 . run --project src/{project_name}/{project_name}.csproj --"
+    if plan.manifest.template_type == "java-gradle-cli":
+        return ".\\scripts\\agent-gradle.ps1 . run"
+    if plan.manifest.template_type == "typescript-bun-mcp-server":
+        return "bun run src/main.ts --help"
+    if plan.manifest.template_type == "typescript-bun-cli":
+        return "bun run src/main.ts"
+    return f"uv run --no-editable {plan.config.project_name}"
+
+
+def windows_run_with_args_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return f"{windows_run_command(plan)} \"example\""
+    if plan.manifest.template_type == "java-gradle-cli":
+        return ".\\scripts\\agent-gradle.ps1 . run --args=\"example\""
+    if plan.manifest.template_type == "typescript-bun-mcp-server":
+        return "bun run src/main.ts --transport http"
+    if plan.manifest.template_type == "typescript-bun-cli":
+        return "bun run src/main.ts \"example\""
+    return f"uv run --no-editable {plan.config.project_name} \"example\""
+
+
+def windows_setup_command(plan: BootstrapPlan) -> str | None:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return ".\\scripts\\agent-dotnet.ps1 . restore --locked-mode"
+    return None
+
+
+def windows_process_match(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "csharp-dotnet-cli":
+        return "dotnet"
+    if plan.manifest.template_type == "java-gradle-cli":
+        return "gradle"
+    if plan.manifest.template_type == "python-uv-cli":
+        return "uv"
+    return "bun"
+
+
+def generated_windows_readme_section(plan: BootstrapPlan) -> str:
+    setup_command = windows_setup_command(plan)
+    setup_line = f"{setup_command}\n" if setup_command else ""
+    return f"""## Windows
+
+PowerShell entrypoints mirror the Unix scripts:
+
+```powershell
+{setup_line}{windows_check_command(plan)}
+{windows_run_command(plan)}
+.\\scripts\\agent-beans.ps1 prime
+.\\scripts\\agent-task.ps1 ps --match {windows_process_match(plan)}
+```
+"""
+
+
+def generated_windows_agent_section(plan: BootstrapPlan) -> str:
+    return f"""## Windows
+
+- Verify: `{windows_check_command(plan)}`
+- Run: `{windows_run_command(plan)}`
+- Run with app args: `{windows_run_with_args_command(plan)}`
+- Beans prime: `.\\scripts\\agent-beans.ps1 prime`
+- Inspect task processes: `.\\scripts\\agent-task.ps1 ps --match {windows_process_match(plan)}`
+"""
+
+
 def generated_agent_beans_section() -> str:
     return """## Beans
 
@@ -825,6 +901,7 @@ Inspect stuck task state:
 ./scripts/agent-gradle . --stop
 ```
 
+{generated_windows_readme_section(plan)}
 ## Customization
 
 - Change the Java baseline in `gradle.properties`.
@@ -894,6 +971,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Stop scoped Gradle daemon: `./scripts/agent-gradle . --stop`
 - If debugging raw Gradle behavior only: `./gradlew check`
 
+{generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 ## Rules
 
@@ -967,6 +1045,7 @@ Inspect stuck task state:
 ./scripts/agent-task ps --match dotnet
 ```
 
+{generated_windows_readme_section(plan)}
 ## Customization
 
 - Product source lives under `src/{project_name}`.
@@ -1025,6 +1104,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect dotnet processes: `./scripts/agent-task ps --match dotnet`
 
+{generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 ## Rules
 
@@ -1093,6 +1173,7 @@ uv run --no-editable python -m {module_name} "Ada Lovelace"
 
 {generated_logging_readme_section().replace("<run-command>", f"uv run --no-editable {plan.config.project_name}")}
 
+{generated_windows_readme_section(plan)}
 ## Customization
 
 - Product source lives under `src/{module_name}`.
@@ -1143,6 +1224,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
+{generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 ## Rules
 
@@ -1201,6 +1283,7 @@ bun run src/main.ts "Ada Lovelace"
 
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts")}
 
+{generated_windows_readme_section(plan)}
 ## Customization
 
 - Product source lives under `src/`.
@@ -1248,6 +1331,7 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
+{generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 ## Rules
 
@@ -1323,6 +1407,7 @@ bun run src/main.ts --state file --state-file .mcp/state.json
 
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts --transport http")}
 
+{generated_windows_readme_section(plan)}
 ## Customization
 
 - MCP tool, prompt, and resource registration lives in `src/mcp.ts`.
@@ -1373,6 +1458,7 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
+{generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 ## Rules
 
@@ -1476,6 +1562,14 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ./scripts/agent-beans list
 ./scripts/agent-beans check
 ./scripts/agent-beans roadmap
+```
+
+## Windows
+
+```powershell
+{windows_check_command(plan)}
+{windows_run_command(plan)}
+.\\scripts\\agent-beans.ps1 prime
 ```
 
 ## Troubleshooting

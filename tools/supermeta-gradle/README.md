@@ -2,7 +2,7 @@
 
 `gradle.py` runs Gradle in the boring, agent-safe way that has proven less painful across local Codex work:
 
-- use the checked-in `./gradlew`;
+- use the checked-in `./gradlew` on POSIX and `gradlew.bat` on Windows;
 - isolate `GRADLE_USER_HOME` under `/tmp/supermeta-gradle/gradle-user-home`;
 - disable file watching;
 - serialize runs that share that Gradle home;
@@ -22,6 +22,14 @@ From the repository root:
 ./scripts/agent-gradle templates/java-gradle-cli run
 ```
 
+Windows PowerShell:
+
+```powershell
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli test
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli check
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli run
+```
+
 Direct invocation:
 
 ```bash
@@ -39,6 +47,12 @@ These helpers wrap the shared `agent-task` process/log diagnostics with Gradle d
 ./scripts/agent-gradle templates/java-gradle-cli --logs
 ./scripts/agent-gradle templates/java-gradle-cli --stop
 ./scripts/agent-gradle templates/java-gradle-cli --kill
+```
+
+```powershell
+.\scripts\agent-task.ps1 ps --match gradle
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli --logs
+.\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop
 ```
 
 - `--ps` lists likely Gradle/Java build processes.

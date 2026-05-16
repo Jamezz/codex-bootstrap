@@ -12,6 +12,13 @@ From a generated repo:
 ./scripts/agent-task kill --match gradle
 ```
 
+Windows PowerShell:
+
+```powershell
+.\scripts\agent-task.ps1 ps --match gradle
+.\scripts\agent-task.ps1 logs .gradle/supermeta-gradle/logs
+```
+
 - `ps` lists matching process commands. Without `--match`, it uses broad build/test defaults.
 - `logs` lists recent files from a log directory.
 - `kill` sends `SIGTERM` and requires at least one explicit `--match` pattern.

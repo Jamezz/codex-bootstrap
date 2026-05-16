@@ -75,8 +75,11 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             [
                 "scripts/agent-dotnet",
+                "scripts/agent-dotnet.ps1",
                 "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
                 "scripts/agent-task",
+                "scripts/agent-task.ps1",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -97,8 +100,11 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             [
                 "scripts/agent-gradle",
+                "scripts/agent-gradle.ps1",
                 "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
                 "scripts/agent-task",
+                "scripts/agent-task.ps1",
                 "tools/supermeta-gradle",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
@@ -121,7 +127,9 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             [
                 "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
                 "scripts/agent-task",
+                "scripts/agent-task.ps1",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -143,7 +151,9 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             [
                 "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
                 "scripts/agent-task",
+                "scripts/agent-task.ps1",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -165,7 +175,9 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(
             [
                 "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
                 "scripts/agent-task",
+                "scripts/agent-task.ps1",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -208,10 +220,14 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertFalse((checkout / ".github").exists())
             self.assertFalse((checkout / "site").exists())
             self.assertFalse((checkout / "bootstrap").exists())
+            self.assertFalse((checkout / "bootstrap.ps1").exists())
             self.assertFalse((checkout / "tools" / "bootstrap").exists())
             self.assertTrue((checkout / "scripts" / "agent-gradle").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-gradle.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
@@ -270,8 +286,11 @@ class BootstrapSmokeTest(unittest.TestCase):
             agents = read_text(checkout / "AGENTS.md")
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/agent-gradle . check", readme)
+            self.assertIn(".\\scripts\\agent-gradle.ps1 . check", readme)
             self.assertIn("./scripts/agent-beans prime", readme)
+            self.assertIn(".\\scripts\\agent-beans.ps1 prime", readme)
             self.assertIn("./scripts/agent-task ps --match gradle", readme)
+            self.assertIn(".\\scripts\\agent-task.ps1 ps --match gradle", readme)
             self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", readme)
             self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
@@ -279,6 +298,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("update `application.mainClass` in `build.gradle.kts`", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
+            self.assertIn('.\\scripts\\agent-gradle.ps1 . run --args="example"', agents)
             self.assertIn("LOG_LEVEL=info ./scripts/agent-gradle . run", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("./scripts/agent-task ps --match gradle", agents)
@@ -367,7 +387,10 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             assert_catalog_removed(self, checkout)
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -394,12 +417,14 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App", readme)
             self.assertIn("uv sync --locked", readme)
             self.assertIn("./scripts/check", readme)
+            self.assertIn(".\\scripts\\check.ps1", readme)
             self.assertIn("uv run --no-editable sample-app", readme)
             self.assertIn("uv run --no-editable python -m sample_app", readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
             self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("uv run --no-editable sample-app", agents)
+            self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info uv run --no-editable sample-app", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
@@ -471,8 +496,12 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             assert_catalog_removed(self, checkout)
             self.assertTrue((checkout / "scripts" / "agent-dotnet").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-dotnet.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -503,6 +532,10 @@ class BootstrapSmokeTest(unittest.TestCase):
                 '"sampleapp":',
                 read_text(checkout / "tests" / "SampleApp.Tests" / "packages.lock.json"),
             )
+            check_powershell = read_text(checkout / "scripts" / "check.ps1")
+            self.assertIn("SampleApp.slnx", check_powershell)
+            self.assertIn("scripts/agent-dotnet.ps1", check_powershell)
+            self.assertNotIn("CsharpDotnetCli.slnx", check_powershell)
 
             app_source = read_text(checkout / "src" / "SampleApp" / "App.cs")
             logging_source = read_text(checkout / "src" / "SampleApp" / "LoggingConfig.cs")
@@ -521,12 +554,15 @@ class BootstrapSmokeTest(unittest.TestCase):
             agents = read_text(checkout / "AGENTS.md")
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/check", readme)
+            self.assertIn(".\\scripts\\check.ps1", readme)
             self.assertIn("./scripts/agent-dotnet . restore --locked-mode", readme)
+            self.assertIn(".\\scripts\\agent-dotnet.ps1 . restore --locked-mode", readme)
             self.assertIn("./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
             self.assertIn("./scripts/agent-task ps --match dotnet", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("Target .NET 10 through `net10.0`", agents)
+            self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info ./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
@@ -620,7 +656,10 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             assert_catalog_removed(self, checkout)
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -649,11 +688,13 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App", readme)
             self.assertIn("bun install --frozen-lockfile", readme)
             self.assertIn("./scripts/check", readme)
+            self.assertIn(".\\scripts\\check.ps1", readme)
             self.assertIn("bun run src/main.ts", readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
             self.assertIn("./scripts/agent-beans prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("Bun is the only package-manager/runtime contract", agents)
+            self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info bun run src/main.ts", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
@@ -715,7 +756,10 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             assert_catalog_removed(self, checkout)
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -741,8 +785,10 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App", readme)
             self.assertIn("TypeScript Bun MCP server", readme)
             self.assertIn("./scripts/check", readme)
+            self.assertIn(".\\scripts\\check.ps1", readme)
             self.assertIn("bun run src/main.ts --transport http", readme)
             self.assertIn("Keep stdio output clean", agents)
+            self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertNotIn("codex-bootstrap", readme.lower())
             self.assertNotIn("codex-bootstrap", agents.lower())
@@ -1041,6 +1087,7 @@ def assert_catalog_removed(test_case: unittest.TestCase, checkout: Path) -> None
     test_case.assertFalse((checkout / ".github").exists())
     test_case.assertFalse((checkout / "site").exists())
     test_case.assertFalse((checkout / "bootstrap").exists())
+    test_case.assertFalse((checkout / "bootstrap.ps1").exists())
     test_case.assertFalse((checkout / "tools" / "bootstrap").exists())
 
     remotes = run_checked(["git", "remote"], cwd=checkout).stdout.strip()

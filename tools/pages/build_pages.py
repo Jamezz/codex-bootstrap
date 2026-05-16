@@ -83,6 +83,7 @@ def build_templates_payload() -> dict[str, Any]:
     return {
         "defaultTemplate": DEFAULT_TEMPLATE,
         "installUrl": f"{PAGES_BASE_URL}/install.sh",
+        "windowsInstallUrl": f"{PAGES_BASE_URL}/install.ps1",
         "pagesUrl": PAGES_BASE_URL,
         "sourceRepository": SOURCE_REPOSITORY,
         "templates": templates,
@@ -104,7 +105,7 @@ def require_string_list(raw: dict[str, Any], key: str, path: Path) -> list[str]:
 
 
 def write_checksums(output: Path) -> None:
-    checksummed = ["index.html", "install.sh", "templates.json"]
+    checksummed = ["index.html", "install.sh", "install.ps1", "templates.json"]
     lines = []
     for name in checksummed:
         path = output / name
@@ -115,6 +116,10 @@ def write_checksums(output: Path) -> None:
 
     (output / "install.sh.sha256").write_text(
         next(line for line in lines if line.endswith("  install.sh")) + "\n",
+        encoding="utf-8",
+    )
+    (output / "install.ps1.sha256").write_text(
+        next(line for line in lines if line.endswith("  install.ps1")) + "\n",
         encoding="utf-8",
     )
     (output / "checksums.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")

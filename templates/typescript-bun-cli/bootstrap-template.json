@@ -10,8 +10,16 @@
       "destination": "scripts/agent-beans"
     },
     {
+      "source": "scripts/agent-beans.ps1",
+      "destination": "scripts/agent-beans.ps1"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
+    },
+    {
+      "source": "scripts/agent-task.ps1",
+      "destination": "scripts/agent-task.ps1"
     },
     {
       "source": "tools/supermeta-beans",

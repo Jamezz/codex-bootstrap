@@ -47,6 +47,18 @@ LOG_LEVEL=info LOG_FORMAT=json ./scripts/agent-dotnet . run --project src/Csharp
 
 `LOG_LEVEL` accepts `trace`, `debug`, `info`, `warn`, `error`, or `off`. `LOG_FORMAT` accepts `text` or `json`. Logs always go to stderr; normal command output stays on stdout unless the CLI is reporting a user-facing error.
 
+## Windows
+
+PowerShell entrypoints mirror the Unix scripts:
+
+```powershell
+.\scripts\agent-dotnet.ps1 . restore --locked-mode
+.\scripts\check.ps1
+.\scripts\agent-dotnet.ps1 . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --
+.\scripts\agent-beans.ps1 prime
+.\scripts\agent-task.ps1 ps --match dotnet
+```
+
 ## Customization
 
 - Product source lives under `src/CsharpDotnetCli`.

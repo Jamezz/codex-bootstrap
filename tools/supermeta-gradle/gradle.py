@@ -4,13 +4,22 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import os
 import shlex
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - exercised on Windows.
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - exercised on POSIX.
+    msvcrt = None
 
 TASK_TOOL_DIR = Path(__file__).resolve().parents[1] / "supermeta-task"
 if TASK_TOOL_DIR.is_dir():
@@ -43,9 +52,9 @@ def main() -> int:
         print("supermeta-gradle: no Gradle arguments supplied", file=sys.stderr)
         return 2
 
-    wrapper = project_dir / "gradlew"
-    if not wrapper.is_file():
-        print(f"supermeta-gradle: missing Gradle wrapper at {wrapper}", file=sys.stderr)
+    wrapper = resolve_gradle_wrapper(project_dir)
+    if wrapper is None:
+        print(f"supermeta-gradle: missing Gradle wrapper in {project_dir}", file=sys.stderr)
         return 2
 
     gradle_home = resolve_gradle_home(args.gradle_user_home, project_dir)
@@ -68,7 +77,7 @@ def main() -> int:
         if not args.no_lock:
             print(f"supermeta-gradle: waiting for Gradle home lock {lock_path}", flush=True)
             lock_start_time = time.monotonic()
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            lock_file_exclusive(lock_file)
             lock_wait_seconds = time.monotonic() - lock_start_time
 
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -192,13 +201,12 @@ def print_recent_logs(project_dir: Path, limit: int) -> int:
 
 
 def stop_gradle_daemon(project_dir: Path, gradle_home: Path) -> int:
-    wrapper = project_dir / "gradlew"
-    if not wrapper.is_file():
-        print(f"supermeta-gradle: missing Gradle wrapper at {wrapper}", file=sys.stderr)
+    wrapper = resolve_gradle_wrapper(project_dir)
+    if wrapper is None:
+        print(f"supermeta-gradle: missing Gradle wrapper in {project_dir}", file=sys.stderr)
         return 2
 
-    command = [str(wrapper)] if os.access(wrapper, os.X_OK) else ["sh", str(wrapper)]
-    command.append("--stop")
+    command = [*gradle_executable(wrapper), "--stop"]
     env = os.environ.copy()
     env["GRADLE_USER_HOME"] = str(gradle_home)
     print(f"supermeta-gradle: stopping Gradle daemon with {shlex.join(command)}")
@@ -228,8 +236,9 @@ def build_command(
     gradle_args: list[str],
     no_default_flags: bool,
     cold_mode: bool,
+    platform_name: str | None = None,
 ) -> list[str]:
-    executable = [str(wrapper)] if os.access(wrapper, os.X_OK) else ["sh", str(wrapper)]
+    executable = gradle_executable(wrapper, platform_name)
     if no_default_flags:
         return [*executable, *gradle_args]
 
@@ -248,6 +257,49 @@ def build_command(
             defaults.append(f"--max-workers={os.environ['SUPERMETA_GRADLE_MAX_WORKERS']}")
 
     return [*executable, *defaults, *gradle_args]
+
+
+def resolve_gradle_wrapper(project_dir: Path, platform_name: str | None = None) -> Path | None:
+    platform = platform_name or os.name
+    if platform == "nt":
+        batch_wrapper = project_dir / "gradlew.bat"
+        if batch_wrapper.is_file():
+            return batch_wrapper
+
+    wrapper = project_dir / "gradlew"
+    if wrapper.is_file():
+        return wrapper
+
+    if platform != "nt":
+        batch_wrapper = project_dir / "gradlew.bat"
+        if batch_wrapper.is_file():
+            return batch_wrapper
+
+    return None
+
+
+def gradle_executable(wrapper: Path, platform_name: str | None = None) -> list[str]:
+    platform = platform_name or os.name
+    if platform == "nt":
+        if wrapper.suffix.lower() in {".bat", ".cmd"}:
+            return [str(wrapper)]
+        return [f"{wrapper}.bat"]
+    if wrapper.suffix.lower() in {".bat", ".cmd"}:
+        return [str(wrapper)]
+    return [str(wrapper)] if os.access(wrapper, os.X_OK) else ["sh", str(wrapper)]
+
+
+def lock_file_exclusive(lock_file: object) -> None:
+    if fcntl is not None:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        return
+
+    if msvcrt is not None:
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+        return
+
+    print("supermeta-gradle: file locking unavailable on this platform", file=sys.stderr)
 
 
 def add_flag_pair(defaults: list[str], gradle_args: list[str], off_flag: str, on_flag: str) -> None:
