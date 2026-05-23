@@ -55,6 +55,7 @@ JAVA_METHOD_RE = re.compile(
     re.MULTILINE,
 )
 JAVA_CONTROL_NAMES = {"catch", "for", "if", "switch", "synchronized", "try", "while"}
+JAVA_MODIFIERS = {"abstract", "final", "native", "private", "protected", "public", "static", "strictfp", "synchronized"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -124,6 +125,7 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
     findings.extend(run_line_count_rules(config.get("line_count", []), root))
     findings.extend(run_java_package_file_count_rules(config.get("java_package_file_count", []), root))
     findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root))
+    findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root))
     findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
@@ -132,7 +134,16 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
         )
     )
 
-    unknown_rules = sorted(set(config) - {"java_import_style", "java_package_file_count", "line_count", "project_callouts"})
+    unknown_rules = sorted(
+        set(config)
+        - {
+            "java_import_style",
+            "java_lombok_boilerplate",
+            "java_package_file_count",
+            "line_count",
+            "project_callouts",
+        }
+    )
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
     return findings
@@ -244,6 +255,302 @@ def suggest_java_wildcard_import(normalized_import: str) -> str:
     target = normalized_import.removeprefix("static ")
     package_or_type = target.rsplit(".", 1)[0]
     return f"{static_prefix}{package_or_type}.*"
+
+
+def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("java_lombok_boilerplate must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"java_lombok_boilerplate[{index}]")
+        name = require_string(rule, "name", default=f"java_lombok_boilerplate[{index}]")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.java"])
+        exclude = require_string_list(rule, "exclude", default=[])
+        ignore_annotations = tuple(require_string_list(rule, "ignore_annotations", default=[]))
+        allow_methods = set(require_string_list(rule, "allow_methods", default=[]))
+
+        for source_file in iter_matching_files(root, paths, include, exclude):
+            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            class_blocks = iter_java_class_blocks(stripped_source)
+            findings.extend(
+                find_lombok_method_boilerplate(
+                    name,
+                    source_file.relative_to(root),
+                    stripped_source,
+                    class_blocks,
+                    ignore_annotations,
+                    allow_methods,
+                )
+            )
+            findings.extend(
+                find_lombok_builder_boilerplate(
+                    name,
+                    source_file.relative_to(root),
+                    stripped_source,
+                    class_blocks,
+                    ignore_annotations,
+                )
+            )
+
+    return findings
+
+
+def find_lombok_method_boilerplate(
+    rule_name: str,
+    relative_path: Path,
+    source: str,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+    allow_methods: set[str],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for method in iter_java_method_blocks(source):
+        if method.name in JAVA_CONTROL_NAMES or method.name in allow_methods:
+            continue
+        if annotations_match_any(method.annotations, ignore_annotations):
+            continue
+        if method_is_inside_ignored_class(method, class_blocks, ignore_annotations):
+            continue
+
+        if is_simple_java_getter(method) or is_simple_java_setter(method) or is_fluent_java_setter(method):
+            findings.append(
+                Finding(
+                    rule=rule_name,
+                    path=relative_path,
+                    message=f"{method.name}() is Lombok boilerplate; {lombok_suggestion(ignore_annotations)}",
+                )
+            )
+        elif is_builder_factory(method):
+            findings.append(
+                Finding(
+                    rule=rule_name,
+                    path=relative_path,
+                    message=f"{method.name}() is Lombok builder boilerplate; {lombok_suggestion(ignore_annotations)}",
+                )
+            )
+
+    return findings
+
+
+def find_lombok_builder_boilerplate(
+    rule_name: str,
+    relative_path: Path,
+    source: str,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for class_block in class_blocks:
+        if class_block.name != "Builder":
+            continue
+        if annotations_match_any(class_block.annotations, ignore_annotations):
+            continue
+        class_source = source[class_block.start : class_block.end]
+        compact = normalize_java_body(class_source)
+        if " build(" in compact and "return this;" in compact:
+            findings.append(
+                Finding(
+                    rule=rule_name,
+                    path=relative_path,
+                    message=f"Builder class is Lombok builder boilerplate; {lombok_suggestion(ignore_annotations)}",
+                )
+            )
+    return findings
+
+
+def iter_java_class_blocks(source: str) -> list[JavaClassBlock]:
+    blocks: list[JavaClassBlock] = []
+    for match in JAVA_CLASS_RE.finditer(source):
+        open_brace = source.find("{", match.start())
+        close_brace = find_matching_brace(source, open_brace)
+        if open_brace == -1 or close_brace == -1:
+            continue
+        blocks.append(
+            JavaClassBlock(
+                name=match.group("name"),
+                start=match.start(),
+                end=close_brace + 1,
+                annotations=annotations_before(source, match.start()),
+            )
+        )
+    return blocks
+
+
+def iter_java_method_blocks(source: str) -> list[JavaMethodBlock]:
+    blocks: list[JavaMethodBlock] = []
+    for match in JAVA_METHOD_RE.finditer(source):
+        method_name = match.group("name")
+        if method_name in JAVA_CONTROL_NAMES:
+            continue
+        open_brace = source.find("{", match.start())
+        close_brace = find_matching_brace(source, open_brace)
+        if open_brace == -1 or close_brace == -1:
+            continue
+        blocks.append(
+            JavaMethodBlock(
+                name=method_name,
+                return_type=" ".join(match.group("return").split()),
+                params=match.group("params").strip(),
+                body=source[open_brace + 1 : close_brace],
+                start=match.start(),
+                end=close_brace + 1,
+                annotations=annotations_before(source, match.start()),
+            )
+        )
+    return blocks
+
+
+def find_matching_brace(source: str, open_brace: int) -> int:
+    if open_brace < 0 or open_brace >= len(source) or source[open_brace] != "{":
+        return -1
+    depth = 0
+    for index in range(open_brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def annotations_before(source: str, index: int) -> tuple[str, ...]:
+    annotations: list[str] = []
+    cursor = index
+    while cursor > 0:
+        line_start = source.rfind("\n", 0, cursor - 1) + 1
+        line = source[line_start:cursor].strip()
+        if not line:
+            cursor = line_start
+            continue
+        if line == "@":
+            line_end = source.find("\n", cursor)
+            if line_end == -1:
+                line_end = len(source)
+            annotation_line = source[line_start:line_end].strip()
+            annotation_name = annotation_line[1:].split("(", 1)[0].strip()
+            if annotation_name:
+                annotations.append(annotation_name)
+            cursor = line_start
+            continue
+        if not line.startswith("@"):
+            if all(token in JAVA_MODIFIERS for token in line.split()):
+                cursor = line_start
+                continue
+            break
+        annotation_name = line[1:].split("(", 1)[0].strip()
+        annotations.append(annotation_name)
+        cursor = line_start
+    return tuple(reversed(annotations))
+
+
+def annotations_match_any(actual_annotations: tuple[str, ...], configured_annotations: tuple[str, ...]) -> bool:
+    return any(
+        annotation_matches(actual, configured)
+        for actual in actual_annotations
+        for configured in configured_annotations
+    )
+
+
+def annotation_matches(actual: str, configured: str) -> bool:
+    if "." in configured:
+        return actual == configured
+    return actual == configured or actual.endswith(f".{configured}")
+
+
+def method_is_inside_ignored_class(
+    method: JavaMethodBlock,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+) -> bool:
+    return any(
+        class_block.start <= method.start <= class_block.end
+        and annotations_match_any(class_block.annotations, ignore_annotations)
+        for class_block in class_blocks
+    )
+
+
+def normalize_java_body(body: str) -> str:
+    return " ".join(body.split())
+
+
+def java_param_names(params: str) -> list[str]:
+    if not params.strip():
+        return []
+    names: list[str] = []
+    for param in params.split(","):
+        cleaned = re.sub(r"@\S+(?:\([^)]*\))?", "", param)
+        cleaned = cleaned.replace("final ", "").replace("...", " ")
+        parts = [part for part in cleaned.strip().split() if part]
+        if not parts:
+            continue
+        names.append(parts[-1].replace("[]", ""))
+    return names
+
+
+def is_simple_java_getter(method: JavaMethodBlock) -> bool:
+    if method.params.strip():
+        return False
+    if not (
+        method.name.startswith("get")
+        and len(method.name) > 3
+        and method.name[3].isupper()
+        or method.name.startswith("is")
+        and len(method.name) > 2
+        and method.name[2].isupper()
+    ):
+        return False
+    return re.fullmatch(r"return\s+(?:this\.)?[A-Za-z_$][\w$]*\s*;", normalize_java_body(method.body)) is not None
+
+
+def is_simple_java_setter(method: JavaMethodBlock) -> bool:
+    if not (method.name.startswith("set") and len(method.name) > 3 and method.name[3].isupper()):
+        return False
+    param_names = java_param_names(method.params)
+    if len(param_names) != 1:
+        return False
+    param_name = re.escape(param_names[0])
+    return (
+        re.fullmatch(
+            rf"(?:this\.)?[A-Za-z_$][\w$]*\s*=\s*{param_name}\s*;",
+            normalize_java_body(method.body),
+        )
+        is not None
+    )
+
+
+def is_fluent_java_setter(method: JavaMethodBlock) -> bool:
+    param_names = java_param_names(method.params)
+    if len(param_names) != 1:
+        return False
+    param_name = re.escape(param_names[0])
+    return (
+        re.fullmatch(
+            rf"(?:this\.)?[A-Za-z_$][\w$]*\s*=\s*{param_name}\s*;\s*return\s+this\s*;",
+            normalize_java_body(method.body),
+        )
+        is not None
+    )
+
+
+def is_builder_factory(method: JavaMethodBlock) -> bool:
+    return (
+        method.name == "builder"
+        and not method.params.strip()
+        and re.fullmatch(r"return\s+new\s+[A-Za-z_$][\w$]*Builder?\s*\(\s*\)\s*;", normalize_java_body(method.body))
+        is not None
+    )
+
+
+def lombok_suggestion(ignore_annotations: tuple[str, ...]) -> str:
+    if ignore_annotations:
+        return (
+            "use Lombok or annotate the method/class with "
+            f"{ignore_annotations[0]} if this is intentionally handwritten"
+        )
+    return "use Lombok"
 
 
 def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> list[Finding]:
