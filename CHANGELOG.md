@@ -56,6 +56,9 @@ Use these buckets inside dated entries when they help:
 - Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
   sync contract is version 2 with `language-checks` marked manual opt-in for
   existing repos.
+- Kept the generated `agent-nags` operations region stable across the
+  260e1d8-to-contract-v2 hop so older helpers do not perform multiple region
+  writes against the same file during that transition.
 
 ### Pages / Installer
 

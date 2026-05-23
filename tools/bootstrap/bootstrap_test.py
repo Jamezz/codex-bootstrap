@@ -20,6 +20,7 @@ from tools.bootstrap.bootstrap import (  # noqa: E402
     UsageError,
     assert_safe_clear_path,
     csharp_project_name_from_slug,
+    generated_nag_docs_region,
     java_package_to_path,
     python_module_from_slug,
     stage_template,
@@ -135,6 +136,16 @@ class ManifestTest(unittest.TestCase):
                 rules_readme,
             )
             self.assertNotIn("templates/sample-app", gradle_readme)
+
+    def test_nag_operations_region_stays_stable_for_old_helper_transition(self) -> None:
+        region = generated_nag_docs_region()
+
+        self.assertIn(
+            "Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. "
+            "Runtime state lives in `.codex-bootstrap/nag-state.json`.\n",
+            region,
+        )
+        self.assertNotIn("ignored by generated `.gitignore`", region)
 
     def test_loads_java_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "java-gradle-cli")

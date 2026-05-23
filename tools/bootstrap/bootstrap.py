@@ -1037,7 +1037,7 @@ Manage noisy reminders without deleting managed policy:
 ./scripts/agent-nag ack post-run-backlog-check
 ```
 
-Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. Runtime state lives in `.codex-bootstrap/nag-state.json` and is ignored by generated `.gitignore` rules.
+Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. Runtime state lives in `.codex-bootstrap/nag-state.json`.
 <!-- codex-bootstrap:end generated-docs/agent-nags -->
 """
 
