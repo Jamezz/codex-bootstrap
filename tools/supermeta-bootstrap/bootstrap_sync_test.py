@@ -294,6 +294,200 @@ class SyncPlannerTest(unittest.TestCase):
             self.assertIn("marker count", plan.conflicts[0].reason)
 
 
+class SyncApplyTest(unittest.TestCase):
+    def test_apply_writes_files_regions_report_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-apply-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "old\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "new\n")
+            write_text(root / "AGENTS.md", managed_region("generated-docs/bootstrap-sync", "old\n"))
+            write_text(candidate / "AGENTS.md", managed_region("generated-docs/bootstrap-sync", "new\n"))
+            metadata = metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                    }
+                },
+                managed_regions={
+                    "AGENTS.md:generated-docs/bootstrap-sync": {
+                        "set": "generated-docs",
+                        "path": "AGENTS.md",
+                        "id": "generated-docs/bootstrap-sync",
+                        "sha256": bootstrap_sync.sha256_text("old\n"),
+                    }
+                },
+            )
+            contract = contract_for(
+                files=[bootstrap_sync.ManagedFileSpec("scripts/agent-bootstrap", "agent-scripts")],
+                regions=[
+                    bootstrap_sync.ManagedRegionSpec(
+                        path="AGENTS.md",
+                        region_id="generated-docs/bootstrap-sync",
+                        managed_set="generated-docs",
+                    )
+                ],
+            )
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+
+            updated = bootstrap_sync.apply_sync_plan(
+                root,
+                metadata,
+                contract,
+                plan,
+                new_commit="abcdef0123456789abcdef0123456789abcdef01",
+            )
+
+            self.assertEqual("new\n", (root / "scripts" / "agent-bootstrap").read_text(encoding="utf-8"))
+            self.assertIn("new", (root / "AGENTS.md").read_text(encoding="utf-8"))
+            self.assertEqual("abcdef0123456789abcdef0123456789abcdef01", updated.source_commit)
+            self.assertTrue(any((root / ".codex-bootstrap" / "reports").glob("*.json")))
+            persisted = bootstrap_sync.load_sync_metadata(root)
+            self.assertEqual("abcdef0123456789abcdef0123456789abcdef01", persisted.source_commit)
+
+    def test_cli_dry_run_prints_no_changes_for_matching_candidate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-cli-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "same\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "same\n")
+            metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                    }
+                },
+                managed_regions={},
+            )
+            write_json(
+                candidate / "templates" / "python-uv-cli" / "bootstrap-template.json",
+                manifest_with_sync_contract(files=["scripts/agent-bootstrap"]),
+            )
+            commit_project_snapshot(root)
+
+            exit_code = bootstrap_sync.main(
+                [
+                    "sync",
+                    "--dry-run",
+                    "--project-root",
+                    str(root),
+                    "--candidate-root",
+                    str(candidate),
+                    "--candidate-commit",
+                    "abcdef0123456789abcdef0123456789abcdef01",
+                ]
+            )
+
+            self.assertEqual(0, exit_code)
+
+    def test_refuses_apply_with_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-cli-conflict-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "edited\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "new\n")
+            metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": "0" * 64,
+                    }
+                },
+                managed_regions={},
+            )
+            write_json(
+                candidate / "templates" / "python-uv-cli" / "bootstrap-template.json",
+                manifest_with_sync_contract(files=["scripts/agent-bootstrap"]),
+            )
+            commit_project_snapshot(root)
+
+            exit_code = bootstrap_sync.main(
+                [
+                    "sync",
+                    "--apply",
+                    "--project-root",
+                    str(root),
+                    "--candidate-root",
+                    str(candidate),
+                    "--candidate-commit",
+                    "abcdef0123456789abcdef0123456789abcdef01",
+                ]
+            )
+
+            self.assertEqual(1, exit_code)
+            self.assertEqual("edited\n", (root / "scripts" / "agent-bootstrap").read_text(encoding="utf-8"))
+
+    def test_read_git_status_reports_untracked_and_modified_files(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-git-status-") as temp_dir:
+            root = Path(temp_dir)
+            bootstrap_sync.run_checked(["git", "init"], cwd=root)
+            write_text(root / "tracked.txt", "old\n")
+            bootstrap_sync.run_checked(["git", "add", "tracked.txt"], cwd=root)
+            bootstrap_sync.run_checked(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Codex Bootstrap Test",
+                    "-c",
+                    "user.email=codex-bootstrap@example.invalid",
+                    "commit",
+                    "-m",
+                    "snapshot",
+                ],
+                cwd=root,
+            )
+            write_text(root / "tracked.txt", "new\n")
+            write_text(root / "untracked.txt", "local\n")
+
+            status = bootstrap_sync.read_git_status(root)
+
+            self.assertEqual("M", status["tracked.txt"])
+            self.assertEqual("??", status["untracked.txt"])
+
+    def test_apply_refuses_dirty_worktree_without_allow_dirty(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-dirty-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "same\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "same\n")
+            metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                    }
+                },
+                managed_regions={},
+            )
+            write_json(
+                candidate / "templates" / "python-uv-cli" / "bootstrap-template.json",
+                manifest_with_sync_contract(files=["scripts/agent-bootstrap"]),
+            )
+
+            exit_code = bootstrap_sync.run_sync_command(
+                argparse.Namespace(
+                    project_root=root,
+                    candidate_root=candidate,
+                    candidate_commit="abcdef0123456789abcdef0123456789abcdef01",
+                    source_dir=None,
+                    apply=True,
+                    dry_run=False,
+                    allow_dirty=False,
+                    git_status_override={"scripts/agent-bootstrap": "M"},
+                )
+            )
+
+            self.assertEqual(1, exit_code)
+
+
 def write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -373,4 +567,57 @@ def contract_for(
         managed_sets=managed_sets,
         verification_commands=("./scripts/check",),
         migration_notes=(),
+    )
+
+
+def manifest_with_sync_contract(files: list[str]) -> dict[str, object]:
+    return {
+        "id": "python-uv-cli",
+        "displayName": "Python uv CLI",
+        "description": "test",
+        "type": "python-uv-cli",
+        "requiredInputs": ["name"],
+        "supportPaths": [],
+        "verificationCommands": ["./scripts/check"],
+        "generatedDocs": {
+            "summary": "summary",
+            "runtime": "runtime",
+            "entrypoints": [],
+            "sourceRoots": [],
+            "testRoots": [],
+            "verificationCommands": [],
+            "runCommands": [],
+            "firstUsefulEdit": "edit",
+        },
+        "syncContract": {
+            "version": 1,
+            "managedSets": [
+                {
+                    "id": "agent-scripts",
+                    "description": "Agent scripts",
+                    "files": [{"path": path, "mode": "whole-file"} for path in files],
+                    "regions": [],
+                }
+            ],
+            "verificationCommands": ["./scripts/check"],
+            "migrationNotes": [],
+        },
+    }
+
+
+def commit_project_snapshot(root: Path) -> None:
+    bootstrap_sync.run_checked(["git", "init"], cwd=root)
+    bootstrap_sync.run_checked(["git", "add", "."], cwd=root)
+    bootstrap_sync.run_checked(
+        [
+            "git",
+            "-c",
+            "user.name=Codex Bootstrap Test",
+            "-c",
+            "user.email=codex-bootstrap@example.invalid",
+            "commit",
+            "-m",
+            "snapshot",
+        ],
+        cwd=root,
     )

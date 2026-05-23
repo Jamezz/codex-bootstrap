@@ -382,6 +382,180 @@ def replace_region(text: str, region_id: str, body: str) -> str:
     return f"{prefix}{begin}\n{body}{end}{suffix}"
 
 
+def apply_sync_plan(
+    root: Path,
+    metadata: SyncMetadata,
+    contract: SyncContract,
+    plan: SyncPlan,
+    new_commit: str,
+) -> SyncMetadata:
+    if plan.conflicts:
+        raise SyncError("refusing to apply sync plan with conflicts")
+    for change in plan.file_changes:
+        destination = root / change.path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(change.new_text, encoding="utf-8")
+    for change in plan.region_changes:
+        destination = root / change.path
+        destination.write_text(change.new_text, encoding="utf-8")
+
+    managed_files = dict(metadata.managed_files)
+    for change in plan.file_changes:
+        managed_files[change.path] = ManagedFileState(
+            managed_set=change.managed_set,
+            sha256=change.new_sha256,
+        )
+    managed_regions = dict(metadata.managed_regions)
+    for change in plan.region_changes:
+        key = f"{change.path}:{change.region_id}"
+        managed_regions[key] = ManagedRegionState(
+            managed_set=change.managed_set,
+            path=change.path,
+            region_id=change.region_id,
+            sha256=change.new_sha256,
+        )
+
+    updated = dataclasses.replace(
+        metadata,
+        source_commit=new_commit,
+        contract_version=contract.version,
+        managed_files=managed_files,
+        managed_regions=managed_regions,
+        verification_commands=contract.verification_commands,
+    )
+    write_sync_metadata(root, updated)
+    write_sync_report(root, plan, updated)
+    return updated
+
+
+def write_sync_metadata(root: Path, metadata: SyncMetadata) -> None:
+    destination = root / SYNC_METADATA
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        json.dumps(metadata.to_json(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_sync_report(root: Path, plan: SyncPlan, metadata: SyncMetadata) -> Path:
+    reports = root / REPORTS_DIR
+    reports.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    destination = reports / f"{timestamp}.json"
+    payload = {
+        "commit": metadata.source_commit,
+        "fileChanges": [dataclasses.asdict(change) for change in plan.file_changes],
+        "regionChanges": [dataclasses.asdict(change) for change in plan.region_changes],
+        "conflicts": [dataclasses.asdict(conflict) for conflict in plan.conflicts],
+        "verificationCommands": list(plan.verification_commands),
+        "migrationNotes": list(plan.migration_notes),
+    }
+    destination.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return destination
+
+
+def run_checked(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    result = run_unchecked(command, cwd=cwd)
+    if result.returncode != 0:
+        raise SyncError(f"command failed with exit {result.returncode}: {' '.join(command)}\n{result.stdout}")
+    return result
+
+
+def run_unchecked(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+        check=False,
+    )
+
+
+def read_git_status(root: Path) -> dict[str, str]:
+    result = run_unchecked(["git", "status", "--porcelain=v1"], cwd=root)
+    if result.returncode != 0:
+        raise SyncError("sync requires a Git worktree")
+    status: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        code = line[:2]
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        status[normalize_path(path)] = "??" if code == "??" else code.strip() or code
+    return status
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Sync Codex Bootstrap managed files.")
+    subparsers = parser.add_subparsers(dest="command")
+    sync_parser = subparsers.add_parser("sync")
+    sync_parser.add_argument("--dry-run", action="store_true")
+    sync_parser.add_argument("--apply", action="store_true")
+    sync_parser.add_argument("--allow-dirty", action="store_true")
+    sync_parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    sync_parser.add_argument("--candidate-root", type=Path)
+    sync_parser.add_argument("--candidate-commit", default="unknown")
+    sync_parser.add_argument("--source-dir", type=Path)
+    args = parser.parse_args(argv)
+    if args.command != "sync":
+        parser.print_help(sys.stderr)
+        return 2
+    try:
+        return run_sync_command(args)
+    except SyncError as error:
+        print(f"agent-bootstrap: {error}", file=sys.stderr)
+        return 2
+
+
+def run_sync_command(args: argparse.Namespace) -> int:
+    root = args.project_root.resolve()
+    metadata = load_sync_metadata(root)
+    if args.candidate_root is None:
+        raise SyncError("--candidate-root is required until candidate regeneration is implemented")
+    candidate_root = args.candidate_root.resolve()
+    contract = load_sync_contract(candidate_root, metadata.template_id)
+    git_status = getattr(args, "git_status_override", None)
+    if git_status is None:
+        git_status = read_git_status(root)
+    if args.apply and git_status and not args.allow_dirty:
+        print("Bootstrap sync refused: worktree has local changes; pass --allow-dirty to continue.")
+        return 1
+    plan = plan_managed_updates(root, candidate_root, metadata, contract, git_status=git_status)
+    print_sync_plan(metadata, contract, plan, args.candidate_commit)
+    if plan.conflicts:
+        return 1
+    if args.apply:
+        apply_sync_plan(root, metadata, contract, plan, args.candidate_commit)
+    return 0
+
+
+def print_sync_plan(
+    metadata: SyncMetadata,
+    contract: SyncContract,
+    plan: SyncPlan,
+    candidate_commit: str,
+) -> None:
+    print("Bootstrap sync plan:")
+    print(f"  template: {metadata.template_id}")
+    print(f"  current-commit: {metadata.source_commit}")
+    print(f"  candidate-commit: {candidate_commit}")
+    print(f"  contract: {metadata.contract_version} -> {contract.version}")
+    for change in plan.file_changes:
+        print(f"  update-file: {change.path}")
+    for change in plan.region_changes:
+        print(f"  update-region: {change.path}#{change.region_id}")
+    for conflict in plan.conflicts:
+        print(f"  conflict: {conflict.path}: {conflict.reason}")
+    for note in plan.migration_notes:
+        print(f"  migration-note: {note}")
+    for command in plan.verification_commands:
+        print(f"  verify: {command}")
+
+
 def normalize_path(value: str) -> str:
     normalized = Path(value).as_posix()
     if normalized.startswith("../") or normalized == ".." or normalized.startswith("/"):
@@ -463,3 +637,7 @@ def require_sha256(raw: dict[str, Any], key: str) -> str:
     if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
         raise SyncError(f"{key} must be a lowercase SHA-256 hex digest")
     return value
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
