@@ -1054,6 +1054,7 @@ Inspect stuck task state:
 - Keep each Java package layer to 7 top-level types or fewer; split larger layers into context-shaped subpackages.
 - Supermeta enforces wildcard imports for Java source; configure `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
+- Checkstyle reports unused imports as warnings, not build-breaking errors.
 - Java lint runs through Gradle Checkstyle, with configuration in `config/checkstyle/checkstyle.xml`.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through the build.
 
@@ -1128,6 +1129,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Keep product source files under `src/main` at 1000 lines or less.
 - Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
+- Treat unused-import Checkstyle findings as warnings; clean them up, but do not make them a build-breaking gate.
 - Keep Lombok as compile-only plus annotation-processor wiring.
 - Keep Java lint in Gradle Checkstyle and project callouts in `supermeta-rules.json`.
 - Route reusable checks through `tools/supermeta-rules/`.

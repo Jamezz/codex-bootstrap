@@ -25,13 +25,24 @@ gradle = load_gradle_module()
 
 
 class BuildCommandTest(unittest.TestCase):
-    def test_warm_defaults_disable_file_watch_only(self) -> None:
+    def test_defaults_disable_file_watch_and_daemon(self) -> None:
         command = gradle.build_command(
             wrapper=Path("/tmp/gradlew"),
             gradle_args=["check"],
             no_default_flags=False,
             cold_mode=False,
         )
+
+        self.assertEqual(["sh", "/tmp/gradlew", "--no-watch-fs", "--no-daemon", "check"], command)
+
+    def test_keep_daemon_env_opts_back_into_daemon_reuse(self) -> None:
+        with patched_env(SUPERMETA_GRADLE_KEEP_DAEMON="1"):
+            command = gradle.build_command(
+                wrapper=Path("/tmp/gradlew"),
+                gradle_args=["check"],
+                no_default_flags=False,
+                cold_mode=False,
+            )
 
         self.assertEqual(["sh", "/tmp/gradlew", "--no-watch-fs", "check"], command)
 
@@ -44,7 +55,7 @@ class BuildCommandTest(unittest.TestCase):
             platform_name="nt",
         )
 
-        self.assertEqual(["C:/repo/gradlew.bat", "--no-watch-fs", "check"], command)
+        self.assertEqual(["C:/repo/gradlew.bat", "--no-watch-fs", "--no-daemon", "check"], command)
 
     def test_parallel_env_adds_parallel_defaults(self) -> None:
         with patched_env(SUPERMETA_GRADLE_PARALLEL="1", SUPERMETA_GRADLE_MAX_WORKERS="4"):
@@ -56,7 +67,7 @@ class BuildCommandTest(unittest.TestCase):
             )
 
         self.assertEqual(
-            ["sh", "/tmp/gradlew", "--no-watch-fs", "--parallel", "--max-workers=4", "check"],
+            ["sh", "/tmp/gradlew", "--no-watch-fs", "--no-daemon", "--parallel", "--max-workers=4", "check"],
             command,
         )
 
@@ -70,7 +81,7 @@ class BuildCommandTest(unittest.TestCase):
             )
 
         self.assertEqual(
-            ["sh", "/tmp/gradlew", "--no-watch-fs", "check", "--no-parallel", "--max-workers=2"],
+            ["sh", "/tmp/gradlew", "--no-watch-fs", "--no-daemon", "check", "--no-parallel", "--max-workers=2"],
             command,
         )
 
@@ -87,6 +98,26 @@ class BuildCommandTest(unittest.TestCase):
             ["sh", "/tmp/gradlew", "--no-watch-fs", "--no-daemon", "--no-parallel", "--max-workers=4", "check"],
             command,
         )
+
+
+class GradleHomeTest(unittest.TestCase):
+    def test_default_gradle_home_is_project_scoped(self) -> None:
+        previous = os.environ.pop("SUPERMETA_GRADLE_USER_HOME", None)
+        try:
+            project_dir = Path("/workspace/sample-app")
+
+            gradle_home = gradle.resolve_gradle_home(None, project_dir)
+
+            self.assertEqual(project_dir / ".gradle" / "supermeta-gradle" / "gradle-user-home", gradle_home)
+        finally:
+            if previous is not None:
+                os.environ["SUPERMETA_GRADLE_USER_HOME"] = previous
+
+    def test_env_gradle_home_still_overrides_project_scoped_default(self) -> None:
+        with patched_env(SUPERMETA_GRADLE_USER_HOME="/tmp/shared-gradle-home"):
+            gradle_home = gradle.resolve_gradle_home(None, Path("/workspace/sample-app"))
+
+        self.assertEqual(Path("/tmp/shared-gradle-home").resolve(), gradle_home)
 
 
 class DiagnosticsTest(unittest.TestCase):

@@ -3,16 +3,17 @@
 `gradle.py` runs Gradle in the boring, agent-safe way that has proven less painful across local Codex work:
 
 - use the checked-in `./gradlew` on POSIX and `gradlew.bat` on Windows;
-- isolate `GRADLE_USER_HOME` under `/tmp/supermeta-gradle/gradle-user-home`;
+- isolate `GRADLE_USER_HOME` under the project-local `.gradle/supermeta-gradle/gradle-user-home`;
 - disable file watching;
+- disable resident Gradle daemons by default;
 - serialize runs that share that Gradle home;
 - tee output to `.gradle/supermeta-gradle/logs/`.
 
-The default mode is warm: it keeps Gradle daemon/cache benefits inside the isolated shared Gradle home so repeated agent runs are not painfully slow, and different templates can reuse downloaded Gradle distributions, dependencies, and toolchains.
+The default mode keeps Gradle distributions, dependencies, and toolchains cached inside the project-local Gradle home, but passes `--no-daemon` so Gradle JVMs do not stay resident after the command exits. This avoids unrelated agents queueing on one shared cache and keeps memory from filling up with idle daemons.
 
 Logs live under `.gradle/` so `clean` tasks cannot delete the active run log. Log names include the process id and a nanosecond suffix so concurrent `--no-lock` runs do not collide.
 
-The summary reports both `run_elapsed` and `total_elapsed`. When another agent run is holding the shared Gradle-home lock, `lock_wait` makes that queue time explicit.
+The summary reports both `run_elapsed` and `total_elapsed`. When another agent run is holding the same project's Gradle-home lock, `lock_wait` makes that queue time explicit.
 
 From the repository root:
 
@@ -62,7 +63,7 @@ These helpers wrap the shared `agent-task` process/log diagnostics with Gradle d
 
 Prefer `--stop` before `--kill` unless a process is clearly wedged.
 
-Set `SUPERMETA_GRADLE_USER_HOME` to override the cache root. Pass `--no-default-flags` before `--` when you are intentionally debugging raw Gradle behavior.
+Set `SUPERMETA_GRADLE_USER_HOME` to opt into an explicit shared cache root or another custom cache location. Set `SUPERMETA_GRADLE_KEEP_DAEMON=1` only when you intentionally want daemon reuse for a short repeated-run session. Pass `--no-default-flags` before `--` when you are intentionally debugging raw Gradle behavior.
 
 For parallel Gradle execution inside one build, either pass Gradle flags directly:
 
@@ -76,7 +77,7 @@ or opt into parallel defaults for repeated agent commands:
 SUPERMETA_GRADLE_PARALLEL=1 SUPERMETA_GRADLE_MAX_WORKERS=4 ./scripts/agent-gradle templates/java-gradle-cli check
 ```
 
-The shared Gradle-home lock still serializes separate harness processes by default. Use `--no-lock` only for intentional concurrent experiments where the projects or tasks will not delete each other's outputs.
+The project Gradle-home lock still serializes separate harness processes for the same checkout by default. Use `--no-lock` only for intentional concurrent experiments where the projects or tasks will not delete each other's outputs.
 
 For wedged or diagnostic runs, use cold mode:
 
@@ -84,7 +85,7 @@ For wedged or diagnostic runs, use cold mode:
 SUPERMETA_GRADLE_COLD=1 ./scripts/agent-gradle templates/java-gradle-cli test
 ```
 
-Cold mode adds `--no-daemon`, `--no-parallel`, and a conservative worker cap. Warm mode is the normal path.
+Cold mode adds `--no-parallel` and a conservative worker cap on top of the default no-daemon behavior.
 
 To stop the scoped daemon for a project:
 

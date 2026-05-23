@@ -16,5 +16,8 @@
     <module name="OneTopLevelClass"/>
     <module name="OuterTypeFilename"/>
     <module name="PackageDeclaration"/>
+    <module name="UnusedImports">
+      <property name="severity" value="warning"/>
+    </module>
   </module>
 </module>

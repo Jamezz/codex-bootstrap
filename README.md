@@ -173,6 +173,7 @@ General source rules:
 - keep Java package layers to 7 top-level types or fewer before nesting into context-shaped subpackages;
 - route language-specific lint and reusable heuristic gates through `tools/supermeta-rules/` project callouts;
 - enforce wildcard imports for Java source unless a project explicitly allowlists an import;
+- report unused Java imports as warnings instead of build-breaking errors;
 - enforce Lombok over handwritten getter, setter, and builder boilerplate for Java source unless a project configures an ignore annotation.
 
 Prefer compatibility-breaking cleanup over preserving early template mistakes. These templates exist to start new projects cleanly, so change the contract when the new contract is better.
@@ -277,9 +278,11 @@ cd templates/csharp-dotnet-cli
 The TypeScript starters require `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
 The C# starter requires .NET SDK 10 on PATH. `scripts/agent-dotnet` keeps `DOTNET_CLI_HOME` and `NUGET_PACKAGES` under the project by default so sandboxed agent runs do not write to the user home directory.
 
-The harness uses the template wrapper with an isolated shared Gradle home, file watching disabled, serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps Gradle warm by default for faster repeated agent runs; set `SUPERMETA_GRADLE_COLD=1` for conservative no-daemon diagnostics.
+The harness uses the template wrapper with a project-local Gradle home, file watching disabled, no resident daemon by default, same-checkout serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps downloaded Gradle assets warm inside each checkout without leaving idle Gradle JVMs around; set `SUPERMETA_GRADLE_COLD=1` for conservative low-worker diagnostics.
 
 For parallel Gradle execution inside one build, pass `--parallel --max-workers=<n>` to the Gradle args or set `SUPERMETA_GRADLE_PARALLEL=1` with `SUPERMETA_GRADLE_MAX_WORKERS=<n>`.
+
+Set `SUPERMETA_GRADLE_KEEP_DAEMON=1` only for a short repeated-run session where daemon reuse is worth the memory.
 
 Generated projects can also carry a general stuck-task helper for process and log inspection:
 

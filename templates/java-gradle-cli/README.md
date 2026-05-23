@@ -101,7 +101,7 @@ Generated projects also include a pinned Beans wrapper and seeded starter backlo
 ./scripts/agent-beans check
 ```
 
-Agents should prefer the harness because it uses the checked-in wrapper with isolated shared Gradle state, no file watching, serialized runs, captured logs under `.gradle/supermeta-gradle/logs/`, and warm Gradle performance by default.
+Agents should prefer the harness because it uses the checked-in wrapper with project-local Gradle state, no file watching, no resident daemon by default, same-checkout serialized runs, and captured logs under `.gradle/supermeta-gradle/logs/`.
 
 For parallel Gradle execution inside one build:
 
@@ -149,6 +149,7 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 - Java package layers are checked for a 7-top-level-type maximum before they should be split into context-shaped subpackages;
 - wildcard imports are enforced for Java source by Supermeta; use explicit imports only through `allow_explicit` in `supermeta-rules.json`;
 - Lombok boilerplate checks reject handwritten getters, setters, and builder patterns; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions;
+- Checkstyle reports unused imports as warnings, not build-breaking errors;
 - if you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 
 The source limits and project callouts are configured in `supermeta-rules.json` and executed through the shared `tools/supermeta-rules/check.py` helper. Java lint uses Gradle Checkstyle with config in `config/checkstyle/checkstyle.xml`.

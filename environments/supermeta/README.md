@@ -20,7 +20,7 @@ The goal is not to preserve every possible option. The goal is to make the good 
 
 `tools/supermeta-rules/check.py` is the shared helper for rules that examples should not reimplement, starting with product source line-count checks.
 
-`tools/supermeta-gradle/gradle.py` is the shared Gradle harness. Gradle templates should document `scripts/agent-gradle` and `scripts/agent-gradle.ps1` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, and parallel output collisions while still keeping warm Gradle performance by default.
+`tools/supermeta-gradle/gradle.py` is the reusable Gradle harness. Gradle templates should document `scripts/agent-gradle` and `scripts/agent-gradle.ps1` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, unrelated-agent lock contention, and idle daemon memory while still keeping downloaded Gradle assets cached inside each checkout.
 
 ## Environment Checklist
 
@@ -42,6 +42,7 @@ Meta source rules:
 - Java package layers should contain at most 7 top-level types before nesting into context-shaped subpackages;
 - language-specific lint and reusable heuristic gates should be routed through `tools/supermeta-rules/` project callouts;
 - Java source should enforce wildcard imports and Lombok-backed data boilerplate through shared Supermeta rules.
+- Java lint should report unused imports as warnings instead of build-breaking errors.
 
 ## Agent Workflow
 

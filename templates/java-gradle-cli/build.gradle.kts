@@ -68,6 +68,8 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 tasks.withType<Checkstyle>().configureEach {
+    maxWarnings = Int.MAX_VALUE
+
     reports {
         xml.required = true
         html.required = true

@@ -188,7 +188,7 @@ def resolve_gradle_home(configured_home: Path | None, project_dir: Path) -> Path
     if env_home:
         return Path(env_home).expanduser().resolve()
 
-    return Path("/tmp") / "supermeta-gradle" / "gradle-user-home"
+    return (project_dir / ".gradle" / "supermeta-gradle" / "gradle-user-home").resolve()
 
 
 def print_processes() -> int:
@@ -251,7 +251,11 @@ def build_command(
         if not has_max_workers(gradle_args):
             max_workers = os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS", DEFAULT_COLD_MAX_WORKERS)
             defaults.append(f"--max-workers={max_workers}")
-    elif os.environ.get("SUPERMETA_GRADLE_PARALLEL") in {"1", "true", "yes"}:
+    else:
+        if not daemon_reuse_is_enabled():
+            add_flag_pair(defaults, gradle_args, "--no-daemon", "--daemon")
+
+    if not cold_mode and os.environ.get("SUPERMETA_GRADLE_PARALLEL") in {"1", "true", "yes"}:
         add_flag_pair(defaults, gradle_args, "--parallel", "--no-parallel")
         if not has_max_workers(gradle_args) and os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS"):
             defaults.append(f"--max-workers={os.environ['SUPERMETA_GRADLE_MAX_WORKERS']}")
@@ -311,6 +315,10 @@ def has_max_workers(gradle_args: list[str]) -> bool:
     return any(arg == "--max-workers" or arg.startswith("--max-workers=") for arg in gradle_args)
 
 
+def daemon_reuse_is_enabled() -> bool:
+    return os.environ.get("SUPERMETA_GRADLE_KEEP_DAEMON") in {"1", "true", "yes"}
+
+
 def run_gradle(
     command: list[str],
     project_dir: Path,
@@ -322,8 +330,9 @@ def run_gradle(
     total_start_time: float,
 ) -> int:
     run_start_time = time.monotonic()
+    mode = "cold" if cold_mode else "default"
     print("supermeta-gradle:", flush=True)
-    print(f"  mode: {'cold' if cold_mode else 'warm'}", flush=True)
+    print(f"  mode: {mode}", flush=True)
     print(f"  project: {project_dir}", flush=True)
     print(f"  gradle_user_home: {gradle_home}", flush=True)
     print(f"  lock_wait: {lock_wait_seconds:.1f}s", flush=True)
@@ -332,7 +341,7 @@ def run_gradle(
 
     with log_path.open("w", encoding="utf-8") as log_file:
         log_file.write(f"project: {project_dir}\n")
-        log_file.write(f"mode: {'cold' if cold_mode else 'warm'}\n")
+        log_file.write(f"mode: {mode}\n")
         log_file.write(f"gradle_user_home: {gradle_home}\n")
         log_file.write(f"lock_wait: {lock_wait_seconds:.1f}s\n")
         log_file.write(f"command: {shlex.join(command)}\n\n")
