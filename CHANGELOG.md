@@ -51,3 +51,5 @@ Use these buckets inside dated entries when they help:
 - `PYTHONPATH=tools/supermeta-bootstrap python3 -m unittest discover -s tools/supermeta-bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/pages -p '*_test.py'`
+- `python3 -m unittest discover -s tools -p '*_test.py'`
+- `./scripts/agent-gradle templates/java-gradle-cli check`
