@@ -328,6 +328,257 @@ final class GeneratedThing {}
             self.assertEqual([], findings)
 
 
+class JavaLombokBoilerplateRuleTest(unittest.TestCase):
+    def test_rejects_simple_getter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private final String name;
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("java-lombok-boilerplate", findings[0].rule)
+            self.assertIn("getName() is Lombok boilerplate", findings[0].message)
+            self.assertIn("use Lombok", findings[0].message)
+
+    def test_rejects_boolean_getter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private boolean active;
+
+    boolean isActive() {
+        return active;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("isActive() is Lombok boilerplate", findings[0].message)
+
+    def test_rejects_simple_setter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private String name;
+
+    void setName(String name) {
+        this.name = name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("setName() is Lombok boilerplate", findings[0].message)
+
+    def test_rejects_fluent_setter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private String name;
+
+    Person name(String name) {
+        this.name = name;
+        return this;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("name() is Lombok boilerplate", findings[0].message)
+
+    def test_allows_non_trivial_method(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private String name;
+
+    String getName() {
+        if (name == null || name.isBlank()) {
+            return "unknown";
+        }
+        return name.strip();
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual([], findings)
+
+    def test_rejects_nested_builder_pattern(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private final String name;
+
+    Person(String name) {
+        this.name = name;
+    }
+
+    static Builder builder() {
+        return new Builder();
+    }
+
+    static final class Builder {
+        private String name;
+
+        Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        Person build() {
+            return new Person(name);
+        }
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertGreaterEqual(len(findings), 1)
+            self.assertTrue(any("builder" in finding.message.lower() for finding in findings))
+
+    def test_method_ignore_annotation_suppresses_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private final String name;
+
+    @ManualBoilerplate
+    String getName() {
+        return name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(ignore_annotations=["ManualBoilerplate"]),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_class_ignore_annotation_suppresses_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+@ManualBoilerplate
+final class Person {
+    private final String name;
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(ignore_annotations=["ManualBoilerplate"]),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_fully_qualified_ignore_annotation_suppresses_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+@com.acme.ManualBoilerplate
+final class Person {
+    private final String name;
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(ignore_annotations=["com.acme.ManualBoilerplate"]),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_allow_methods_suppresses_named_method(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+final class Person {
+    private final String name;
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(allow_methods=["getName"]), root)
+
+            self.assertEqual([], findings)
+
+    def test_rejects_invalid_ignore_annotations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(root, "final class Person {}")
+            config = java_lombok_boilerplate_config(ignore_annotations=[""])
+
+            with self.assertRaisesRegex(ValueError, "ignore_annotations must be an array of non-empty strings"):
+                check.run_rules(config, root)
+
+
 def write_source(root: Path, relative_path: str, source: str) -> Path:
     path = root / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -395,6 +646,35 @@ def java_import_style_config(
                 "include": ["**/*.java"],
                 "exclude": exclude or [],
                 "allow_explicit": allow_explicit or [],
+            }
+        ]
+    }
+
+
+def write_lombok_sample(root: Path, class_body: str) -> Path:
+    return write_source(
+        root,
+        "src/main/java/example/Person.java",
+        f"""package example;
+
+{class_body.strip()}
+""",
+    )
+
+
+def java_lombok_boilerplate_config(
+    ignore_annotations: list[str] | None = None,
+    allow_methods: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "java_lombok_boilerplate": [
+            {
+                "name": "java-lombok-boilerplate",
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": ["**/generated/**"],
+                "ignore_annotations": [] if ignore_annotations is None else ignore_annotations,
+                "allow_methods": [] if allow_methods is None else allow_methods,
             }
         ]
     }
