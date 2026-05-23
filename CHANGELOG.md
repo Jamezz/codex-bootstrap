@@ -43,6 +43,9 @@ Use these buckets inside dated entries when they help:
 - Added a generated downstream-to-upstream suggestion workflow with a
   copy/paste report blob for Bootstrap-owned bugs and improvements discovered
   inside generated projects.
+- Added a generated-project agent nag contract with reusable lifecycle hooks,
+  bootstrap update reminders, post-run follow-up suggestions, local override
+  policy, and `agent-coord run` hook integration.
 
 ### Pages / Installer
 

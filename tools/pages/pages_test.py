@@ -50,6 +50,7 @@ class PagesBuildTest(unittest.TestCase):
             self.assertTrue(java_template["syncCapable"])
             self.assertEqual(1, java_template["syncContractVersion"])
             self.assertIn("agent-scripts", java_template["managedSets"])
+            self.assertIn("agent-nags", java_template["managedSets"])
 
             checksums = (output / "checksums.txt").read_text(encoding="utf-8")
             self.assertIn("  install.sh\n", checksums)

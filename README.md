@@ -16,9 +16,11 @@ The repo currently ships:
 - `tools/pages/`: the GitHub Pages installer-site builder and tests.
 - `scripts/agent-bootstrap` and `scripts/agent-bootstrap.ps1`: generated-project sync wrappers for pulling later managed bootstrap updates.
 - `scripts/agent-coord` and `scripts/agent-coord.ps1`: advisory local agent coordination with opt-in serialized resource leases.
+- `scripts/agent-nag` and `scripts/agent-nag.ps1`: advisory generated-project reminder hooks for bootstrap updates and wrapped-command follow-up.
 - `scripts/agent-dotnet` and `scripts/agent-dotnet.ps1`: .NET CLI wrappers that keep dotnet home and NuGet package state local to the project during agent runs.
 - `tools/supermeta-bootstrap/`: the generated-project managed sync helper.
 - `tools/supermeta-agent/`: the local agent coordination helper copied into generated projects.
+- `tools/supermeta-nag/`: the generated-project nag helper copied into generated projects.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
@@ -116,6 +118,18 @@ Apply when the plan has no conflicts:
 
 Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
 
+## Agent Nags
+
+Generated projects include advisory reminders for bootstrap updates and wrapped-command follow-up:
+
+```bash
+./scripts/agent-nag run-hook session-start
+./scripts/agent-nag check-updates --quiet
+./scripts/agent-nag snooze post-run-backlog-check --for 7d
+```
+
+Wrappers may call nag hooks before and after managed execution. Nags are advisory by default and must not hide the exit code from builds, tests, sync, or coordination runs. Project-specific reminders belong in `.codex-bootstrap/nags.local.json`.
+
 ## Coordinate Local Agents
 
 Generated projects include advisory coordination for parallel local agents:
@@ -179,6 +193,7 @@ Every bootstrap environment should include:
 - a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
 - a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` / `scripts/agent-beans.ps1` wrappers;
 - a generated sync contract with `.codex-bootstrap/sync.json`, `scripts/agent-bootstrap`, and `tools/supermeta-bootstrap/`;
+- a generated nag contract with `.codex-bootstrap/nags.json`, local overrides, `scripts/agent-nag`, and lifecycle hook docs;
 - first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - a deterministic verification command that can be run before handoff;
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
@@ -210,6 +225,8 @@ scripts/
   agent-beans.ps1
   agent-coord
   agent-coord.ps1
+  agent-nag
+  agent-nag.ps1
   agent-dotnet
   agent-dotnet.ps1
   agent-gradle
@@ -230,6 +247,7 @@ tools/
   bootstrap/
   pages/
   supermeta-agent/
+  supermeta-nag/
   supermeta-gradle/
   supermeta-beans/
   supermeta-rules/
