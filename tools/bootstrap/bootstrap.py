@@ -34,6 +34,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     "README.md",
     "bootstrap",
     "bootstrap.ps1",
+    "docs",
     "environments",
     "scripts",
     "site",
