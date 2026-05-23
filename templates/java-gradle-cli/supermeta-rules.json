@@ -17,6 +17,25 @@
       "exclude": ["**/generated/**"]
     }
   ],
+  "java_import_style": [
+    {
+      "name": "java-wildcard-imports",
+      "paths": ["src/main/java", "src/test/java"],
+      "include": ["**/*.java"],
+      "exclude": ["**/generated/**"],
+      "allow_explicit": []
+    }
+  ],
+  "java_lombok_boilerplate": [
+    {
+      "name": "java-lombok-boilerplate",
+      "paths": ["src/main/java", "src/test/java"],
+      "include": ["**/*.java"],
+      "exclude": ["**/generated/**"],
+      "ignore_annotations": [],
+      "allow_methods": []
+    }
+  ],
   "project_callouts": [
     {
       "name": "java-checkstyle",

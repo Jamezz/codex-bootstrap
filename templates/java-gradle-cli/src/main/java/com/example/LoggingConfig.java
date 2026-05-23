@@ -2,16 +2,13 @@ package com.example;
 
 import java.util.*;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.ConsoleAppender;
-import ch.qos.logback.core.encoder.Encoder;
-import net.logstash.logback.encoder.LogstashEncoder;
-import net.logstash.logback.fieldnames.LogstashFieldNames;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.encoder.*;
+import ch.qos.logback.classic.spi.*;
+import ch.qos.logback.core.*;
+import ch.qos.logback.core.encoder.*;
+import net.logstash.logback.encoder.*;
+import net.logstash.logback.fieldnames.*;
+import org.slf4j.*;
 
 public final class LoggingConfig {
     private static final String DEFAULT_LOG_LEVEL = "warn";
@@ -29,13 +26,13 @@ public final class LoggingConfig {
         String levelName = normalizedEnvValue(env, "LOG_LEVEL", DEFAULT_LOG_LEVEL);
         String formatName = normalizedEnvValue(env, "LOG_FORMAT", DEFAULT_LOG_FORMAT);
 
-        Level level = switch (levelName) {
-            case "trace" -> Level.TRACE;
-            case "debug" -> Level.DEBUG;
-            case "info" -> Level.INFO;
-            case "warn" -> Level.WARN;
-            case "error" -> Level.ERROR;
-            case "off" -> Level.OFF;
+        ch.qos.logback.classic.Level level = switch (levelName) {
+            case "trace" -> ch.qos.logback.classic.Level.TRACE;
+            case "debug" -> ch.qos.logback.classic.Level.DEBUG;
+            case "info" -> ch.qos.logback.classic.Level.INFO;
+            case "warn" -> ch.qos.logback.classic.Level.WARN;
+            case "error" -> ch.qos.logback.classic.Level.ERROR;
+            case "off" -> ch.qos.logback.classic.Level.OFF;
             default -> throw new IllegalArgumentException(
                 "invalid LOG_LEVEL " + quote(env.get("LOG_LEVEL"))
                     + "; expected one of: trace, debug, info, warn, error, off"
@@ -52,7 +49,8 @@ public final class LoggingConfig {
     }
 
     public static void configure(Config config) {
-        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        ch.qos.logback.classic.LoggerContext context =
+            (ch.qos.logback.classic.LoggerContext) LoggerFactory.getILoggerFactory();
         context.reset();
 
         ConsoleAppender<ILoggingEvent> appender = new ConsoleAppender<>();
@@ -74,7 +72,7 @@ public final class LoggingConfig {
         configure(fromEnvironment());
     }
 
-    private static Encoder<ILoggingEvent> textEncoder(LoggerContext context) {
+    private static Encoder<ILoggingEvent> textEncoder(ch.qos.logback.classic.LoggerContext context) {
         PatternLayoutEncoder encoder = new PatternLayoutEncoder();
         encoder.setContext(context);
         encoder.setPattern("%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{36} - %msg%n");
@@ -82,7 +80,7 @@ public final class LoggingConfig {
         return encoder;
     }
 
-    private static Encoder<ILoggingEvent> jsonEncoder(LoggerContext context) {
+    private static Encoder<ILoggingEvent> jsonEncoder(ch.qos.logback.classic.LoggerContext context) {
         LogstashFieldNames fieldNames = new LogstashFieldNames();
         fieldNames.setTimestamp("timestamp");
         fieldNames.setLogger("logger");
@@ -111,6 +109,6 @@ public final class LoggingConfig {
         JSON
     }
 
-    record Config(Level level, LogFormat format) {
+    record Config(ch.qos.logback.classic.Level level, LogFormat format) {
     }
 }
