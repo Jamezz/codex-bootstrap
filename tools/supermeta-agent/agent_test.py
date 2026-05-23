@@ -189,3 +189,165 @@ class RegistryLifecycleTest(unittest.TestCase):
 
 def read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+class LeaseLifecycleTest(unittest.TestCase):
+    def test_acquires_free_exclusive_lease(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-lease-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            now = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+
+            lease = store.acquire_once(
+                resource="perf:exclusive",
+                agent_id="agent-1",
+                cwd=Path("/tmp/sample-app"),
+                task="perf pass",
+                ttl_seconds=900,
+                now=now,
+                pid=123,
+                host="host",
+                user="alice",
+            )
+
+            self.assertEqual("perf:exclusive", lease.resource)
+            self.assertEqual("agent-1", lease.agent_id)
+
+    def test_reentrant_acquire_by_same_agent_refreshes_lease(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-reentrant-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            first = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+            second = first + timedelta(seconds=30)
+            store.acquire_once("docker", "agent-1", Path("/tmp/sample-app"), "docker work", 900, first, 123, "host", "alice")
+
+            lease = store.acquire_once("docker", "agent-1", Path("/tmp/sample-app"), "docker work", 900, second, 123, "host", "alice")
+
+            self.assertEqual(agent.format_time(second), lease.updatedAt)
+
+    def test_live_lease_blocks_other_agent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-blocked-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            now = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+            store.acquire_once("perf:exclusive", "agent-1", Path("/tmp/one"), "first", 900, now, 123, "host", "alice")
+
+            with self.assertRaisesRegex(agent.LeaseUnavailable, "perf:exclusive is held by agent-1"):
+                store.acquire_once("perf:exclusive", "agent-2", Path("/tmp/two"), "second", 900, now, 456, "host", "alice")
+
+    def test_expired_lease_is_reclaimed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-expired-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            first = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+            second = first + timedelta(seconds=30)
+            store.acquire_once("perf:exclusive", "agent-1", Path("/tmp/one"), "first", 10, first, 123, "host", "alice")
+
+            lease = store.acquire_once("perf:exclusive", "agent-2", Path("/tmp/two"), "second", 900, second, 456, "host", "alice")
+
+            self.assertEqual("agent-2", lease.agent_id)
+
+    def test_release_removes_owned_lease(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-release-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            now = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+            store.acquire_once("docker", "agent-1", Path("/tmp/sample-app"), "docker work", 900, now, 123, "host", "alice")
+
+            released = store.release(("docker",), "agent-1")
+
+            self.assertEqual(("docker",), tuple(released))
+            self.assertFalse((Path(temp_dir) / "leases" / agent.resource_file_name("docker")).exists())
+
+    def test_release_all_removes_all_owned_leases(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-release-all-") as temp_dir:
+            store = agent.CoordinationStore(Path(temp_dir))
+            now = datetime(2026, 5, 23, 19, 0, tzinfo=timezone.utc)
+            store.acquire_once("docker", "agent-1", Path("/tmp/sample-app"), "work", 900, now, 123, "host", "alice")
+            store.acquire_once("perf:exclusive", "agent-1", Path("/tmp/sample-app"), "work", 900, now, 123, "host", "alice")
+
+            released = store.release_all("agent-1")
+
+            self.assertEqual(("docker", "perf:exclusive"), tuple(sorted(released)))
+
+
+class CliBehaviorTest(unittest.TestCase):
+    def test_status_json_reports_agents_and_leases(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-status-") as temp_dir:
+            output = agent.run_cli(
+                [
+                    "--state-home",
+                    temp_dir,
+                    "--agent-id",
+                    "agent-1",
+                    "announce",
+                    "--task",
+                    "perf pass",
+                    "--resource",
+                    "perf",
+                ],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+            self.assertEqual(0, output)
+
+            captured = agent.CapturedOutput()
+            exit_code = agent.run_cli(["--state-home", temp_dir, "status", "--json"], cwd=Path(temp_dir), env={}, stdout=captured)
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(captured.text)
+            self.assertEqual(["agent-1"], [item["agentId"] for item in payload["agents"]])
+            self.assertEqual([], payload["leases"])
+
+    def test_acquire_timeout_returns_75(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-timeout-") as temp_dir:
+            first = agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-1", "acquire", "--resource", "docker"],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+            second = agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-2", "acquire", "--resource", "docker", "--timeout", "0s"],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+
+            self.assertEqual(0, first)
+            self.assertEqual(agent.ACQUIRE_TIMEOUT_EXIT, second)
+
+    def test_leave_removes_agent_and_owned_leases(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-leave-") as temp_dir:
+            agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-1", "announce", "--task", "work", "--resource", "docker"],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+            agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-1", "acquire", "--resource", "docker"],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+
+            exit_code = agent.run_cli(["--state-home", temp_dir, "--agent-id", "agent-1", "leave"], cwd=Path(temp_dir), env={}, stdout=None)
+
+            self.assertEqual(0, exit_code)
+            self.assertFalse((Path(temp_dir) / "registry" / "agent-1.json").exists())
+            self.assertFalse((Path(temp_dir) / "leases" / agent.resource_file_name("docker")).exists())
+
+    def test_run_returns_child_exit_code_and_releases_lease(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-run-") as temp_dir:
+            command = [
+                sys.executable,
+                "-c",
+                "import sys; sys.exit(7)",
+            ]
+
+            exit_code = agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-1", "run", "--resource", "perf:exclusive", "--", *command],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=None,
+            )
+
+            self.assertEqual(7, exit_code)
+            self.assertFalse((Path(temp_dir) / "leases" / agent.resource_file_name("perf:exclusive")).exists())
