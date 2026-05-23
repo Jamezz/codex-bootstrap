@@ -361,3 +361,98 @@ class CliBehaviorTest(unittest.TestCase):
 
             self.assertEqual(7, exit_code)
             self.assertFalse((Path(temp_dir) / "leases" / agent.resource_file_name("perf:exclusive")).exists())
+
+
+class RunNagHookIntegrationTest(unittest.TestCase):
+    def test_run_invokes_pre_post_and_success_hooks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-nag-success-") as temp_dir:
+            root = Path(temp_dir)
+            child = root / "child.py"
+            child.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+            calls: list[tuple[str, int | None]] = []
+
+            def fake_nag_hook(cwd: Path, hook: str, wrapper: str, command: list[str], exit_code: int | None) -> int:
+                calls.append((hook, exit_code))
+                return 0
+
+            with patch.object(agent, "run_nag_hook", side_effect=fake_nag_hook):
+                exit_code = agent.run_cli(
+                    [
+                        "--state-home",
+                        str(root / "state"),
+                        "--agent-id",
+                        "agent-1",
+                        "run",
+                        "--resource",
+                        "test:exclusive",
+                        "--",
+                        sys.executable,
+                        str(child),
+                    ],
+                    cwd=root,
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(
+                [("pre-run", None), ("post-run", 0), ("post-success", 0)],
+                calls,
+            )
+
+    def test_run_invokes_failure_hook_and_preserves_child_exit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-nag-failure-") as temp_dir:
+            root = Path(temp_dir)
+            child = root / "child.py"
+            child.write_text("import sys\nsys.exit(7)\n", encoding="utf-8")
+            calls: list[tuple[str, int | None]] = []
+
+            def fake_nag_hook(cwd: Path, hook: str, wrapper: str, command: list[str], exit_code: int | None) -> int:
+                calls.append((hook, exit_code))
+                return 0
+
+            with patch.object(agent, "run_nag_hook", side_effect=fake_nag_hook):
+                exit_code = agent.run_cli(
+                    [
+                        "--state-home",
+                        str(root / "state"),
+                        "--agent-id",
+                        "agent-1",
+                        "run",
+                        "--resource",
+                        "test:exclusive",
+                        "--",
+                        sys.executable,
+                        str(child),
+                    ],
+                    cwd=root,
+                )
+
+            self.assertEqual(7, exit_code)
+            self.assertEqual(
+                [("pre-run", None), ("post-run", 7), ("post-failure", 7)],
+                calls,
+            )
+
+    def test_run_preserves_child_exit_when_nag_hook_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="agent-coord-nag-hook-fails-") as temp_dir:
+            root = Path(temp_dir)
+            child = root / "child.py"
+            child.write_text("import sys\nsys.exit(5)\n", encoding="utf-8")
+
+            with patch.object(agent, "run_nag_hook", return_value=2):
+                exit_code = agent.run_cli(
+                    [
+                        "--state-home",
+                        str(root / "state"),
+                        "--agent-id",
+                        "agent-1",
+                        "run",
+                        "--resource",
+                        "test:exclusive",
+                        "--",
+                        sys.executable,
+                        str(child),
+                    ],
+                    cwd=root,
+                )
+
+            self.assertEqual(5, exit_code)
