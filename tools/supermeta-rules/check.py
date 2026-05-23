@@ -7,6 +7,7 @@ import argparse
 import fnmatch
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -20,6 +21,40 @@ class Finding:
     rule: str
     path: Path
     message: str
+
+
+@dataclass(frozen=True)
+class JavaClassBlock:
+    name: str
+    start: int
+    end: int
+    annotations: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class JavaMethodBlock:
+    name: str
+    return_type: str
+    params: str
+    body: str
+    start: int
+    end: int
+    annotations: tuple[str, ...]
+
+
+JAVA_IMPORT_RE = re.compile(
+    r"^\s*import\s+(?P<static>static\s+)?"
+    r"(?P<target>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\.\*)?)\s*;\s*$"
+)
+JAVA_CLASS_RE = re.compile(r"\b(?:class|record|interface|enum)\s+(?P<name>[A-Za-z_$][\w$]*)[^{]*\{")
+JAVA_METHOD_RE = re.compile(
+    r"(?P<return>[A-Za-z_$][\w$<>\[\].?,\s]*?)\s+"
+    r"(?P<name>[A-Za-z_$][\w$]*)\s*"
+    r"\((?P<params>[^()]*)\)\s*"
+    r"(?:throws\s+[^{]+)?\{",
+    re.MULTILINE,
+)
+JAVA_CONTROL_NAMES = {"catch", "for", "if", "switch", "synchronized", "try", "while"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,6 +123,7 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
     findings: list[Finding] = []
     findings.extend(run_line_count_rules(config.get("line_count", []), root))
     findings.extend(run_java_package_file_count_rules(config.get("java_package_file_count", []), root))
+    findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root))
     findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
@@ -96,7 +132,7 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
         )
     )
 
-    unknown_rules = sorted(set(config) - {"java_package_file_count", "line_count", "project_callouts"})
+    unknown_rules = sorted(set(config) - {"java_import_style", "java_package_file_count", "line_count", "project_callouts"})
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
     return findings
@@ -160,6 +196,54 @@ def run_java_package_file_count_rules(rules: Any, root: Path) -> list[Finding]:
                 )
 
     return findings
+
+
+def run_java_import_style_rules(rules: Any, root: Path) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("java_import_style must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"java_import_style[{index}]")
+        name = require_string(rule, "name", default=f"java_import_style[{index}]")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.java"])
+        exclude = require_string_list(rule, "exclude", default=[])
+        allow_explicit = set(require_string_list(rule, "allow_explicit", default=[]))
+
+        for source_file in iter_matching_files(root, paths, include, exclude):
+            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            for import_line in stripped_source.splitlines():
+                normalized = normalize_java_import(import_line)
+                if normalized is None or normalized in allow_explicit or normalized.endswith(".*"):
+                    continue
+                findings.append(
+                    Finding(
+                        rule=name,
+                        path=source_file.relative_to(root),
+                        message=(
+                            f"explicit import {normalized}; use "
+                            f"{suggest_java_wildcard_import(normalized)} unless allowlisted"
+                        ),
+                    )
+                )
+
+    return findings
+
+
+def normalize_java_import(line: str) -> str | None:
+    match = JAVA_IMPORT_RE.match(line)
+    if match is None:
+        return None
+    prefix = "static " if match.group("static") else ""
+    return f"{prefix}{match.group('target')}"
+
+
+def suggest_java_wildcard_import(normalized_import: str) -> str:
+    static_prefix = "static " if normalized_import.startswith("static ") else ""
+    target = normalized_import.removeprefix("static ")
+    package_or_type = target.rsplit(".", 1)[0]
+    return f"{static_prefix}{package_or_type}.*"
 
 
 def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> list[Finding]:
@@ -259,6 +343,98 @@ def resolve_under_root(root: Path, configured_path: str) -> Path:
 def count_lines(path: Path) -> int:
     with path.open("r", encoding="utf-8") as source:
         return sum(1 for _ in source)
+
+
+def strip_java_comments_and_strings(source: str) -> str:
+    result: list[str] = []
+    index = 0
+    state = "code"
+    while index < len(source):
+        char = source[index]
+        next_two = source[index : index + 2]
+        next_three = source[index : index + 3]
+
+        if state == "code":
+            if next_two == "//":
+                result.extend("  ")
+                index += 2
+                state = "line_comment"
+                continue
+            if next_two == "/*":
+                result.extend("  ")
+                index += 2
+                state = "block_comment"
+                continue
+            if next_three == '"""':
+                result.extend("   ")
+                index += 3
+                state = "text_block"
+                continue
+            if char == '"':
+                result.append(" ")
+                index += 1
+                state = "string"
+                continue
+            if char == "'":
+                result.append(" ")
+                index += 1
+                state = "char"
+                continue
+            result.append(char)
+            index += 1
+            continue
+
+        if state == "line_comment":
+            if char == "\n":
+                result.append("\n")
+                state = "code"
+            else:
+                result.append(" ")
+            index += 1
+            continue
+
+        if state == "block_comment":
+            if next_two == "*/":
+                result.extend("  ")
+                index += 2
+                state = "code"
+                continue
+            result.append("\n" if char == "\n" else " ")
+            index += 1
+            continue
+
+        if state == "text_block":
+            if next_three == '"""':
+                result.extend("   ")
+                index += 3
+                state = "code"
+                continue
+            result.append("\n" if char == "\n" else " ")
+            index += 1
+            continue
+
+        if state == "string":
+            if char == "\\" and index + 1 < len(source):
+                result.extend("  ")
+                index += 2
+                continue
+            result.append("\n" if char == "\n" else " ")
+            if char == '"':
+                state = "code"
+            index += 1
+            continue
+
+        if state == "char":
+            if char == "\\" and index + 1 < len(source):
+                result.extend("  ")
+                index += 2
+                continue
+            result.append("\n" if char == "\n" else " ")
+            if char == "'":
+                state = "code"
+            index += 1
+
+    return "".join(result)
 
 
 def trim_output(output: str, max_characters: int = 4000) -> str:
