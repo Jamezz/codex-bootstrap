@@ -318,7 +318,11 @@ def find_lombok_method_boilerplate(
         if method_is_inside_ignored_class(method, class_blocks, ignore_annotations):
             continue
 
-        if is_simple_java_getter(method) or is_simple_java_setter(method) or is_fluent_java_setter(method):
+        is_accessor = is_simple_java_getter(method) or is_simple_java_setter(method) or is_fluent_java_setter(method)
+        if is_accessor and is_override_accessor_contract_method(method):
+            continue
+
+        if is_accessor:
             findings.append(
                 Finding(
                     rule=rule_name,
@@ -555,6 +559,10 @@ def is_fluent_java_setter(method: JavaMethodBlock) -> bool:
         )
         is not None
     )
+
+
+def is_override_accessor_contract_method(method: JavaMethodBlock) -> bool:
+    return annotations_match_any(method.annotations, ("Override",))
 
 
 def is_builder_factory(method: JavaMethodBlock) -> bool:

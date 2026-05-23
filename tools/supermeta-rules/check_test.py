@@ -447,6 +447,38 @@ final class Person {
             self.assertEqual(1, len(findings))
             self.assertIn("setName() is Lombok boilerplate", findings[0].message)
 
+    def test_allows_override_accessors_as_interface_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+interface Named {
+    String getName();
+
+    void setName(String name);
+}
+
+final class Person implements Named {
+    private String name;
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(java_lombok_boilerplate_config(), root)
+
+            self.assertEqual([], findings)
+
     def test_rejects_fluent_setter(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
