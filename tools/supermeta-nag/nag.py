@@ -299,3 +299,349 @@ def parse_when(value: object) -> dict[str, Any]:
         if key not in allowed:
             raise NagError(f"unsupported when key: {key}")
     return dict(value)
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: str
+
+
+def run_cli(
+    argv: list[str],
+    stdout=None,
+    now: datetime | None = None,
+    command_runner=None,
+) -> int:
+    args = parse_args(argv)
+    output = stdout or sys.stdout
+    current_time = now or utc_now()
+    runner = command_runner or run_unchecked
+    root = args.project_root.resolve()
+    try:
+        if args.command == "run-hook":
+            return run_hook_command(root, args, output, current_time, runner)
+        if args.command == "check-updates":
+            return check_updates_command(root, args.quiet, args.verbose, output, current_time, runner)
+        if args.command == "ack":
+            state = set_acknowledged(load_state(root), args.nag_id, True)
+            write_state(root, state)
+            return 0
+        if args.command == "snooze":
+            state = set_snooze(load_state(root), args.nag_id, current_time + parse_duration(args.duration))
+            write_state(root, state)
+            return 0
+        if args.command == "reset":
+            state = clear_runtime_state(load_state(root), args.nag_id)
+            write_state(root, state)
+            return 0
+        if args.command == "list":
+            policy, warnings = load_effective_policy(root)
+            print_warnings(warnings)
+            for nag_id in sorted(policy.nags):
+                output.write(f"{nag_id}\n")
+            return 0
+        if args.command == "status":
+            policy, warnings = load_effective_policy(root)
+            print_warnings(warnings)
+            state = load_state(root)
+            output.write(json.dumps(status_payload(policy, state), indent=2, sort_keys=True) + "\n")
+            return 0
+    except NagError as error:
+        print(f"agent-nag: {error}", file=sys.stderr)
+        return 2
+    return 2
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run Codex Bootstrap agent nags.")
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    hook = subparsers.add_parser("run-hook")
+    hook.add_argument("hook")
+    hook.add_argument("--wrapper", default="")
+    hook.add_argument("--command", dest="child_command", default="")
+    hook.add_argument("--exit-code", type=int)
+
+    updates = subparsers.add_parser("check-updates")
+    updates.add_argument("--quiet", action="store_true")
+    updates.add_argument("--verbose", action="store_true")
+
+    subparsers.add_parser("list")
+    subparsers.add_parser("status")
+
+    ack = subparsers.add_parser("ack")
+    ack.add_argument("nag_id")
+
+    snooze = subparsers.add_parser("snooze")
+    snooze.add_argument("nag_id")
+    snooze.add_argument("--for", dest="duration", required=True)
+
+    reset = subparsers.add_parser("reset")
+    reset.add_argument("nag_id")
+
+    return parser.parse_args(argv)
+
+
+def run_hook_command(root: Path, args: argparse.Namespace, output, now: datetime, command_runner) -> int:
+    policy, warnings = load_effective_policy(root)
+    print_warnings(warnings)
+    state = load_state(root)
+    context = hook_context(root, args)
+    should_write_state = False
+    for definition in sorted(policy.nags.values(), key=lambda item: item.nag_id):
+        if definition.hook != args.hook or not matches_when(definition, context):
+            continue
+        if definition.action == "check-bootstrap-update":
+            _shown, updated_state = evaluate_bootstrap_update(
+                root,
+                definition,
+                state,
+                now,
+                output,
+                command_runner,
+                quiet=True,
+                verbose=False,
+            )
+            should_write_state = should_write_state or updated_state != state
+            state = updated_state
+            continue
+        if should_show(definition, state, now):
+            print_nag(definition, output)
+            state = mark_shown(state, definition.nag_id, now)
+            should_write_state = True
+    if should_write_state:
+        write_state(root, state)
+    return 0
+
+
+def matches_when(definition: NagDefinition, context: dict[str, Any]) -> bool:
+    for key, expected in definition.when.items():
+        if context.get(key) != expected:
+            return False
+    return True
+
+
+def hook_context(root: Path, args: argparse.Namespace) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "wrapper": getattr(args, "wrapper", ""),
+        "command": getattr(args, "child_command", ""),
+    }
+    exit_code = getattr(args, "exit_code", None)
+    if exit_code is not None:
+        context["exitCode"] = exit_code
+    context.update(read_sync_metadata(root))
+    return context
+
+
+def print_nag(definition: NagDefinition, output) -> None:
+    output.write(f"agent-nag: {definition.nag_id}\n")
+    output.write(f"  {definition.message}\n")
+    if definition.commands:
+        output.write("  Suggested:\n")
+        for command in definition.commands:
+            output.write(f"    {' '.join(command)}\n")
+
+
+def mark_shown(state: NagState, nag_id: str, now: datetime) -> NagState:
+    current = state.nags.get(nag_id, empty_runtime_state())
+    updated = dataclasses.replace(current, last_shown_at=now)
+    return replace_runtime_state(state, nag_id, updated)
+
+
+def set_acknowledged(state: NagState, nag_id: str, acknowledged: bool) -> NagState:
+    current = state.nags.get(nag_id, empty_runtime_state())
+    return replace_runtime_state(state, nag_id, dataclasses.replace(current, acknowledged=acknowledged))
+
+
+def set_snooze(state: NagState, nag_id: str, snoozed_until: datetime) -> NagState:
+    current = state.nags.get(nag_id, empty_runtime_state())
+    return replace_runtime_state(state, nag_id, dataclasses.replace(current, snoozed_until=snoozed_until))
+
+
+def clear_runtime_state(state: NagState, nag_id: str) -> NagState:
+    nags = dict(state.nags)
+    nags.pop(nag_id, None)
+    return NagState(schema_version=state.schema_version, nags=nags)
+
+
+def replace_runtime_state(state: NagState, nag_id: str, runtime: NagRuntimeState) -> NagState:
+    nags = dict(state.nags)
+    nags[nag_id] = runtime
+    return NagState(schema_version=state.schema_version, nags=nags)
+
+
+def empty_runtime_state() -> NagRuntimeState:
+    return NagRuntimeState(
+        last_shown_at=None,
+        last_checked_at=None,
+        last_seen_value=None,
+        snoozed_until=None,
+        acknowledged=False,
+    )
+
+
+def write_state(root: Path, state: NagState) -> None:
+    destination = root / NAG_STATE
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=destination.parent, delete=False) as temp_file:
+        json.dump(state.to_json(), temp_file, indent=2, sort_keys=True)
+        temp_file.write("\n")
+        temp_file.flush()
+        os.fsync(temp_file.fileno())
+        temp_name = temp_file.name
+    os.replace(temp_name, destination)
+
+
+def check_updates_command(root: Path, quiet: bool, verbose: bool, output, now: datetime, command_runner) -> int:
+    try:
+        policy, warnings = load_effective_policy(root)
+        print_warnings(warnings)
+        state = load_state(root)
+        definition = policy.nags.get("bootstrap-update-check")
+        if definition is None:
+            definition = NagDefinition(
+                nag_id="bootstrap-update-check",
+                enabled=True,
+                hook="session-start",
+                cadence="per-run",
+                action="check-bootstrap-update",
+                message="A newer Codex Bootstrap version is available.",
+                commands=(),
+                when={},
+            )
+        _shown, state = evaluate_bootstrap_update(
+            root,
+            definition,
+            state,
+            now,
+            output,
+            command_runner,
+            quiet=quiet,
+            verbose=verbose,
+        )
+        write_state(root, state)
+        return 0
+    except NagError as error:
+        if verbose:
+            print(f"agent-nag: update check failed: {error}", file=sys.stderr)
+            return 1
+        state = mark_checked(load_state(root), "bootstrap-update-check", now, f"error:{error}")
+        write_state(root, state)
+        return 0
+
+
+def evaluate_bootstrap_update(
+    root: Path,
+    definition: NagDefinition,
+    state: NagState,
+    now: datetime,
+    output,
+    command_runner,
+    quiet: bool,
+    verbose: bool,
+) -> tuple[bool, NagState]:
+    if not should_show(definition, state, now):
+        return False, state
+    sync = read_required_sync_metadata(root)
+    result = command_runner(["git", "ls-remote", sync["sourceRepository"], sync["sourceRef"]], cwd=root)
+    if result.returncode != 0:
+        raise NagError(result.stdout.strip() or "git ls-remote failed")
+    latest = parse_ls_remote_commit(result.stdout)
+    current = sync["sourceCommit"]
+    checked_state = mark_checked(state, definition.nag_id, now, latest)
+    if latest == current:
+        if verbose and not quiet:
+            output.write("agent-nag: bootstrap-update-check\n  Codex Bootstrap is current.\n")
+        return False, checked_state
+    output.write(f"agent-nag: {definition.nag_id}\n")
+    output.write(f"  {definition.message}\n")
+    output.write(f"  current: {current}\n")
+    output.write(f"  latest:  {latest}\n")
+    output.write("  Suggested:\n")
+    output.write("    ./scripts/agent-bootstrap sync --dry-run\n")
+    output.write("    ./scripts/agent-bootstrap sync --apply\n")
+    return True, mark_shown(checked_state, definition.nag_id, now)
+
+
+def mark_checked(state: NagState, nag_id: str, now: datetime, value: str) -> NagState:
+    current = state.nags.get(nag_id, empty_runtime_state())
+    return replace_runtime_state(
+        state,
+        nag_id,
+        dataclasses.replace(current, last_checked_at=now, last_seen_value=value),
+    )
+
+
+def read_sync_metadata(root: Path) -> dict[str, str]:
+    path = root / SYNC_METADATA
+    if not path.is_file():
+        return {}
+    try:
+        return read_required_sync_metadata(root)
+    except (NagError, OSError, json.JSONDecodeError):
+        return {}
+
+
+def read_required_sync_metadata(root: Path) -> dict[str, str]:
+    raw = load_json(root / SYNC_METADATA)
+    source = raw.get("source")
+    template = raw.get("template")
+    if not isinstance(source, dict) or not isinstance(template, dict):
+        raise NagError("sync metadata is missing source or template")
+    return {
+        "sourceRepository": require_string(source, "repository"),
+        "sourceRef": require_string(source, "ref"),
+        "sourceCommit": require_string(source, "commit"),
+        "templateId": require_string(template, "id"),
+    }
+
+
+def parse_ls_remote_commit(output: str) -> str:
+    for line in output.splitlines():
+        commit, separator, _ref = line.partition("\t")
+        if separator and len(commit) == 40:
+            return commit
+    raise NagError("git ls-remote did not return a commit")
+
+
+def run_unchecked(command: list[str], cwd: Path | None = None) -> CommandResult:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=DEFAULT_TIMEOUT_SECONDS,
+        check=False,
+    )
+    return CommandResult(completed.returncode, completed.stdout)
+
+
+def status_payload(policy: NagPolicy, state: NagState) -> dict[str, Any]:
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "nags": {
+            nag_id: {
+                "enabled": definition.enabled,
+                "hook": definition.hook,
+                "cadence": definition.cadence,
+                "state": state.nags.get(nag_id, empty_runtime_state()).to_json(),
+            }
+            for nag_id, definition in sorted(policy.nags.items())
+        },
+    }
+
+
+def print_warnings(warnings: tuple[str, ...]) -> None:
+    for warning in warnings:
+        print(f"agent-nag: {warning}", file=sys.stderr)
+
+
+def main() -> int:
+    return run_cli(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
