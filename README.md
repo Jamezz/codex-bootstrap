@@ -15,8 +15,10 @@ The repo currently ships:
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/pages/`: the GitHub Pages installer-site builder and tests.
 - `scripts/agent-bootstrap` and `scripts/agent-bootstrap.ps1`: generated-project sync wrappers for pulling later managed bootstrap updates.
+- `scripts/agent-coord` and `scripts/agent-coord.ps1`: advisory local agent coordination with opt-in serialized resource leases.
 - `scripts/agent-dotnet` and `scripts/agent-dotnet.ps1`: .NET CLI wrappers that keep dotnet home and NuGet package state local to the project during agent runs.
 - `tools/supermeta-bootstrap/`: the generated-project managed sync helper.
+- `tools/supermeta-agent/`: the local agent coordination helper copied into generated projects.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
@@ -114,6 +116,24 @@ Apply when the plan has no conflicts:
 
 Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
 
+## Coordinate Local Agents
+
+Generated projects include advisory coordination for parallel local agents:
+
+```bash
+./scripts/agent-coord announce --task "perf pass" --resource cpu:heavy
+./scripts/agent-coord status
+./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check
+```
+
+PowerShell:
+
+```powershell
+.\scripts\agent-coord.ps1 status
+```
+
+The tool stores per-user state on Linux, macOS, and Windows and only serializes work when `run` or `acquire` is used.
+
 ## Suggest Upstream Bootstrap Changes
 
 Generated project `AGENTS.md` and README files include a managed copy/paste workflow for reporting downstream discoveries back to Codex Bootstrap.
@@ -188,6 +208,8 @@ environments/
 scripts/
   agent-beans
   agent-beans.ps1
+  agent-coord
+  agent-coord.ps1
   agent-dotnet
   agent-dotnet.ps1
   agent-gradle
@@ -207,6 +229,7 @@ templates/
 tools/
   bootstrap/
   pages/
+  supermeta-agent/
   supermeta-gradle/
   supermeta-beans/
   supermeta-rules/

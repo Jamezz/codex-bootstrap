@@ -411,6 +411,47 @@ class BootstrapSmokeTest(unittest.TestCase):
             run_checked(["./scripts/agent-task", "ps", "--match", "gradle"], cwd=checkout, timeout=120)
             run_checked(["./scripts/agent-gradle", ".", "--logs"], cwd=checkout, timeout=120)
             run_checked(["./scripts/agent-gradle", ".", "--ps"], cwd=checkout, timeout=120)
+            coord_home = checkout / ".tmp-agent-coord"
+            run_checked(
+                [
+                    "./scripts/agent-coord",
+                    "--state-home",
+                    str(coord_home),
+                    "--agent-id",
+                    "bootstrap-smoke",
+                    "announce",
+                    "--task",
+                    "bootstrap smoke",
+                    "--resource",
+                    "cpu:heavy",
+                ],
+                cwd=checkout,
+                timeout=120,
+            )
+            status = run_checked(
+                [
+                    "./scripts/agent-coord",
+                    "--state-home",
+                    str(coord_home),
+                    "status",
+                    "--json",
+                ],
+                cwd=checkout,
+                timeout=120,
+            )
+            self.assertIn("bootstrap-smoke", status.stdout)
+            run_checked(
+                [
+                    "./scripts/agent-coord",
+                    "--state-home",
+                    str(coord_home),
+                    "--agent-id",
+                    "bootstrap-smoke",
+                    "leave",
+                ],
+                cwd=checkout,
+                timeout=120,
+            )
             run_checked(
                 [
                     "python3",
