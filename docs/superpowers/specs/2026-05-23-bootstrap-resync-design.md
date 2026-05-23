@@ -245,6 +245,17 @@ Generated `AGENTS.md` should tell agents:
 - run `./scripts/agent-bootstrap sync --apply` only for managed updates;
 - run the verification commands printed by sync;
 - update downstream `CHANGELOG.md` when the downstream repo has one and the sync changes merge-relevant behavior.
+- use the generated upstream-suggestion blob when a downstream discovery belongs back in Codex Bootstrap.
+
+Generated README and `AGENTS.md` sync regions should also include a downstream-to-upstream suggestion workflow. The workflow should ask downstream agents to distinguish Bootstrap-owned bugs and improvements from product-only downstream choices, read `.codex-bootstrap/sync.json`, include `sync --dry-run` output when relevant, and hand a copy/paste markdown report to an upstream `codex-bootstrap` agent.
+
+The report should capture:
+
+- downstream repository or path;
+- template id, synced upstream commit, sync contract version, downstream commit or branch, and affected managed set or file/region;
+- what happened, why it belongs upstream, and expected upstream behavior;
+- commands run, failure output or symptoms, relevant downstream files, and local workaround if any;
+- files or contracts likely affected upstream, verification that should pass, and compatibility stance.
 
 The existing destructive bootstrap path remains the initial creation flow. It gains sync metadata and support paths, but it does not preserve the bootstrap Git remote.
 

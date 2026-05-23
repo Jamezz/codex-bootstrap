@@ -352,6 +352,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn(
                 "src/main/java/com/acme/sample/App.java",
@@ -473,6 +474,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn("src/sample_app/cli.py", read_text(checkout / "docs" / "ARCHITECTURE.md"))
             self.assertIn(
@@ -669,6 +671,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn("Generated.SampleApp", read_text(checkout / "docs" / "ARCHITECTURE.md"))
             self.assertIn("src/SampleApp/App.cs", read_text(checkout / "docs" / "ARCHITECTURE.md"))
@@ -801,6 +804,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
 
             if shutil.which("bun") is None:
@@ -894,6 +898,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
 
             if shutil.which("bun") is None:
@@ -1281,6 +1286,20 @@ def assert_generated_operational_baseline(test_case: unittest.TestCase, checkout
     seed_bean = read_text(checkout / ".beans" / "sample-app-f001--replace-starter-behavior.md")
     test_case.assertIn("type: feature", seed_bean)
     test_case.assertIn("parent: sample-app-m001", seed_bean)
+
+
+def assert_generated_upstream_suggestion_contract(
+    test_case: unittest.TestCase, readme: str, agents: str
+) -> None:
+    for text in (readme, agents):
+        test_case.assertIn("## Suggest Upstream Bootstrap Changes", text)
+        test_case.assertIn("Upstream bootstrap suggestion", text)
+        test_case.assertIn("Template id:", text)
+        test_case.assertIn("Synced upstream commit:", text)
+        test_case.assertIn("Why this belongs upstream:", text)
+        test_case.assertIn("Verification that should pass:", text)
+    test_case.assertIn("read `.codex-bootstrap/sync.json`", agents)
+    test_case.assertIn("./scripts/agent-bootstrap sync --dry-run", agents)
 
 
 def run_checked(

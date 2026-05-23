@@ -40,6 +40,9 @@ Use these buckets inside dated entries when they help:
   `.codex-bootstrap/sync.json`, `scripts/agent-bootstrap`,
   `scripts/agent-bootstrap.ps1`, `tools/supermeta-bootstrap/`, managed-file
   hashes, managed-region hashes, and generated sync instructions.
+- Added a generated downstream-to-upstream suggestion workflow with a
+  copy/paste report blob for Bootstrap-owned bugs and improvements discovered
+  inside generated projects.
 
 ### Pages / Installer
 

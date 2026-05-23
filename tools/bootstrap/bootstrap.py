@@ -805,6 +805,8 @@ Apply only when the plan has no conflicts:
 ./scripts/agent-bootstrap sync --apply
 {check_command}
 ```
+
+{generated_upstream_suggestion_section()}
 <!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
 """
 
@@ -818,8 +820,50 @@ def generated_agent_sync_region(check_command: str) -> str:
 - Apply managed updates with `./scripts/agent-bootstrap sync --apply` only when the plan is clean.
 - After apply, run `{check_command}` and any extra verification commands printed by sync.
 - If this repo has `CHANGELOG.md`, update it when sync changes merge-relevant behavior.
+
+{generated_upstream_suggestion_section()}
 <!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
 """
+
+
+def generated_upstream_suggestion_section() -> str:
+    return """## Suggest Upstream Bootstrap Changes
+
+If a downstream agent finds a bug or improvement that belongs in Codex Bootstrap, keep the downstream change local and hand this copy/paste blob to an upstream `codex-bootstrap` agent.
+
+Upstream-worthy items include generated starter bugs, stale or broken verification commands, agent wrapper issues, Supermeta tool fixes, generated docs or AGENTS guidance, template defaults, bootstrap sync behavior, or managed-set contract changes. Product-only downstream choices do not belong upstream.
+
+Before sending the blob, read `.codex-bootstrap/sync.json` for the template id, synced commit, contract version, managed sets, and source repository. If the issue affects resync, include `./scripts/agent-bootstrap sync --dry-run` output.
+
+```markdown
+Upstream bootstrap suggestion
+
+Source downstream project:
+- Repository/path:
+- Template id:
+- Synced upstream commit:
+- Sync contract version:
+- Downstream project commit/branch:
+- Affected managed set or file/region:
+
+Problem or improvement:
+- What happened:
+- Why this belongs upstream:
+- Expected upstream behavior:
+
+Evidence:
+- Commands run:
+- Failure output or symptoms:
+- Relevant downstream files:
+- Local workaround, if any:
+
+Requested upstream change:
+- Files/contracts likely affected:
+- Verification that should pass:
+- Compatibility stance:
+```
+
+Fill unknown fields with `unknown`; do not block a useful upstream report on perfect metadata."""
 
 
 def check_command(plan: BootstrapPlan) -> str:

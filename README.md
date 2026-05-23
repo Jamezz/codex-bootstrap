@@ -114,6 +114,42 @@ Apply when the plan has no conflicts:
 
 Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
 
+## Suggest Upstream Bootstrap Changes
+
+Generated project `AGENTS.md` and README files include a managed copy/paste workflow for reporting downstream discoveries back to Codex Bootstrap.
+
+Downstream agents should use it when they find a starter bug, stale verification command, agent wrapper issue, Supermeta tool fix, generated docs improvement, template default issue, bootstrap sync problem, or managed-set contract change. Product-only downstream choices should stay downstream.
+
+The report should include metadata from `.codex-bootstrap/sync.json`, relevant `./scripts/agent-bootstrap sync --dry-run` output when sync is involved, reproduction commands, symptoms, local workaround if any, and the upstream verification that should pass after the fix.
+
+```markdown
+Upstream bootstrap suggestion
+
+Source downstream project:
+- Repository/path:
+- Template id:
+- Synced upstream commit:
+- Sync contract version:
+- Downstream project commit/branch:
+- Affected managed set or file/region:
+
+Problem or improvement:
+- What happened:
+- Why this belongs upstream:
+- Expected upstream behavior:
+
+Evidence:
+- Commands run:
+- Failure output or symptoms:
+- Relevant downstream files:
+- Local workaround, if any:
+
+Requested upstream change:
+- Files/contracts likely affected:
+- Verification that should pass:
+- Compatibility stance:
+```
+
 ## Environment Contract
 
 Every bootstrap environment should include:
