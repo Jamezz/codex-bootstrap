@@ -146,7 +146,7 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 ## Conventions
 
 - production source files under `src/main` are checked for a 1000-line maximum;
-- Java package directories are checked for an 8-source-file maximum before they should be split into subpackages;
+- Java package layers are checked for a 7-top-level-type maximum before they should be split into context-shaped subpackages;
 - wildcard imports are enforced for Java source by Supermeta; use explicit imports only through `allow_explicit` in `supermeta-rules.json`;
 - Lombok boilerplate checks reject handwritten getters, setters, and builder patterns; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions;
 - if you rename `App`, update `application.mainClass` in `build.gradle.kts`.

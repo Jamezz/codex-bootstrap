@@ -10,7 +10,7 @@ When editing this environment:
 - require every runnable template to document verification;
 - require runnable templates to declare generated-project behavior in `bootstrap-template.json`;
 - carry the 1000-line product source limit into new starters;
-- carry the Java 8-files-per-package limit into Java starters;
+- carry the Java 7-top-level-types-per-package-layer limit into Java starters;
 - enforce Java wildcard imports and Lombok-backed getter, setter, and builder boilerplate through `tools/supermeta-rules/`;
 - route reusable checks through `tools/supermeta-rules/`;
 - route language-specific lint through `project_callouts`;

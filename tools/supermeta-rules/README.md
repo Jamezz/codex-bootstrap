@@ -30,16 +30,16 @@ Checks that matching files stay under a configured maximum line count.
 }
 ```
 
-### `java_package_file_count`
+### `java_package_class_count`
 
-Checks that each Java package directory contains no more than a configured number of directly contained Java source files. Subpackages are counted independently.
+Checks that each Java package layer contains no more than a configured number of directly contained top-level Java types. Subpackages are counted independently, and nested classes inside a top-level type do not count against the package layer.
 
 ```json
 {
-  "java_package_file_count": [
+  "java_package_class_count": [
     {
       "name": "java-package-size",
-      "max_files": 8,
+      "max_classes": 7,
       "paths": ["src/main/java", "src/test/java"],
       "include": ["**/*.java"],
       "exclude": ["**/generated/**"]

@@ -113,7 +113,7 @@ General source rules:
 
 - keep non-generated product source files at 1000 lines or less;
 - exception: `tools/bootstrap/bootstrap.py` may exceed 1000 lines because the destructive launcher, template rewrite dispatch, and generated-project docs are intentionally kept in one audited control surface;
-- keep Java package directories to 8 source files or fewer before nesting into subpackages;
+- keep Java package layers to 7 top-level types or fewer before nesting into context-shaped subpackages;
 - route language-specific lint and reusable heuristic gates through `tools/supermeta-rules/` project callouts;
 - enforce wildcard imports for Java source unless a project explicitly allowlists an import;
 - enforce Lombok over handwritten getter, setter, and builder boilerplate for Java source unless a project configures an ignore annotation.

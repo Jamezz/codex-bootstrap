@@ -186,35 +186,88 @@ class ProjectCalloutRuleTest(unittest.TestCase):
             self.assertFalse(marker.exists())
 
 
-class JavaPackageFileCountRuleTest(unittest.TestCase):
+class JavaPackageClassCountRuleTest(unittest.TestCase):
     def test_allows_package_at_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            write_java_files(root, "src/main/java/example", count=8)
+            write_java_files(root, "src/main/java/example", count=7)
 
-            findings = check.run_rules(java_package_count_config(max_files=8), root)
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
 
             self.assertEqual([], findings)
 
     def test_fails_package_over_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            write_java_files(root, "src/main/java/example", count=9)
+            write_java_files(root, "src/main/java/example", count=8)
 
-            findings = check.run_rules(java_package_count_config(max_files=8), root)
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
 
             self.assertEqual(1, len(findings))
             self.assertEqual("java-package-size", findings[0].rule)
             self.assertEqual(Path("src/main/java/example"), findings[0].path)
-            self.assertIn("9 Java source files exceeds package limit of 8", findings[0].message)
+            self.assertIn("8 Java top-level types exceeds package layer limit of 7", findings[0].message)
+            self.assertIn(
+                "refactor this layer into cohesive subpackages based on the system context",
+                findings[0].message,
+            )
+
+    def test_counts_multiple_top_level_classes_in_one_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/MixedTypes.java",
+                """package example;
+
+final class Type0 {}
+final class Type1 {}
+final class Type2 {}
+final class Type3 {}
+final class Type4 {}
+final class Type5 {}
+final class Type6 {}
+final class Type7 {}
+""",
+            )
+
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("8 Java top-level types", findings[0].message)
+
+    def test_ignores_nested_classes_when_counting_package_layer(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+final class App {
+    static final class Nested0 {}
+    static final class Nested1 {}
+    static final class Nested2 {}
+    static final class Nested3 {}
+    static final class Nested4 {}
+    static final class Nested5 {}
+    static final class Nested6 {}
+    static final class Nested7 {}
+}
+""",
+            )
+
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
+
+            self.assertEqual([], findings)
 
     def test_counts_subpackages_independently(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            write_java_files(root, "src/main/java/example", count=8)
-            write_java_files(root, "src/main/java/example/nested", count=8)
+            write_java_files(root, "src/main/java/example", count=7)
+            write_java_files(root, "src/main/java/example/nested", count=7)
 
-            findings = check.run_rules(java_package_count_config(max_files=8), root)
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
 
             self.assertEqual([], findings)
 
@@ -619,12 +672,12 @@ def callout_config(command: list[str]) -> dict[str, object]:
     }
 
 
-def java_package_count_config(max_files: int) -> dict[str, object]:
+def java_package_count_config(max_classes: int) -> dict[str, object]:
     return {
-        "java_package_file_count": [
+        "java_package_class_count": [
             {
                 "name": "java-package-size",
-                "max_files": max_files,
+                "max_classes": max_classes,
                 "paths": ["src/main/java"],
                 "include": ["**/*.java"],
                 "exclude": ["**/generated/**"],

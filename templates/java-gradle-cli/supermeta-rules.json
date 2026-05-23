@@ -8,10 +8,10 @@
       "exclude": ["**/generated/**"]
     }
   ],
-  "java_package_file_count": [
+  "java_package_class_count": [
     {
       "name": "java-package-size",
-      "max_files": 8,
+      "max_classes": 7,
       "paths": ["src/main/java", "src/test/java"],
       "include": ["**/*.java"],
       "exclude": ["**/generated/**"]

@@ -38,7 +38,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep runtime logging configured through `LoggingConfig`; `LOG_LEVEL` and `LOG_FORMAT` are the public knobs.
 - Keep logs on stderr and normal command output on stdout.
 - Keep product source files under `src/main` at 1000 lines or less.
-- Keep Java package directories to 8 source files or fewer before nesting into subpackages.
+- Keep Java package layers to 7 top-level types or fewer before nesting into context-shaped subpackages.
 - Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
 - Preserve Lombok compile-only and annotation-processor wiring.

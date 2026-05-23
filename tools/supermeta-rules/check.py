@@ -123,7 +123,7 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
 
     findings: list[Finding] = []
     findings.extend(run_line_count_rules(config.get("line_count", []), root))
-    findings.extend(run_java_package_file_count_rules(config.get("java_package_file_count", []), root))
+    findings.extend(run_java_package_class_count_rules(config.get("java_package_class_count", []), root))
     findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root))
     findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root))
     findings.extend(
@@ -139,7 +139,7 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
         - {
             "java_import_style",
             "java_lombok_boilerplate",
-            "java_package_file_count",
+            "java_package_class_count",
             "line_count",
             "project_callouts",
         }
@@ -176,32 +176,36 @@ def run_line_count_rules(rules: Any, root: Path) -> list[Finding]:
     return findings
 
 
-def run_java_package_file_count_rules(rules: Any, root: Path) -> list[Finding]:
+def run_java_package_class_count_rules(rules: Any, root: Path) -> list[Finding]:
     if not isinstance(rules, list):
-        raise ValueError("java_package_file_count must be an array")
+        raise ValueError("java_package_class_count must be an array")
 
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
-        rule = require_object(raw_rule, f"java_package_file_count[{index}]")
-        name = require_string(rule, "name", default=f"java_package_file_count[{index}]")
-        max_files = require_positive_int(rule, "max_files")
+        rule = require_object(raw_rule, f"java_package_class_count[{index}]")
+        name = require_string(rule, "name", default=f"java_package_class_count[{index}]")
+        max_classes = require_positive_int(rule, "max_classes")
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*.java"])
         exclude = require_string_list(rule, "exclude", default=[])
 
-        files_by_package: dict[Path, list[Path]] = {}
+        classes_by_package: dict[Path, list[str]] = {}
         for source_file in iter_matching_files(root, paths, include, exclude):
-            files_by_package.setdefault(source_file.parent, []).append(source_file)
+            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            type_names = top_level_java_type_names(stripped_source)
+            classes_by_package.setdefault(source_file.parent, []).extend(type_names)
 
-        for package_dir, source_files in sorted(files_by_package.items()):
-            if len(source_files) > max_files:
+        for package_dir, type_names in sorted(classes_by_package.items()):
+            type_count = len(type_names)
+            if type_count > max_classes:
                 findings.append(
                     Finding(
                         rule=name,
                         path=package_dir.relative_to(root),
                         message=(
-                            f"{len(source_files)} Java source files exceeds package limit "
-                            f"of {max_files}; split the package into subpackages"
+                            f"{type_count} Java top-level types exceeds package layer limit "
+                            f"of {max_classes}; refactor this layer into cohesive subpackages "
+                            "based on the system context"
                         ),
                     )
                 )
@@ -376,6 +380,24 @@ def iter_java_class_blocks(source: str) -> list[JavaClassBlock]:
             )
         )
     return blocks
+
+
+def top_level_java_type_names(source: str) -> list[str]:
+    names: list[str] = []
+    for match in JAVA_CLASS_RE.finditer(source):
+        if java_brace_depth_before(source, match.start()) == 0:
+            names.append(match.group("name"))
+    return names
+
+
+def java_brace_depth_before(source: str, index: int) -> int:
+    depth = 0
+    for char in source[:index]:
+        if char == "{":
+            depth += 1
+        elif char == "}" and depth > 0:
+            depth -= 1
+    return depth
 
 
 def iter_java_method_blocks(source: str) -> list[JavaMethodBlock]:

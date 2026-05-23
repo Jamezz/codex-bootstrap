@@ -912,7 +912,7 @@ Inspect stuck task state:
 - Product source lives under `src/main/java/{package_name.replace(".", "/")}`.
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
-- Keep each Java package directory to 8 source files or fewer; split larger packages into subpackages.
+- Keep each Java package layer to 7 top-level types or fewer; split larger layers into context-shaped subpackages.
 - Supermeta enforces wildcard imports for Java source; configure `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
 - Java lint runs through Gradle Checkstyle, with configuration in `config/checkstyle/checkstyle.xml`.
@@ -983,7 +983,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Keep SLF4J, Logback, and logstash-logback-encoder version changes in `gradle.properties`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 {generated_logging_agent_rules()}
-- Keep Java package directories to 8 source files or fewer before nesting into subpackages.
+- Keep Java package layers to 7 top-level types or fewer before nesting into context-shaped subpackages.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.

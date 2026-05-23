@@ -39,7 +39,7 @@ When adding a new environment or template, include:
 Meta source rules:
 
 - non-generated product source files must stay at 1000 lines or less;
-- Java package directories should contain at most 8 source files before nesting into subpackages;
+- Java package layers should contain at most 7 top-level types before nesting into context-shaped subpackages;
 - language-specific lint and reusable heuristic gates should be routed through `tools/supermeta-rules/` project callouts;
 - Java source should enforce wildcard imports and Lombok-backed data boilerplate through shared Supermeta rules.
 
