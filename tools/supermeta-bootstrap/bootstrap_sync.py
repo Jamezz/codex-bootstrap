@@ -138,6 +138,52 @@ class SyncContract:
         return result
 
 
+@dataclass(frozen=True)
+class FileChange:
+    path: str
+    new_text: str
+    new_sha256: str
+    managed_set: str
+
+
+@dataclass(frozen=True)
+class RegionChange:
+    path: str
+    region_id: str
+    new_text: str
+    new_body: str
+    new_sha256: str
+    managed_set: str
+
+
+@dataclass(frozen=True)
+class SyncConflict:
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class SyncPlan:
+    file_changes: tuple[FileChange, ...]
+    region_changes: tuple[RegionChange, ...]
+    conflicts: tuple[SyncConflict, ...]
+    migration_notes: tuple[str, ...]
+    verification_commands: tuple[str, ...]
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.file_changes or self.region_changes)
+
+    @property
+    def has_conflicts(self) -> bool:
+        return bool(self.conflicts)
+
+
+@dataclass(frozen=True)
+class RegionBody:
+    body: str
+
+
 def load_sync_metadata(root: Path) -> SyncMetadata:
     metadata_path = root / SYNC_METADATA
     if not metadata_path.is_file():
@@ -227,6 +273,113 @@ def sha256_file(path: Path) -> str:
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def plan_managed_updates(
+    root: Path,
+    candidate_root: Path,
+    metadata: SyncMetadata,
+    contract: SyncContract,
+    git_status: dict[str, str],
+) -> SyncPlan:
+    file_changes: list[FileChange] = []
+    region_changes: list[RegionChange] = []
+    conflicts: list[SyncConflict] = []
+    enabled_sets = set(metadata.managed_sets) - set(metadata.opt_out)
+
+    for path, spec in sorted(contract.managed_files.items()):
+        if spec.managed_set not in enabled_sets or path in metadata.opt_out:
+            continue
+        current = root / path
+        candidate = candidate_root / path
+        if not candidate.is_file():
+            conflicts.append(SyncConflict(path, "managed target missing from regenerated template"))
+            continue
+        if git_status.get(path) == "??":
+            conflicts.append(SyncConflict(path, "untracked file would be overwritten"))
+            continue
+        previous = metadata.managed_files.get(path)
+        if current.exists() and previous and sha256_file(current) != previous.sha256:
+            conflicts.append(SyncConflict(path, "hash mismatch; downstream file was edited"))
+            continue
+        candidate_text = candidate.read_text(encoding="utf-8")
+        candidate_hash = sha256_file(candidate)
+        current_hash = sha256_file(current) if current.exists() else ""
+        if current_hash != candidate_hash:
+            file_changes.append(
+                FileChange(
+                    path=path,
+                    new_text=candidate_text,
+                    new_sha256=candidate_hash,
+                    managed_set=spec.managed_set,
+                )
+            )
+
+    for key, spec in sorted(contract.managed_regions.items()):
+        if spec.managed_set not in enabled_sets or key in metadata.opt_out:
+            continue
+        current = root / spec.path
+        candidate = candidate_root / spec.path
+        if not current.is_file() or not candidate.is_file():
+            conflicts.append(SyncConflict(spec.path, f"managed region {spec.region_id} file is missing"))
+            continue
+        previous = metadata.managed_regions.get(key)
+        try:
+            current_text = current.read_text(encoding="utf-8")
+            candidate_text = candidate.read_text(encoding="utf-8")
+            current_region = extract_region(current_text, spec.region_id)
+            candidate_region = extract_region(candidate_text, spec.region_id)
+        except SyncError as error:
+            conflicts.append(SyncConflict(spec.path, str(error)))
+            continue
+        if previous and sha256_text(current_region.body) != previous.sha256:
+            conflicts.append(SyncConflict(spec.path, f"managed region {spec.region_id} hash mismatch"))
+            continue
+        if current_region.body != candidate_region.body:
+            region_changes.append(
+                RegionChange(
+                    path=spec.path,
+                    region_id=spec.region_id,
+                    new_text=replace_region(current_text, spec.region_id, candidate_region.body),
+                    new_body=candidate_region.body,
+                    new_sha256=sha256_text(candidate_region.body),
+                    managed_set=spec.managed_set,
+                )
+            )
+
+    return SyncPlan(
+        file_changes=tuple(file_changes),
+        region_changes=tuple(region_changes),
+        conflicts=tuple(conflicts),
+        migration_notes=contract.migration_notes,
+        verification_commands=contract.verification_commands,
+    )
+
+
+def extract_region(text: str, region_id: str) -> RegionBody:
+    begin = f"<!-- codex-bootstrap:begin {region_id} -->"
+    end = f"<!-- codex-bootstrap:end {region_id} -->"
+    begin_count = text.count(begin)
+    end_count = text.count(end)
+    if begin_count != 1 or end_count != 1:
+        raise SyncError(f"managed region {region_id} marker count is begin={begin_count} end={end_count}")
+    begin_index = text.index(begin) + len(begin)
+    end_index = text.index(end)
+    if end_index < begin_index:
+        raise SyncError(f"managed region {region_id} end marker appears before begin marker")
+    body = text[begin_index:end_index]
+    if body.startswith("\n"):
+        body = body[1:]
+    return RegionBody(body=body)
+
+
+def replace_region(text: str, region_id: str, body: str) -> str:
+    begin = f"<!-- codex-bootstrap:begin {region_id} -->"
+    end = f"<!-- codex-bootstrap:end {region_id} -->"
+    extract_region(text, region_id)
+    prefix, rest = text.split(begin, 1)
+    _old_body, suffix = rest.split(end, 1)
+    return f"{prefix}{begin}\n{body}{end}{suffix}"
 
 
 def normalize_path(value: str) -> str:
