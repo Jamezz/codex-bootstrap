@@ -738,12 +738,15 @@ def run_child_with_leases(
         sys.platform,
         getpass.getuser(),
     )
+    child_exit = 1
     try:
+        run_nag_hook(cwd, "pre-run", "agent-coord", child_command, None)
         process = subprocess.Popen(child_command, cwd=cwd)
         heartbeat_seconds = max(1.0, min(30.0, ttl_seconds / 3))
         while True:
             try:
-                return process.wait(timeout=heartbeat_seconds)
+                child_exit = process.wait(timeout=heartbeat_seconds)
+                break
             except subprocess.TimeoutExpired:
                 now = utc_now()
                 for resource in args.resource:
@@ -769,10 +772,38 @@ def run_child_with_leases(
                     os.getpid(),
                     socket.gethostname(),
                     sys.platform,
-                    getpass.getuser(),
-                )
+                        getpass.getuser(),
+                    )
+        run_nag_hook(cwd, "post-run", "agent-coord", child_command, child_exit)
+        run_nag_hook(
+            cwd,
+            "post-success" if child_exit == 0 else "post-failure",
+            "agent-coord",
+            child_command,
+            child_exit,
+        )
+        return child_exit
     finally:
         store.release(tuple(args.resource), agent_id)
+
+
+def run_nag_hook(
+    cwd: Path,
+    hook: str,
+    wrapper: str,
+    command: list[str],
+    exit_code: int | None,
+) -> int:
+    nag_wrapper = cwd / "scripts" / ("agent-nag.ps1" if sys.platform.startswith("win") else "agent-nag")
+    if not nag_wrapper.is_file():
+        return 0
+    args = [str(nag_wrapper), "run-hook", hook, "--wrapper", wrapper, "--command", " ".join(command)]
+    if exit_code is not None:
+        args.extend(["--exit-code", str(exit_code)])
+    result = subprocess.run(args, cwd=cwd, check=False)
+    if result.returncode != 0:
+        print(f"agent-coord: agent-nag {hook} exited {result.returncode}", file=sys.stderr)
+    return result.returncode
 
 
 def main() -> int:

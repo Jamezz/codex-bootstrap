@@ -32,6 +32,14 @@
       "destination": "scripts/agent-coord.ps1"
     },
     {
+      "source": "scripts/agent-nag",
+      "destination": "scripts/agent-nag"
+    },
+    {
+      "source": "scripts/agent-nag.ps1",
+      "destination": "scripts/agent-nag.ps1"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
     },
@@ -58,6 +66,10 @@
     {
       "source": "tools/supermeta-bootstrap",
       "destination": "tools/supermeta-bootstrap"
+    },
+    {
+      "source": "tools/supermeta-nag",
+      "destination": "tools/supermeta-nag"
     }
   ],
   "verificationCommands": [
@@ -132,6 +144,54 @@
           }
         ],
         "regions": []
+      },
+      {
+        "id": "agent-nags",
+        "description": "Agent reminder policy, nag wrappers, and hook implementation.",
+        "files": [
+          {
+            "path": "scripts/agent-nag",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-nag.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/nag.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/nag_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": ".codex-bootstrap/nags.json",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/agent-nags"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/agent-nags"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/agent-nags"
+          }
+        ]
       },
       {
         "id": "supermeta-tools",

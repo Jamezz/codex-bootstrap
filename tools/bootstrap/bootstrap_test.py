@@ -83,6 +83,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-beans.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-agent",
@@ -90,11 +92,14 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
             ],
             [path.source for path in manifest.support_paths],
         )
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
 
     def test_loads_java_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "java-gradle-cli")
@@ -116,6 +121,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-beans.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-gradle",
@@ -124,15 +131,20 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
             ],
             [path.source for path in manifest.support_paths],
         )
         self.assertEqual(1, manifest.sync_contract.version)
         self.assertIn("agent-scripts", manifest.sync_contract.managed_sets)
+        self.assertIn("agent-nags", manifest.sync_contract.managed_sets)
         self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
         self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", manifest.sync_contract.managed_regions)
+        self.assertIn("README.md:generated-docs/agent-nags", manifest.sync_contract.managed_regions)
 
     def test_loads_python_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "python-uv-cli")
@@ -153,6 +165,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-beans.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-agent",
@@ -160,11 +174,14 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
             ],
             [path.source for path in manifest.support_paths],
         )
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
 
     def test_loads_typescript_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
@@ -185,6 +202,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-beans.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-agent",
@@ -192,11 +211,14 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
             ],
             [path.source for path in manifest.support_paths],
         )
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
 
     def test_loads_typescript_mcp_server_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-mcp-server")
@@ -217,6 +239,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-beans.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-agent",
@@ -224,11 +248,14 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
             ],
             [path.source for path in manifest.support_paths],
         )
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
 
 
 class SafetyTest(unittest.TestCase):
@@ -275,26 +302,41 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-coord").is_file())
             self.assertTrue((checkout / "scripts" / "agent-coord.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-nag").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-nag.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-bootstrap" / "bootstrap_sync.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-agent" / "agent.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-nag" / "nag.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
             self.assertTrue((checkout / ".codex-bootstrap" / "sync.json").is_file())
             self.assertTrue((checkout / ".codex-bootstrap" / "reports" / ".gitignore").is_file())
+            self.assertTrue((checkout / ".codex-bootstrap" / "nags.json").is_file())
+            self.assertTrue((checkout / ".codex-bootstrap" / "nags.local.json").is_file())
+            self.assertFalse((checkout / ".codex-bootstrap" / "nag-state.json").exists())
             sync_metadata = json.loads(
                 (checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8")
             )
+            nags = json.loads((checkout / ".codex-bootstrap" / "nags.json").read_text(encoding="utf-8"))
             self.assertEqual(1, sync_metadata["schemaVersion"])
             self.assertEqual("java-gradle-cli", sync_metadata["template"]["id"])
             self.assertEqual("sample-app", sync_metadata["identity"]["projectName"])
             self.assertEqual("com.acme.sample", sync_metadata["identity"]["javaPackage"])
             self.assertIn("agent-scripts", sync_metadata["managedSets"])
+            self.assertIn("agent-nags", sync_metadata["managedSets"])
             self.assertIn("scripts/agent-bootstrap", sync_metadata["managedFiles"])
+            self.assertIn("scripts/agent-nag", sync_metadata["managedFiles"])
+            self.assertIn(".codex-bootstrap/nags.json", sync_metadata["managedFiles"])
+            self.assertNotIn(".codex-bootstrap/nags.local.json", sync_metadata["managedFiles"])
             self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", sync_metadata["managedRegions"])
+            self.assertIn("README.md:generated-docs/agent-nags", sync_metadata["managedRegions"])
+            self.assertEqual(1, nags["schemaVersion"])
+            self.assertIn("bootstrap-update-check", [item["id"] for item in nags["nags"]])
+            self.assertIn("post-run-backlog-check", [item["id"] for item in nags["nags"]])
 
             remotes = run_checked(["git", "remote"], cwd=checkout).stdout.strip()
             self.assertEqual("", remotes)
@@ -367,6 +409,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-coord status", readme)
             self.assertIn("./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle . check", readme)
             self.assertIn(".\\scripts\\agent-coord.ps1 status", readme)
+            self.assertIn("./scripts/agent-nag run-hook session-start", readme)
             self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
             self.assertIn("docs/ARCHITECTURE.md", readme)
@@ -387,6 +430,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-coord announce --task", agents)
             self.assertIn("./scripts/agent-coord status", agents)
             self.assertIn("./scripts/agent-coord run --resource perf:exclusive", agents)
+            self.assertIn("Treat nags as advisory", agents)
             self.assertIn("Supermeta enforces wildcard imports", agents)
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", agents)
             self.assertIn("Treat unused-import Checkstyle findings as warnings", agents)
@@ -401,6 +445,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             operations = read_text(checkout / "docs" / "OPERATIONS.md")
             self.assertIn("## Agent Coordination", operations)
             self.assertIn("CODEX_AGENT_COORD_HOME", operations)
+            assert_generated_nag_docs(self, readme, agents, operations)
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
             run_checked(
@@ -1384,6 +1429,19 @@ def assert_generated_upstream_suggestion_contract(
         test_case.assertIn("Verification that should pass:", text)
     test_case.assertIn("read `.codex-bootstrap/sync.json`", agents)
     test_case.assertIn("./scripts/agent-bootstrap sync --dry-run", agents)
+
+
+def assert_generated_nag_docs(
+    test_case: unittest.TestCase,
+    readme: str,
+    agents: str,
+    operations: str,
+) -> None:
+    for text in (readme, agents, operations):
+        test_case.assertIn("codex-bootstrap:begin generated-docs/agent-nags", text)
+        test_case.assertIn("./scripts/agent-nag run-hook session-start", text)
+        test_case.assertIn("./scripts/agent-nag snooze post-run-backlog-check --for 7d", text)
+    test_case.assertIn("Treat nags as advisory", agents)
 
 
 def run_checked(
