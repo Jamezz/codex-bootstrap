@@ -219,6 +219,122 @@ class JavaPackageFileCountRuleTest(unittest.TestCase):
             self.assertEqual([], findings)
 
 
+class JavaImportStyleRuleTest(unittest.TestCase):
+    def test_allows_wildcard_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+final class App {}
+""",
+            )
+
+            findings = check.run_rules(java_import_style_config(), root)
+
+            self.assertEqual([], findings)
+
+    def test_rejects_explicit_import(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+import java.util.List;
+
+final class App {}
+""",
+            )
+
+            findings = check.run_rules(java_import_style_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("java-wildcard-imports", findings[0].rule)
+            self.assertEqual(Path("src/main/java/example/App.java"), findings[0].path)
+            self.assertIn("explicit import java.util.List", findings[0].message)
+            self.assertIn("use java.util.*", findings[0].message)
+
+    def test_rejects_explicit_static_import(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/test/java/example/AppTest.java",
+                """package example;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+final class AppTest {}
+""",
+            )
+
+            findings = check.run_rules(java_import_style_config(paths=["src/test/java"]), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("src/test/java/example/AppTest.java"), findings[0].path)
+            self.assertIn("explicit import static org.junit.jupiter.api.Assertions.assertEquals", findings[0].message)
+            self.assertIn("use static org.junit.jupiter.api.Assertions.*", findings[0].message)
+
+    def test_allows_explicit_import_when_allowlisted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+final class App {}
+""",
+            )
+
+            findings = check.run_rules(
+                java_import_style_config(
+                    allow_explicit=[
+                        "java.util.List",
+                        "static org.junit.jupiter.api.Assertions.assertEquals",
+                    ]
+                ),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_honors_import_exclusions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/generated/GeneratedThing.java",
+                """package generated;
+
+import java.util.List;
+
+final class GeneratedThing {}
+""",
+            )
+
+            findings = check.run_rules(java_import_style_config(exclude=["**/generated/**"]), root)
+
+            self.assertEqual([], findings)
+
+
+def write_source(root: Path, relative_path: str, source: str) -> Path:
+    path = root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
+    return path
+
+
 def write_java_file(root: Path) -> None:
     source = root / "src" / "main" / "java" / "example" / "App.java"
     source.parent.mkdir(parents=True, exist_ok=True)
@@ -261,6 +377,24 @@ def java_package_count_config(max_files: int) -> dict[str, object]:
                 "paths": ["src/main/java"],
                 "include": ["**/*.java"],
                 "exclude": ["**/generated/**"],
+            }
+        ]
+    }
+
+
+def java_import_style_config(
+    paths: list[str] | None = None,
+    exclude: list[str] | None = None,
+    allow_explicit: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "java_import_style": [
+            {
+                "name": "java-wildcard-imports",
+                "paths": paths or ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": exclude or [],
+                "allow_explicit": allow_explicit or [],
             }
         ]
     }
