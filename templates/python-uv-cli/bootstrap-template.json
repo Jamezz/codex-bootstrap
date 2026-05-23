@@ -24,12 +24,24 @@
       "destination": "scripts/agent-beans.ps1"
     },
     {
+      "source": "scripts/agent-coord",
+      "destination": "scripts/agent-coord"
+    },
+    {
+      "source": "scripts/agent-coord.ps1",
+      "destination": "scripts/agent-coord.ps1"
+    },
+    {
       "source": "scripts/agent-task",
       "destination": "scripts/agent-task"
     },
     {
       "source": "scripts/agent-task.ps1",
       "destination": "scripts/agent-task.ps1"
+    },
+    {
+      "source": "tools/supermeta-agent",
+      "destination": "tools/supermeta-agent"
     },
     {
       "source": "tools/supermeta-beans",
@@ -104,6 +116,14 @@
             "mode": "whole-file"
           },
           {
+            "path": "scripts/agent-coord",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-coord.ps1",
+            "mode": "whole-file"
+          },
+          {
             "path": "scripts/agent-task",
             "mode": "whole-file"
           },
@@ -132,6 +152,22 @@
           },
           {
             "path": "tools/supermeta-bootstrap/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/agent.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/agent_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/README.md",
             "mode": "whole-file"
           },
           {

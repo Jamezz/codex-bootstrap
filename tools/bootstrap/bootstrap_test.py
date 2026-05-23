@@ -81,8 +81,11 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -90,6 +93,8 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
 
     def test_loads_java_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "java-gradle-cli")
@@ -109,9 +114,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
                 "tools/supermeta-gradle",
+                "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -122,6 +130,8 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(1, manifest.sync_contract.version)
         self.assertIn("agent-scripts", manifest.sync_contract.managed_sets)
         self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", manifest.sync_contract.managed_regions)
 
     def test_loads_python_template_manifest(self) -> None:
@@ -141,8 +151,11 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -150,6 +163,8 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
 
     def test_loads_typescript_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
@@ -168,8 +183,11 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -177,6 +195,8 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
 
     def test_loads_typescript_mcp_server_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-mcp-server")
@@ -195,8 +215,11 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
@@ -204,6 +227,8 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
 
 
 class SafetyTest(unittest.TestCase):
