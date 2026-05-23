@@ -13,6 +13,9 @@ This is a copyable starter, not a long-lived framework.
 - Run with JSON logs: `cd templates/java-gradle-cli && LOG_LEVEL=info LOG_FORMAT=json ../../scripts/agent-gradle . run`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
+- Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle templates/java-gradle-cli check`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
 - List generic task logs: `./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle templates/java-gradle-cli --ps`
@@ -24,6 +27,7 @@ This is a copyable starter, not a long-lived framework.
 
 - Verify from repo root: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli check`
 - Run from repo root: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli run`
+- Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect task processes: `.\scripts\agent-task.ps1 ps --match gradle`
 - Stop scoped Gradle daemon: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop`
 - After materialization, verify with `.\scripts\agent-gradle.ps1 . check`

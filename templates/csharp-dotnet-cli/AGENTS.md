@@ -16,6 +16,9 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Beans prime: `./scripts/agent-beans prime`
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`
+- Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
 - Inspect dotnet processes: `./scripts/agent-task ps --match dotnet`
 
 ## Windows
@@ -24,6 +27,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Verify: `.\scripts\check.ps1`
 - Run: `.\scripts\agent-dotnet.ps1 . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --`
 - Beans prime: `.\scripts\agent-beans.ps1 prime`
+- Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect dotnet processes: `.\scripts\agent-task.ps1 ps --match dotnet`
 
 ## Beans

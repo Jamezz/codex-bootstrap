@@ -956,6 +956,61 @@ def generated_agent_beans_section() -> str:
 """
 
 
+def generated_agent_coordination_readme_section(check_command_text: str) -> str:
+    return f"""## Agent Coordination
+
+Advertise work when several local agents may share machine resources:
+
+```bash
+./scripts/agent-coord announce --task "verification" --resource cpu:heavy
+./scripts/agent-coord status
+```
+
+Serialize sensitive work explicitly:
+
+```bash
+./scripts/agent-coord run --resource perf:exclusive -- {check_command_text}
+```
+
+PowerShell:
+
+```powershell
+.\\scripts\\agent-coord.ps1 status
+```
+
+The tool is advisory unless `run` or `acquire` is used. Set `CODEX_AGENT_COORD_HOME` when agents should coordinate through a shared directory.
+"""
+
+
+def generated_agent_coordination_agent_section(check_command_text: str) -> str:
+    return f"""## Agent Coordination
+
+- Announce substantial work: `./scripts/agent-coord announce --task "short task name" --resource cpu:heavy`
+- Inspect peers: `./scripts/agent-coord status`
+- Serialize resource-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- {check_command_text}`
+- Release this session when done: `./scripts/agent-coord leave`
+- Use `CODEX_AGENT_COORD_HOME` for shared coordination across non-default locations.
+"""
+
+
+def generated_agent_coordination_operations_section(check_command_text: str) -> str:
+    return f"""## Agent Coordination
+
+```bash
+./scripts/agent-coord status
+./scripts/agent-coord run --resource perf:exclusive -- {check_command_text}
+```
+
+State locations:
+
+- Linux: `$XDG_STATE_HOME/codex-bootstrap/agents`, or `~/.local/state/codex-bootstrap/agents`.
+- macOS: `~/Library/Application Support/codex-bootstrap/agents`.
+- Windows: `%LOCALAPPDATA%\\CodexBootstrap\\agents`.
+
+Set `CODEX_AGENT_COORD_HOME` to coordinate through a specific directory. Use `./scripts/agent-coord leave` to remove the current agent record and release leases. Stale records expire through TTL cleanup.
+"""
+
+
 def generated_logging_readme_section() -> str:
     return """## Logging
 
@@ -1041,6 +1096,7 @@ Inspect stuck task state:
 ./scripts/agent-gradle . --stop
 ```
 
+{generated_agent_coordination_readme_section(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1117,6 +1173,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1192,6 +1249,7 @@ Inspect stuck task state:
 ./scripts/agent-task ps --match dotnet
 ```
 
+{generated_agent_coordination_readme_section(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1254,6 +1312,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1322,6 +1381,7 @@ uv run --no-editable python -m {module_name} "Ada Lovelace"
 
 {generated_logging_readme_section().replace("<run-command>", f"uv run --no-editable {plan.config.project_name}")}
 
+{generated_agent_coordination_readme_section(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1376,6 +1436,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1434,6 +1495,7 @@ bun run src/main.ts "Ada Lovelace"
 
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts")}
 
+{generated_agent_coordination_readme_section(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1485,6 +1547,7 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1560,6 +1623,7 @@ bun run src/main.ts --state file --state-file .mcp/state.json
 
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts --transport http")}
 
+{generated_agent_coordination_readme_section(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1614,6 +1678,7 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1719,6 +1784,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ./scripts/agent-beans roadmap
 ```
 
+{generated_agent_coordination_operations_section(check_command(plan))}
 ## Windows
 
 ```powershell

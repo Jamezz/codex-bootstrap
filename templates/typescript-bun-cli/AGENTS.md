@@ -15,6 +15,9 @@ This is a copyable starter, not a long-lived framework.
 - Run with JSON logs: `cd templates/typescript-bun-cli && LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
+- Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
@@ -23,6 +26,7 @@ This is a copyable starter, not a long-lived framework.
 - Verify from template root: `.\scripts\check.ps1`
 - Run from template root: `bun run src/main.ts`
 - Beans prime after materialization: `.\scripts\agent-beans.ps1 prime`
+- Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect Bun processes after materialization: `.\scripts\agent-task.ps1 ps --match bun`
 
 ## Rules

@@ -17,6 +17,9 @@ This is a copyable starter, not a long-lived framework.
 - Run with JSON logs: `cd templates/python-uv-cli && LOG_LEVEL=info LOG_FORMAT=json uv run --no-editable python-uv-cli`
 - Beans prime after materialization: `./scripts/agent-beans prime`
 - Beans check after materialization: `./scripts/agent-beans check`
+- Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
@@ -25,6 +28,7 @@ This is a copyable starter, not a long-lived framework.
 - Verify from template root: `.\scripts\check.ps1`
 - Run from template root: `uv run --no-editable python-uv-cli`
 - Beans prime after materialization: `.\scripts\agent-beans.ps1 prime`
+- Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect task processes after materialization: `.\scripts\agent-task.ps1 ps --match uv`
 
 ## Rules

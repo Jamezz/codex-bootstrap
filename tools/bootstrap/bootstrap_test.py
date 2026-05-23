@@ -273,10 +273,13 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / "scripts" / "agent-bootstrap.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-coord").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-coord.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-bootstrap" / "bootstrap_sync.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-agent" / "agent.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -361,6 +364,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-task ps --match gradle", readme)
             self.assertIn(".\\scripts\\agent-task.ps1 ps --match gradle", readme)
             self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", readme)
+            self.assertIn("./scripts/agent-coord status", readme)
+            self.assertIn("./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle . check", readme)
+            self.assertIn(".\\scripts\\agent-coord.ps1 status", readme)
             self.assertIn('./scripts/agent-gradle . run --args="Ada Lovelace"', readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
             self.assertIn("docs/ARCHITECTURE.md", readme)
@@ -378,6 +384,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-gradle . --ps", agents)
             self.assertIn("./scripts/agent-gradle . --logs", agents)
             self.assertIn("./scripts/agent-gradle . --stop", agents)
+            self.assertIn("./scripts/agent-coord announce --task", agents)
+            self.assertIn("./scripts/agent-coord status", agents)
+            self.assertIn("./scripts/agent-coord run --resource perf:exclusive", agents)
             self.assertIn("Supermeta enforces wildcard imports", agents)
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", agents)
             self.assertIn("Treat unused-import Checkstyle findings as warnings", agents)
@@ -389,6 +398,9 @@ class BootstrapSmokeTest(unittest.TestCase):
                 "src/main/java/com/acme/sample/App.java",
                 read_text(checkout / "docs" / "ARCHITECTURE.md"),
             )
+            operations = read_text(checkout / "docs" / "OPERATIONS.md")
+            self.assertIn("## Agent Coordination", operations)
+            self.assertIn("CODEX_AGENT_COORD_HOME", operations)
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
             run_checked(
