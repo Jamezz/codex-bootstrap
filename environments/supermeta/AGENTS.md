@@ -11,7 +11,7 @@ When editing this environment:
 - require runnable templates to declare generated-project behavior in `bootstrap-template.json`;
 - carry the 1000-line product source limit into new starters;
 - carry the Java 8-files-per-package limit into Java starters;
-- prefer wildcard imports where feasible;
+- enforce Java wildcard imports and Lombok-backed getter, setter, and builder boilerplate through `tools/supermeta-rules/`;
 - route reusable checks through `tools/supermeta-rules/`;
 - route language-specific lint through `project_callouts`;
 - route Gradle agent commands through `scripts/agent-gradle`;

@@ -147,8 +147,8 @@ Leave exact toolchains off for normal agent verification unless the runtime JDK 
 
 - production source files under `src/main` are checked for a 1000-line maximum;
 - Java package directories are checked for an 8-source-file maximum before they should be split into subpackages;
-- wildcard imports are acceptable and preferred when they keep Java files cleaner;
-- Lombok is available by default and should be used where it keeps Java source compact;
+- wildcard imports are enforced for Java source by Supermeta; use explicit imports only through `allow_explicit` in `supermeta-rules.json`;
+- Lombok boilerplate checks reject handwritten getters, setters, and builder patterns; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions;
 - if you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 
 The source limits and project callouts are configured in `supermeta-rules.json` and executed through the shared `tools/supermeta-rules/check.py` helper. Java lint uses Gradle Checkstyle with config in `config/checkstyle/checkstyle.xml`.

@@ -39,8 +39,9 @@ This is a copyable starter, not a long-lived framework.
 - Keep logs on stderr and normal command output on stdout.
 - Keep product source files under `src/main` at 1000 lines or less.
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
-- Use wildcard imports where feasible.
-- Use Lombok where it keeps Java source compact; preserve compile-only and annotation-processor wiring.
+- Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
+- Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
+- Preserve Lombok compile-only and annotation-processor wiring.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
 - Keep Java lint in Gradle Checkstyle with config under `config/checkstyle/`.

@@ -913,6 +913,8 @@ Inspect stuck task state:
 - Test source lives under `src/test/java/{package_name.replace(".", "/")}`.
 - If you rename `App`, update `application.mainClass` in `build.gradle.kts`.
 - Keep each Java package directory to 8 source files or fewer; split larger packages into subpackages.
+- Supermeta enforces wildcard imports for Java source; configure `allow_explicit` only for deliberate exceptions.
+- Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
 - Java lint runs through Gradle Checkstyle, with configuration in `config/checkstyle/checkstyle.xml`.
 - Keep reusable project checks in `tools/supermeta-rules/` and wire them through the build.
 
@@ -983,8 +985,9 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 {generated_logging_agent_rules()}
 - Keep Java package directories to 8 source files or fewer before nesting into subpackages.
 - Keep product source files under `src/main` at 1000 lines or less.
-- Use wildcard imports where feasible.
-- Use Lombok where it keeps Java source compact, and keep it as compile-only plus annotation-processor wiring.
+- Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
+- Supermeta rejects handwritten getter, setter, and builder boilerplate; use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
+- Keep Lombok as compile-only plus annotation-processor wiring.
 - Keep Java lint in Gradle Checkstyle and project callouts in `supermeta-rules.json`.
 - Route reusable checks through `tools/supermeta-rules/`.
 - Use `scripts/agent-gradle` for agent verification unless debugging raw Gradle behavior.
