@@ -5,9 +5,11 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -283,7 +285,7 @@ class CliBehaviorTest(unittest.TestCase):
                 ],
                 cwd=Path(temp_dir),
                 env={},
-                stdout=None,
+                stdout=agent.CapturedOutput(),
             )
             self.assertEqual(0, output)
 
@@ -301,14 +303,15 @@ class CliBehaviorTest(unittest.TestCase):
                 ["--state-home", temp_dir, "--agent-id", "agent-1", "acquire", "--resource", "docker"],
                 cwd=Path(temp_dir),
                 env={},
-                stdout=None,
+                stdout=agent.CapturedOutput(),
             )
-            second = agent.run_cli(
-                ["--state-home", temp_dir, "--agent-id", "agent-2", "acquire", "--resource", "docker", "--timeout", "0s"],
-                cwd=Path(temp_dir),
-                env={},
-                stdout=None,
-            )
+            with redirect_stderr(StringIO()):
+                second = agent.run_cli(
+                    ["--state-home", temp_dir, "--agent-id", "agent-2", "acquire", "--resource", "docker", "--timeout", "0s"],
+                    cwd=Path(temp_dir),
+                    env={},
+                    stdout=agent.CapturedOutput(),
+                )
 
             self.assertEqual(0, first)
             self.assertEqual(agent.ACQUIRE_TIMEOUT_EXIT, second)
@@ -319,16 +322,21 @@ class CliBehaviorTest(unittest.TestCase):
                 ["--state-home", temp_dir, "--agent-id", "agent-1", "announce", "--task", "work", "--resource", "docker"],
                 cwd=Path(temp_dir),
                 env={},
-                stdout=None,
+                stdout=agent.CapturedOutput(),
             )
             agent.run_cli(
                 ["--state-home", temp_dir, "--agent-id", "agent-1", "acquire", "--resource", "docker"],
                 cwd=Path(temp_dir),
                 env={},
-                stdout=None,
+                stdout=agent.CapturedOutput(),
             )
 
-            exit_code = agent.run_cli(["--state-home", temp_dir, "--agent-id", "agent-1", "leave"], cwd=Path(temp_dir), env={}, stdout=None)
+            exit_code = agent.run_cli(
+                ["--state-home", temp_dir, "--agent-id", "agent-1", "leave"],
+                cwd=Path(temp_dir),
+                env={},
+                stdout=agent.CapturedOutput(),
+            )
 
             self.assertEqual(0, exit_code)
             self.assertFalse((Path(temp_dir) / "registry" / "agent-1.json").exists())
@@ -346,7 +354,7 @@ class CliBehaviorTest(unittest.TestCase):
                 ["--state-home", temp_dir, "--agent-id", "agent-1", "run", "--resource", "perf:exclusive", "--", *command],
                 cwd=Path(temp_dir),
                 env={},
-                stdout=None,
+                stdout=agent.CapturedOutput(),
             )
 
             self.assertEqual(7, exit_code)
