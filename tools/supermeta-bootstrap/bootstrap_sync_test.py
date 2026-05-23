@@ -488,6 +488,54 @@ class SyncApplyTest(unittest.TestCase):
             self.assertEqual(1, exit_code)
 
 
+class CandidateRegenerationTest(unittest.TestCase):
+    def test_builds_bootstrap_args_from_identity(self) -> None:
+        metadata = bootstrap_sync.SyncMetadata(
+            schema_version=1,
+            source_repository="file:///tmp/codex-bootstrap",
+            source_ref="main",
+            source_commit="old",
+            template_id="java-gradle-cli",
+            contract_version=1,
+            identity={"projectName": "sample-app", "javaPackage": "com.acme.sample"},
+            managed_sets=("agent-scripts",),
+            opt_out=(),
+            managed_files={},
+            managed_regions={},
+            verification_commands=(),
+        )
+
+        self.assertEqual(
+            [
+                "./bootstrap",
+                "--template",
+                "java-gradle-cli",
+                "--name",
+                "sample-app",
+                "--yes",
+                "--package",
+                "com.acme.sample",
+            ],
+            bootstrap_sync.bootstrap_args(metadata),
+        )
+
+    def test_agent_bootstrap_unix_wrapper_points_at_sync_helper(self) -> None:
+        wrapper = (Path(__file__).resolve().parents[2] / "scripts" / "agent-bootstrap").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("tools/supermeta-bootstrap/bootstrap_sync.py", wrapper)
+        self.assertIn('exec python3 "$repo_root/tools/supermeta-bootstrap/bootstrap_sync.py" "$@"', wrapper)
+
+    def test_agent_bootstrap_powershell_wrapper_points_at_sync_helper(self) -> None:
+        wrapper = (
+            Path(__file__).resolve().parents[2] / "scripts" / "agent-bootstrap.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("tools/supermeta-bootstrap/bootstrap_sync.py", wrapper)
+        self.assertIn("Invoke-PythonChecked", wrapper)
+
+
 def write_json(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -514,23 +514,35 @@ def main(argv: list[str] | None = None) -> int:
 def run_sync_command(args: argparse.Namespace) -> int:
     root = args.project_root.resolve()
     metadata = load_sync_metadata(root)
-    if args.candidate_root is None:
-        raise SyncError("--candidate-root is required until candidate regeneration is implemented")
-    candidate_root = args.candidate_root.resolve()
-    contract = load_sync_contract(candidate_root, metadata.template_id)
-    git_status = getattr(args, "git_status_override", None)
-    if git_status is None:
-        git_status = read_git_status(root)
-    if args.apply and git_status and not args.allow_dirty:
-        print("Bootstrap sync refused: worktree has local changes; pass --allow-dirty to continue.")
-        return 1
-    plan = plan_managed_updates(root, candidate_root, metadata, contract, git_status=git_status)
-    print_sync_plan(metadata, contract, plan, args.candidate_commit)
-    if plan.conflicts:
-        return 1
-    if args.apply:
-        apply_sync_plan(root, metadata, contract, plan, args.candidate_commit)
-    return 0
+    temp_dir: tempfile.TemporaryDirectory[str] | None = None
+    try:
+        if args.candidate_root is not None:
+            candidate_root = args.candidate_root.resolve()
+            candidate_commit = args.candidate_commit
+            contract = load_sync_contract(candidate_root, metadata.template_id)
+        else:
+            source_root, candidate_commit, temp_dir = prepare_candidate_from_source(
+                metadata,
+                args.source_dir.resolve() if args.source_dir else None,
+            )
+            contract = load_sync_contract(source_root, metadata.template_id)
+            candidate_root = regenerate_candidate_project(source_root, metadata)
+        git_status = getattr(args, "git_status_override", None)
+        if git_status is None:
+            git_status = read_git_status(root)
+        if args.apply and git_status and not args.allow_dirty:
+            print("Bootstrap sync refused: worktree has local changes; pass --allow-dirty to continue.")
+            return 1
+        plan = plan_managed_updates(root, candidate_root, metadata, contract, git_status=git_status)
+        print_sync_plan(metadata, contract, plan, candidate_commit)
+        if plan.conflicts:
+            return 1
+        if args.apply:
+            apply_sync_plan(root, metadata, contract, plan, candidate_commit)
+        return 0
+    finally:
+        if temp_dir is not None:
+            temp_dir.cleanup()
 
 
 def print_sync_plan(
@@ -554,6 +566,55 @@ def print_sync_plan(
         print(f"  migration-note: {note}")
     for command in plan.verification_commands:
         print(f"  verify: {command}")
+
+
+def bootstrap_args(metadata: SyncMetadata) -> list[str]:
+    project_name = metadata.identity.get("projectName")
+    if not project_name:
+        raise SyncError("sync identity is missing projectName")
+    args = [
+        "./bootstrap",
+        "--template",
+        metadata.template_id,
+        "--name",
+        project_name,
+        "--yes",
+    ]
+    java_package = metadata.identity.get("javaPackage")
+    if metadata.template_id == "java-gradle-cli":
+        if not java_package:
+            raise SyncError("Java sync identity is missing javaPackage")
+        args.extend(["--package", java_package])
+    return args
+
+
+def prepare_candidate_from_source(
+    metadata: SyncMetadata, source_dir: Path | None
+) -> tuple[Path, str, tempfile.TemporaryDirectory[str] | None]:
+    temp_dir = tempfile.TemporaryDirectory(prefix="codex-bootstrap-sync-")
+    checkout = Path(temp_dir.name) / "source"
+    if source_dir is not None:
+        shutil.copytree(source_dir, checkout, ignore=shutil.ignore_patterns(".git"))
+        commit = git_output(["git", "rev-parse", "HEAD"], cwd=source_dir, fallback="local-source")
+        return checkout, commit, temp_dir
+    run_checked(["git", "clone", "--depth", "1", metadata.source_repository, str(checkout)], cwd=Path.cwd())
+    if run_unchecked(["git", "-C", str(checkout), "checkout", "--detach", metadata.source_ref]).returncode != 0:
+        run_checked(["git", "-C", str(checkout), "fetch", "--depth", "1", "origin", metadata.source_ref], cwd=Path.cwd())
+        run_checked(["git", "-C", str(checkout), "checkout", "--detach", "FETCH_HEAD"], cwd=Path.cwd())
+    commit = git_output(["git", "rev-parse", "HEAD"], cwd=checkout, fallback="unknown")
+    return checkout, commit, temp_dir
+
+
+def regenerate_candidate_project(source_root: Path, metadata: SyncMetadata) -> Path:
+    run_checked(bootstrap_args(metadata), cwd=source_root)
+    return source_root
+
+
+def git_output(command: list[str], cwd: Path, fallback: str) -> str:
+    result = run_unchecked(command, cwd=cwd)
+    if result.returncode != 0:
+        return fallback
+    return result.stdout.strip() or fallback
 
 
 def normalize_path(value: str) -> str:
