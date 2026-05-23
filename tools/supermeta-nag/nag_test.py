@@ -342,6 +342,30 @@ class HookEvaluationTest(unittest.TestCase):
             self.assertIn("agent-nag: update check failed", stderr.getvalue())
 
 
+class WrapperStaticTest(unittest.TestCase):
+    def test_unix_wrapper_routes_to_nag_script(self) -> None:
+        wrapper = (Path(__file__).resolve().parents[2] / "scripts" / "agent-nag").read_text(encoding="utf-8")
+
+        self.assertIn("tools/supermeta-nag/nag.py", wrapper)
+        self.assertIn('exec python3 "$repo_root/tools/supermeta-nag/nag.py" "$@"', wrapper)
+
+    def test_powershell_wrapper_routes_to_nag_script(self) -> None:
+        wrapper = (Path(__file__).resolve().parents[2] / "scripts" / "agent-nag.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("tools/supermeta-nag/nag.py", wrapper)
+        self.assertIn("Invoke-PythonChecked", wrapper)
+
+    def test_agent_bootstrap_delegates_check_updates(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        wrapper = (root / "scripts" / "agent-bootstrap").read_text(encoding="utf-8")
+        windows = (root / "scripts" / "agent-bootstrap.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("check-updates", wrapper)
+        self.assertIn("agent-nag", wrapper)
+        self.assertIn("check-updates", windows)
+        self.assertIn("agent-nag.ps1", windows)
+
+
 def write_default_policy(root: Path) -> None:
     write_json(
         root / ".codex-bootstrap" / "nags.json",
