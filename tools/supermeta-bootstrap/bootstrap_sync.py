@@ -143,6 +143,7 @@ class FileChange:
     path: str
     new_text: str
     new_sha256: str
+    new_mode: int
     managed_set: str
 
 
@@ -271,6 +272,10 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def file_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -304,13 +309,16 @@ def plan_managed_updates(
             continue
         candidate_text = candidate.read_text(encoding="utf-8")
         candidate_hash = sha256_file(candidate)
+        candidate_mode = file_mode(candidate)
         current_hash = sha256_file(current) if current.exists() else ""
-        if current_hash != candidate_hash:
+        current_mode = file_mode(current) if current.exists() else -1
+        if current_hash != candidate_hash or current_mode != candidate_mode:
             file_changes.append(
                 FileChange(
                     path=path,
                     new_text=candidate_text,
                     new_sha256=candidate_hash,
+                    new_mode=candidate_mode,
                     managed_set=spec.managed_set,
                 )
             )
@@ -395,6 +403,7 @@ def apply_sync_plan(
         destination = root / change.path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(change.new_text, encoding="utf-8")
+        destination.chmod(change.new_mode)
     for change in plan.region_changes:
         destination = root / change.path
         destination.write_text(change.new_text, encoding="utf-8")

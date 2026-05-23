@@ -298,6 +298,42 @@ class SyncPlannerTest(unittest.TestCase):
 
 
 class SyncApplyTest(unittest.TestCase):
+    def test_apply_preserves_candidate_file_mode_for_managed_scripts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-mode-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-coord", "#!/bin/sh\necho ok\n")
+            write_text(candidate / "scripts" / "agent-coord", "#!/bin/sh\necho ok\n")
+            (root / "scripts" / "agent-coord").chmod(0o644)
+            (candidate / "scripts" / "agent-coord").chmod(0o755)
+            metadata = metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-coord": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-coord"),
+                    }
+                },
+                managed_regions={},
+            )
+            contract = contract_for(
+                files=[bootstrap_sync.ManagedFileSpec("scripts/agent-coord", "agent-scripts")]
+            )
+
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+            bootstrap_sync.apply_sync_plan(
+                root,
+                metadata,
+                contract,
+                plan,
+                new_commit="abcdef0123456789abcdef0123456789abcdef01",
+            )
+
+            self.assertEqual(("scripts/agent-coord",), tuple(change.path for change in plan.file_changes))
+            self.assertEqual(0o755, file_mode(root / "scripts" / "agent-coord"))
+
     def test_apply_writes_files_regions_report_and_metadata(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bootstrap-sync-apply-") as temp_dir:
             root = Path(temp_dir) / "project"
@@ -547,6 +583,10 @@ def write_json(path: Path, payload: dict[str, object]) -> None:
 def write_text(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8")
+
+
+def file_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
 
 
 def managed_region(region_id: str, body: str) -> str:
