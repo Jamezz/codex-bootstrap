@@ -14,7 +14,9 @@ The repo currently ships:
 - `site/`: the GitHub Pages installer surface.
 - `tools/bootstrap/`: the launcher implementation and smoke tests.
 - `tools/pages/`: the GitHub Pages installer-site builder and tests.
+- `scripts/agent-bootstrap` and `scripts/agent-bootstrap.ps1`: generated-project sync wrappers for pulling later managed bootstrap updates.
 - `scripts/agent-dotnet` and `scripts/agent-dotnet.ps1`: .NET CLI wrappers that keep dotnet home and NuGet package state local to the project during agent runs.
+- `tools/supermeta-bootstrap/`: the generated-project managed sync helper.
 - `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
@@ -94,6 +96,24 @@ Use `--dry-run` to inspect the plan first:
 
 Use `--yes` for non-interactive agent runs.
 
+## Resync Generated Projects
+
+New generated projects include a bootstrap sync contract under `.codex-bootstrap/sync.json`.
+
+Preview managed updates:
+
+```bash
+./scripts/agent-bootstrap sync --dry-run
+```
+
+Apply when the plan has no conflicts:
+
+```bash
+./scripts/agent-bootstrap sync --apply
+```
+
+Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
+
 ## Environment Contract
 
 Every bootstrap environment should include:
@@ -102,12 +122,13 @@ Every bootstrap environment should include:
 - an `AGENTS.md` with direct instructions for Codex-style agents working inside the environment;
 - a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
 - a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` / `scripts/agent-beans.ps1` wrappers;
+- a generated sync contract with `.codex-bootstrap/sync.json`, `scripts/agent-bootstrap`, and `tools/supermeta-bootstrap/`;
 - first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - a deterministic verification command that can be run before handoff;
 - enough project structure to feel like the first commit of a real project, not a toy snippet;
 - clear extension points for common next moves.
 
-Runnable templates should also include a `bootstrap-template.json` manifest describing required inputs, support paths that must survive into the generated project, generated verification commands, and generated-doc metadata.
+Runnable templates should also include a `bootstrap-template.json` manifest describing required inputs, support paths that must survive into the generated project, generated verification commands, generated-doc metadata, and the `syncContract` managed sets.
 
 General source rules:
 

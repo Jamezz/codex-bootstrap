@@ -31,6 +31,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
+    "CHANGELOG.md",
     "README.md",
     "bootstrap",
     "bootstrap.ps1",

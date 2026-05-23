@@ -64,18 +64,16 @@ def build_templates_payload() -> dict[str, Any]:
     templates = []
     for manifest_path in sorted((REPO_ROOT / "templates").glob(f"*/{TEMPLATE_MANIFEST}")):
         raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-        templates.append(
-            {
-                "id": require_string(raw, "id", manifest_path),
-                "displayName": require_string(raw, "displayName", manifest_path),
-                "description": require_string(raw, "description", manifest_path),
-                "type": require_string(raw, "type", manifest_path),
-                "requiredInputs": require_string_list(raw, "requiredInputs", manifest_path),
-                "verificationCommands": require_string_list(
-                    raw, "verificationCommands", manifest_path
-                ),
-            }
-        )
+        template_payload = {
+            "id": require_string(raw, "id", manifest_path),
+            "displayName": require_string(raw, "displayName", manifest_path),
+            "description": require_string(raw, "description", manifest_path),
+            "type": require_string(raw, "type", manifest_path),
+            "requiredInputs": require_string_list(raw, "requiredInputs", manifest_path),
+            "verificationCommands": require_string_list(raw, "verificationCommands", manifest_path),
+        }
+        template_payload.update(sync_summary(raw, manifest_path))
+        templates.append(template_payload)
 
     if not templates:
         raise ValueError("no template manifests found")
@@ -95,6 +93,29 @@ def require_string(raw: dict[str, Any], key: str, path: Path) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{path}: expected non-empty string field {key}")
     return value
+
+
+def sync_summary(raw: dict[str, Any], path: Path) -> dict[str, Any]:
+    sync_contract = raw.get("syncContract")
+    if not isinstance(sync_contract, dict):
+        return {
+            "syncCapable": False,
+            "syncContractVersion": 0,
+            "managedSets": [],
+        }
+    version = sync_contract.get("version")
+    if not isinstance(version, int):
+        raise ValueError(f"{path}: expected integer field syncContract.version")
+    managed_sets = sync_contract.get("managedSets")
+    if not isinstance(managed_sets, list) or not all(
+        isinstance(item, dict) for item in managed_sets
+    ):
+        raise ValueError(f"{path}: expected object array field syncContract.managedSets")
+    return {
+        "syncCapable": True,
+        "syncContractVersion": version,
+        "managedSets": [require_string(item, "id", path) for item in managed_sets],
+    }
 
 
 def require_string_list(raw: dict[str, Any], key: str, path: Path) -> list[str]:

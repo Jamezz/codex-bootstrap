@@ -44,6 +44,12 @@ class PagesBuildTest(unittest.TestCase):
                 manifest_ids,
                 [template["id"] for template in templates["templates"]],
             )
+            java_template = next(
+                template for template in templates["templates"] if template["id"] == "java-gradle-cli"
+            )
+            self.assertTrue(java_template["syncCapable"])
+            self.assertEqual(1, java_template["syncContractVersion"])
+            self.assertIn("agent-scripts", java_template["managedSets"])
 
             checksums = (output / "checksums.txt").read_text(encoding="utf-8")
             self.assertIn("  install.sh\n", checksums)
