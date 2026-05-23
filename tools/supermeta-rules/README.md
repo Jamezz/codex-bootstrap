@@ -1,13 +1,17 @@
 # Supermeta Rules
 
-`check.py` is a small, dependency-free rule checker for bootstrap templates. Templates can use it from their own build systems instead of reimplementing catalog rules.
+`check.py` is a small, dependency-free rule checker for generated projects. Templates can use it from their own build systems instead of reimplementing shared rules.
 
-Run it from the repo root:
+Run it from a generated project root:
+
+```bash
+python3 tools/supermeta-rules/check.py --config supermeta-rules.json --root .
+```
+
+When working inside the Codex Bootstrap catalog itself, pass a template config and template root:
 
 ```bash
 python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/supermeta-rules.json --root templates/java-gradle-cli
-python3 tools/supermeta-rules/check.py --config templates/python-uv-cli/supermeta-rules.json --root templates/python-uv-cli
-python3 tools/supermeta-rules/check.py --config templates/typescript-bun-cli/supermeta-rules.json --root templates/typescript-bun-cli
 ```
 
 ## Supported Rules

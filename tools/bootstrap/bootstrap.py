@@ -539,7 +539,6 @@ def execute_plan(plan: BootstrapPlan) -> None:
 
 def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     copy_template(plan.template_dir, staged_root)
-    copy_support_paths(plan, staged_root)
     rewriter = {
         "csharp-dotnet-cli": rewrite_csharp_template,
         "java-gradle-cli": rewrite_java_template,
@@ -550,6 +549,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     if rewriter is None:
         raise UsageError(f"unsupported template type '{plan.manifest.template_type}'")
     rewriter(plan, staged_root)
+    copy_support_paths(plan, staged_root)
     write_sync_metadata(plan, staged_root)
 
 
@@ -795,6 +795,8 @@ def generated_bootstrap_sync_region(check_command: str) -> str:
 
 This project can resync Codex Bootstrap managed files and generated doc regions from the recorded bootstrap source.
 
+When upstream adds a new managed set, sync enables it unless the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended during that migration.
+
 Preview managed updates first:
 
 ```bash
@@ -820,6 +822,7 @@ def generated_agent_sync_region(check_command: str) -> str:
 - Run `./scripts/agent-bootstrap sync --dry-run` before applying bootstrap updates.
 - Inspect conflicts instead of forcing over local edits.
 - Apply managed updates with `./scripts/agent-bootstrap sync --apply` only when the plan is clean.
+- New upstream managed sets are enabled unless their set id is listed in `.codex-bootstrap/sync.json` `optOut`.
 - After apply, run `{check_command}` and any extra verification commands printed by sync.
 - If this repo has `CHANGELOG.md`, update it when sync changes merge-relevant behavior.
 

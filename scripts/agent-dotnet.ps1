@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $scriptArgs = @($args)
 if ($scriptArgs.Count -lt 2) {
     [Console]::Error.WriteLine("usage: scripts/agent-dotnet.ps1 <dotnet-project-dir> <dotnet-args...>")
-    [Console]::Error.WriteLine("example: scripts/agent-dotnet.ps1 templates/csharp-dotnet-cli test")
+    [Console]::Error.WriteLine("example: scripts/agent-dotnet.ps1 . test")
     exit 2
 }
 

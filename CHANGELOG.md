@@ -46,6 +46,12 @@ Use these buckets inside dated entries when they help:
 - Added a generated-project agent nag contract with reusable lifecycle hooks,
   bootstrap update reminders, post-run follow-up suggestions, local override
   policy, and `agent-coord run` hook integration.
+- Bootstrap generation now rewrites template-owned files before copying shared
+  support tools, so generated project names no longer corrupt managed
+  `tools/supermeta-*` helper code or tests.
+- Bootstrap sync now auto-enables newly introduced managed sets unless opted
+  out, appends missing generated doc regions during that migration, and records
+  the enabled sets in sync reports and metadata.
 
 ### Pages / Installer
 

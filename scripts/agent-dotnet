@@ -3,7 +3,7 @@ set -eu
 
 if [ "$#" -lt 2 ]; then
   echo "usage: scripts/agent-dotnet <dotnet-project-dir> <dotnet-args...>" >&2
-  echo "example: scripts/agent-dotnet templates/csharp-dotnet-cli test" >&2
+  echo "example: scripts/agent-dotnet . test" >&2
   exit 2
 fi
 

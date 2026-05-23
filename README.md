@@ -118,6 +118,8 @@ Apply when the plan has no conflicts:
 
 Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
 
+When the upstream sync contract adds a new managed set, sync enables it unless the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended to existing docs during that migration.
+
 ## Agent Nags
 
 Generated projects include advisory reminders for bootstrap updates and wrapped-command follow-up:

@@ -165,6 +165,7 @@ class SyncConflict:
 
 @dataclass(frozen=True)
 class SyncPlan:
+    new_managed_sets: tuple[str, ...]
     file_changes: tuple[FileChange, ...]
     region_changes: tuple[RegionChange, ...]
     conflicts: tuple[SyncConflict, ...]
@@ -173,7 +174,7 @@ class SyncPlan:
 
     @property
     def has_changes(self) -> bool:
-        return bool(self.file_changes or self.region_changes)
+        return bool(self.new_managed_sets or self.file_changes or self.region_changes)
 
     @property
     def has_conflicts(self) -> bool:
@@ -290,7 +291,15 @@ def plan_managed_updates(
     file_changes: list[FileChange] = []
     region_changes: list[RegionChange] = []
     conflicts: list[SyncConflict] = []
-    enabled_sets = set(metadata.managed_sets) - set(metadata.opt_out)
+    opt_out = set(metadata.opt_out)
+    new_managed_sets = tuple(
+        sorted(
+            managed_set
+            for managed_set in contract.managed_sets
+            if managed_set not in metadata.managed_sets and managed_set not in opt_out
+        )
+    )
+    enabled_sets = (set(metadata.managed_sets) | set(new_managed_sets)) - opt_out
 
     for path, spec in sorted(contract.managed_files.items()):
         if spec.managed_set not in enabled_sets or path in metadata.opt_out:
@@ -312,7 +321,7 @@ def plan_managed_updates(
         candidate_mode = file_mode(candidate)
         current_hash = sha256_file(current) if current.exists() else ""
         current_mode = file_mode(current) if current.exists() else -1
-        if current_hash != candidate_hash or current_mode != candidate_mode:
+        if previous is None or current_hash != candidate_hash or current_mode != candidate_mode:
             file_changes.append(
                 FileChange(
                     path=path,
@@ -335,15 +344,31 @@ def plan_managed_updates(
         try:
             current_text = current.read_text(encoding="utf-8")
             candidate_text = candidate.read_text(encoding="utf-8")
-            current_region = extract_region(current_text, spec.region_id)
             candidate_region = extract_region(candidate_text, spec.region_id)
         except SyncError as error:
             conflicts.append(SyncConflict(spec.path, str(error)))
             continue
+        try:
+            current_region = extract_region(current_text, spec.region_id)
+        except SyncError as error:
+            if previous is not None or not region_markers_absent(current_text, spec.region_id):
+                conflicts.append(SyncConflict(spec.path, str(error)))
+                continue
+            region_changes.append(
+                RegionChange(
+                    path=spec.path,
+                    region_id=spec.region_id,
+                    new_text=append_region(current_text, spec.region_id, candidate_region.body),
+                    new_body=candidate_region.body,
+                    new_sha256=sha256_text(candidate_region.body),
+                    managed_set=spec.managed_set,
+                )
+            )
+            continue
         if previous and sha256_text(current_region.body) != previous.sha256:
             conflicts.append(SyncConflict(spec.path, f"managed region {spec.region_id} hash mismatch"))
             continue
-        if current_region.body != candidate_region.body:
+        if previous is None or current_region.body != candidate_region.body:
             region_changes.append(
                 RegionChange(
                     path=spec.path,
@@ -356,6 +381,7 @@ def plan_managed_updates(
             )
 
     return SyncPlan(
+        new_managed_sets=new_managed_sets,
         file_changes=tuple(file_changes),
         region_changes=tuple(region_changes),
         conflicts=tuple(conflicts),
@@ -388,6 +414,23 @@ def replace_region(text: str, region_id: str, body: str) -> str:
     prefix, rest = text.split(begin, 1)
     _old_body, suffix = rest.split(end, 1)
     return f"{prefix}{begin}\n{body}{end}{suffix}"
+
+
+def region_markers_absent(text: str, region_id: str) -> bool:
+    begin = f"<!-- codex-bootstrap:begin {region_id} -->"
+    end = f"<!-- codex-bootstrap:end {region_id} -->"
+    return begin not in text and end not in text
+
+
+def append_region(text: str, region_id: str, body: str) -> str:
+    begin = f"<!-- codex-bootstrap:begin {region_id} -->"
+    end = f"<!-- codex-bootstrap:end {region_id} -->"
+    separator = ""
+    if text and not text.endswith("\n"):
+        separator = "\n\n"
+    elif text and not text.endswith("\n\n"):
+        separator = "\n"
+    return f"{text}{separator}{begin}\n{body}{end}\n"
 
 
 def apply_sync_plan(
@@ -428,6 +471,7 @@ def apply_sync_plan(
         metadata,
         source_commit=new_commit,
         contract_version=contract.version,
+        managed_sets=tuple(sorted(set(metadata.managed_sets) | set(plan.new_managed_sets))),
         managed_files=managed_files,
         managed_regions=managed_regions,
         verification_commands=contract.verification_commands,
@@ -453,6 +497,7 @@ def write_sync_report(root: Path, plan: SyncPlan, metadata: SyncMetadata) -> Pat
     destination = reports / f"{timestamp}.json"
     payload = {
         "commit": metadata.source_commit,
+        "newManagedSets": list(plan.new_managed_sets),
         "fileChanges": [dataclasses.asdict(change) for change in plan.file_changes],
         "regionChanges": [dataclasses.asdict(change) for change in plan.region_changes],
         "conflicts": [dataclasses.asdict(conflict) for conflict in plan.conflicts],
@@ -565,6 +610,8 @@ def print_sync_plan(
     print(f"  current-commit: {metadata.source_commit}")
     print(f"  candidate-commit: {candidate_commit}")
     print(f"  contract: {metadata.contract_version} -> {contract.version}")
+    for managed_set in plan.new_managed_sets:
+        print(f"  enable-managed-set: {managed_set}")
     for change in plan.file_changes:
         print(f"  update-file: {change.path}")
     for change in plan.region_changes:

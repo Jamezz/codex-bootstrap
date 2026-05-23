@@ -14,12 +14,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from tools.bootstrap.bootstrap import (  # noqa: E402
+    BootstrapConfig,
+    BootstrapPlan,
     TemplateManifest,
     UsageError,
     assert_safe_clear_path,
     csharp_project_name_from_slug,
     java_package_to_path,
     python_module_from_slug,
+    stage_template,
     title_from_slug,
     validate_java_package,
     validate_project_name,
@@ -100,6 +103,38 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+
+    def test_stage_template_does_not_rewrite_copied_support_tools(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-stage-") as temp_dir:
+            staged_root = Path(temp_dir) / "sample-app"
+            plan = BootstrapPlan(
+                repo_root=REPO_ROOT,
+                manifest=TemplateManifest.load(REPO_ROOT, "java-gradle-cli"),
+                config=BootstrapConfig(
+                    template_id="java-gradle-cli",
+                    project_name="sample-app",
+                    package_name="com.acme.sample",
+                    yes=True,
+                    dry_run=False,
+                    force=False,
+                ),
+            )
+
+            stage_template(plan, staged_root)
+
+            sync_test = read_text(staged_root / "tools" / "supermeta-bootstrap" / "bootstrap_sync_test.py")
+            gradle_readme = read_text(staged_root / "tools" / "supermeta-gradle" / "README.md")
+            rules_readme = read_text(staged_root / "tools" / "supermeta-rules" / "README.md")
+            gradle_wrapper = read_text(staged_root / "scripts" / "agent-gradle")
+            self.assertIn('template_id="java-gradle-cli"', sync_test)
+            self.assertNotIn('template_id="sample-app"', sync_test)
+            self.assertIn("example: scripts/agent-gradle . test", gradle_wrapper)
+            self.assertIn("./scripts/agent-gradle . check", gradle_readme)
+            self.assertIn(
+                "python3 tools/supermeta-rules/check.py --config supermeta-rules.json --root .",
+                rules_readme,
+            )
+            self.assertNotIn("templates/sample-app", gradle_readme)
 
     def test_loads_java_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "java-gradle-cli")

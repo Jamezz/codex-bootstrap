@@ -5,7 +5,7 @@ $scriptArgs = @($args)
 if ($scriptArgs.Count -lt 2) {
     [Console]::Error.WriteLine("usage: scripts/agent-gradle.ps1 <gradle-project-dir> <gradle-args...>")
     [Console]::Error.WriteLine("       scripts/agent-gradle.ps1 <gradle-project-dir> --ps|--logs|--stop|--kill")
-    [Console]::Error.WriteLine("example: scripts/agent-gradle.ps1 templates/java-gradle-cli test")
+    [Console]::Error.WriteLine("example: scripts/agent-gradle.ps1 . test")
     exit 2
 }
 
