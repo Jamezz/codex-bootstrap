@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -76,6 +77,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-dotnet",
                 "scripts/agent-dotnet.ps1",
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
                 "scripts/agent-task",
@@ -83,6 +86,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
             ],
             [path.source for path in manifest.support_paths],
         )
@@ -101,6 +105,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-gradle",
                 "scripts/agent-gradle.ps1",
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
                 "scripts/agent-task",
@@ -109,9 +115,14 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
             ],
             [path.source for path in manifest.support_paths],
         )
+        self.assertEqual(1, manifest.sync_contract.version)
+        self.assertIn("agent-scripts", manifest.sync_contract.managed_sets)
+        self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
+        self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", manifest.sync_contract.managed_regions)
 
     def test_loads_python_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "python-uv-cli")
@@ -126,6 +137,8 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("src/python_uv_cli/logging_config.py", manifest.generated_docs.entrypoints)
         self.assertEqual(
             [
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
                 "scripts/agent-task",
@@ -133,6 +146,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
             ],
             [path.source for path in manifest.support_paths],
         )
@@ -150,6 +164,8 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("src/logging.ts", manifest.generated_docs.entrypoints)
         self.assertEqual(
             [
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
                 "scripts/agent-task",
@@ -157,6 +173,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
             ],
             [path.source for path in manifest.support_paths],
         )
@@ -174,6 +191,8 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("src/state.ts", manifest.generated_docs.entrypoints)
         self.assertEqual(
             [
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
                 "scripts/agent-beans.ps1",
                 "scripts/agent-task",
@@ -181,6 +200,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
             ],
             [path.source for path in manifest.support_paths],
         )
@@ -224,14 +244,29 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertFalse((checkout / "tools" / "bootstrap").exists())
             self.assertTrue((checkout / "scripts" / "agent-gradle").is_file())
             self.assertTrue((checkout / "scripts" / "agent-gradle.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-bootstrap").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-bootstrap.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
             self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-bootstrap" / "bootstrap_sync.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+            self.assertTrue((checkout / ".codex-bootstrap" / "sync.json").is_file())
+            self.assertTrue((checkout / ".codex-bootstrap" / "reports" / ".gitignore").is_file())
+            sync_metadata = json.loads(
+                (checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(1, sync_metadata["schemaVersion"])
+            self.assertEqual("java-gradle-cli", sync_metadata["template"]["id"])
+            self.assertEqual("sample-app", sync_metadata["identity"]["projectName"])
+            self.assertEqual("com.acme.sample", sync_metadata["identity"]["javaPackage"])
+            self.assertIn("agent-scripts", sync_metadata["managedSets"])
+            self.assertIn("scripts/agent-bootstrap", sync_metadata["managedFiles"])
+            self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", sync_metadata["managedRegions"])
 
             remotes = run_checked(["git", "remote"], cwd=checkout).stdout.strip()
             self.assertEqual("", remotes)
@@ -315,8 +350,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("./scripts/agent-gradle . --stop", agents)
             self.assertIn("Supermeta enforces wildcard imports", agents)
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", agents)
-            self.assertNotIn("codex-bootstrap", readme.lower())
-            self.assertNotIn("codex-bootstrap", agents.lower())
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn(
                 "src/main/java/com/acme/sample/App.java",
@@ -436,8 +471,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info uv run --no-editable sample-app", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
-            self.assertNotIn("codex-bootstrap", readme.lower())
-            self.assertNotIn("codex-bootstrap", agents.lower())
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn("src/sample_app/cli.py", read_text(checkout / "docs" / "ARCHITECTURE.md"))
             self.assertIn(
@@ -574,8 +609,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info ./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
-            self.assertNotIn("codex-bootstrap", readme.lower())
-            self.assertNotIn("codex-bootstrap", agents.lower())
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn("Generated.SampleApp", read_text(checkout / "docs" / "ARCHITECTURE.md"))
             self.assertIn("src/SampleApp/App.cs", read_text(checkout / "docs" / "ARCHITECTURE.md"))
@@ -706,8 +741,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info bun run src/main.ts", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
-            self.assertNotIn("codex-bootstrap", readme.lower())
-            self.assertNotIn("codex-bootstrap", agents.lower())
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
             assert_generated_operational_baseline(self, checkout)
 
             if shutil.which("bun") is None:
@@ -799,8 +834,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Keep stdio output clean", agents)
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
-            self.assertNotIn("codex-bootstrap", readme.lower())
-            self.assertNotIn("codex-bootstrap", agents.lower())
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
             assert_generated_operational_baseline(self, checkout)
 
             if shutil.which("bun") is None:

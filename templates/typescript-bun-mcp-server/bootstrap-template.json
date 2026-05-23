@@ -3,8 +3,18 @@
   "displayName": "TypeScript Bun MCP Server",
   "description": "A compact TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-mcp-server",
-  "requiredInputs": ["name"],
+  "requiredInputs": [
+    "name"
+  ],
   "supportPaths": [
+    {
+      "source": "scripts/agent-bootstrap",
+      "destination": "scripts/agent-bootstrap"
+    },
+    {
+      "source": "scripts/agent-bootstrap.ps1",
+      "destination": "scripts/agent-bootstrap.ps1"
+    },
     {
       "source": "scripts/agent-beans",
       "destination": "scripts/agent-beans"
@@ -32,9 +42,16 @@
     {
       "source": "tools/supermeta-rules",
       "destination": "tools/supermeta-rules"
+    },
+    {
+      "source": "tools/supermeta-bootstrap",
+      "destination": "tools/supermeta-bootstrap"
     }
   ],
-  "verificationCommands": ["./scripts/check", "bun run src/main.ts --help"],
+  "verificationCommands": [
+    "./scripts/check",
+    "bun run src/main.ts --help"
+  ],
   "generatedDocs": {
     "summary": "This is a compact TypeScript Bun MCP server with local stdio, Bun-native Streamable HTTP, typed state stores, tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
     "runtime": "Bun owns package installation, runtime execution, and tests. The MCP server is constructed separately from transport startup so tests can exercise tools through an in-memory MCP client. `stdio` is the default transport for local agent-spawned servers, while `http` exposes `/health` and `/mcp` through Bun's native server. State defaults to memory and can be switched to an atomic JSON file store. Runtime logging uses Pino on stderr, Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
@@ -48,9 +65,17 @@
       "src/logging.ts",
       "package.json scripts"
     ],
-    "sourceRoots": ["src", "tools/supermeta-rules"],
-    "testRoots": ["tests", "supermeta-rules.json"],
-    "verificationCommands": ["./scripts/check"],
+    "sourceRoots": [
+      "src",
+      "tools/supermeta-rules"
+    ],
+    "testRoots": [
+      "tests",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
     "runCommands": [
       "bun run src/main.ts --help",
       "bun run src/main.ts",
@@ -58,5 +83,143 @@
       "bun run src/main.ts --transport http --state file --state-file .mcp/state.json"
     ],
     "firstUsefulEdit": "Replace or extend the stub tools in `src/mcp.ts`, update the protocol tests first or in the same change, then rerun `./scripts/check`."
+  },
+  "syncContract": {
+    "version": 1,
+    "managedSets": [
+      {
+        "id": "agent-scripts",
+        "description": "Agent wrapper scripts and bootstrap sync entrypoints.",
+        "files": [
+          {
+            "path": "scripts/agent-bootstrap",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-bootstrap.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "supermeta-tools",
+        "description": "Shared Supermeta support tools copied into generated projects.",
+        "files": [
+          {
+            "path": "tools/supermeta-bootstrap/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/README.md",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "generated-docs",
+        "description": "Generated bootstrap sync instructions in project docs.",
+        "files": [],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/bootstrap-sync"
+          }
+        ]
+      },
+      {
+        "id": "language-checks",
+        "description": "Template verification and reusable rule configuration.",
+        "files": [
+          {
+            "path": "supermeta-rules.json",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      }
+    ],
+    "verificationCommands": [
+      "./scripts/agent-bootstrap sync --dry-run",
+      "./scripts/check"
+    ],
+    "migrationNotes": []
   }
 }

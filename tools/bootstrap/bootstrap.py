@@ -267,6 +267,55 @@ class GeneratedDocs:
 
 
 @dataclass(frozen=True)
+class ManagedFileSpec:
+    path: str
+    managed_set: str
+
+
+@dataclass(frozen=True)
+class ManagedRegionSpec:
+    path: str
+    region_id: str
+    managed_set: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.path}:{self.region_id}"
+
+
+@dataclass(frozen=True)
+class ManagedSetSpec:
+    managed_set: str
+    description: str
+    files: tuple[ManagedFileSpec, ...]
+    regions: tuple[ManagedRegionSpec, ...]
+
+
+@dataclass(frozen=True)
+class SyncContract:
+    version: int
+    managed_sets: dict[str, ManagedSetSpec]
+    verification_commands: tuple[str, ...]
+    migration_notes: tuple[str, ...]
+
+    @property
+    def managed_files(self) -> dict[str, ManagedFileSpec]:
+        result: dict[str, ManagedFileSpec] = {}
+        for managed_set in self.managed_sets.values():
+            for spec in managed_set.files:
+                result[spec.path] = spec
+        return result
+
+    @property
+    def managed_regions(self) -> dict[str, ManagedRegionSpec]:
+        result: dict[str, ManagedRegionSpec] = {}
+        for managed_set in self.managed_sets.values():
+            for spec in managed_set.regions:
+                result[spec.key] = spec
+        return result
+
+
+@dataclass(frozen=True)
 class TemplateManifest:
     template_id: str
     display_name: str
@@ -276,6 +325,7 @@ class TemplateManifest:
     support_paths: tuple[SupportPath, ...]
     verification_commands: tuple[str, ...]
     generated_docs: GeneratedDocs
+    sync_contract: SyncContract
 
     @classmethod
     def load(cls, repo_root: Path, template_id: str) -> "TemplateManifest":
@@ -301,6 +351,7 @@ class TemplateManifest:
         support_paths = tuple(parse_support_paths(raw.get("supportPaths", [])))
         verification_commands = tuple(require_string_list(raw, "verificationCommands"))
         generated_docs = parse_generated_docs(raw.get("generatedDocs"))
+        sync_contract = parse_sync_contract(raw.get("syncContract"))
 
         return cls(
             template_id=manifest_id,
@@ -311,6 +362,7 @@ class TemplateManifest:
             support_paths=support_paths,
             verification_commands=verification_commands,
             generated_docs=generated_docs,
+            sync_contract=sync_contract,
         )
 
 
@@ -497,6 +549,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     if rewriter is None:
         raise UsageError(f"unsupported template type '{plan.manifest.template_type}'")
     rewriter(plan, staged_root)
+    write_sync_metadata(plan, staged_root)
 
 
 def copy_template(template_dir: Path, staged_root: Path) -> None:
@@ -733,6 +786,47 @@ If the pinned Beans CLI is installed, inspect project task context with:
 """
 
 
+def generated_bootstrap_sync_region(check_command: str) -> str:
+    return f"""<!-- codex-bootstrap:begin generated-docs/bootstrap-sync -->
+## Bootstrap Sync
+
+This project can resync Codex Bootstrap managed files and generated doc regions from the recorded bootstrap source.
+
+Preview managed updates first:
+
+```bash
+./scripts/agent-bootstrap sync --dry-run
+```
+
+Apply only when the plan has no conflicts:
+
+```bash
+./scripts/agent-bootstrap sync --apply
+{check_command}
+```
+<!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
+"""
+
+
+def generated_agent_sync_region(check_command: str) -> str:
+    return f"""<!-- codex-bootstrap:begin generated-docs/bootstrap-sync -->
+## Bootstrap Sync
+
+- Run `./scripts/agent-bootstrap sync --dry-run` before applying bootstrap updates.
+- Inspect conflicts instead of forcing over local edits.
+- Apply managed updates with `./scripts/agent-bootstrap sync --apply` only when the plan is clean.
+- After apply, run `{check_command}` and any extra verification commands printed by sync.
+- If this repo has `CHANGELOG.md`, update it when sync changes merge-relevant behavior.
+<!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
+"""
+
+
+def check_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "java-gradle-cli":
+        return "./scripts/agent-gradle . check"
+    return "./scripts/check"
+
+
 def windows_check_command(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . check"
@@ -928,6 +1022,7 @@ Extend the CLI behavior in `App.java`, update `AppTest.java` first or in the sam
 ```
 
 {generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 ## Agent Workflow
 
 Agents should start by reading `AGENTS.md`, then run:
@@ -976,6 +1071,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Keep Java version changes in `gradle.properties`.
@@ -1072,6 +1168,7 @@ Extend the CLI behavior in `App.cs`, update `AppTests.cs` first or in the same c
 ```
 
 {generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 ## Agent Workflow
 
 Agents should start by reading `AGENTS.md`, then run:
@@ -1110,6 +1207,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Target .NET 10 through `net10.0` unless the project intentionally chooses a different runtime floor.
@@ -1199,6 +1297,7 @@ uv run --no-editable {plan.config.project_name} example
 ```
 
 {generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 """
 
 
@@ -1230,6 +1329,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Keep runtime dependencies in `pyproject.toml`; keep dev-only tools in the dev dependency group.
@@ -1309,6 +1409,7 @@ bun run src/main.ts example
 ```
 
 {generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 """
 
 
@@ -1337,6 +1438,7 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
@@ -1434,6 +1536,7 @@ bun run src/main.ts --help
 ```
 
 {generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 """
 
 
@@ -1464,6 +1567,7 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Bun is the only package-manager/runtime contract for this project; do not add npm, pnpm, or Yarn fallback paths.
@@ -1576,6 +1680,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 .\\scripts\\agent-beans.ps1 prime
 ```
 
+{generated_agent_sync_region(check_command(plan))}
 ## Troubleshooting
 
 Use `./scripts/agent-task ps` to inspect stuck build or test processes. Use the language-specific commands in `AGENTS.md` before killing processes directly.
@@ -1623,6 +1728,125 @@ def write_generated_beans(plan: BootstrapPlan, staged_root: Path) -> None:
     )
     for filename, content in generated_seed_beans(plan).items():
         (beans_dir / filename).write_text(content, encoding="utf-8")
+
+
+def write_sync_metadata(plan: BootstrapPlan, staged_root: Path) -> None:
+    sync_dir = staged_root / ".codex-bootstrap"
+    reports_dir = sync_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / ".gitignore").write_text("*\n!.gitignore\n", encoding="utf-8")
+    metadata = {
+        "schemaVersion": 1,
+        "source": {
+            "repository": detect_source_repository(plan.repo_root),
+            "ref": detect_source_ref(plan.repo_root),
+            "commit": detect_source_commit(plan.repo_root),
+        },
+        "template": {
+            "id": plan.manifest.template_id,
+            "contractVersion": plan.manifest.sync_contract.version,
+        },
+        "identity": sync_identity(plan),
+        "managedSets": sorted(plan.manifest.sync_contract.managed_sets),
+        "optOut": [],
+        "managedFiles": managed_file_hashes(plan, staged_root),
+        "managedRegions": managed_region_hashes(plan, staged_root),
+        "verificationCommands": list(plan.manifest.sync_contract.verification_commands),
+    }
+    (sync_dir / "sync.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def sync_identity(plan: BootstrapPlan) -> dict[str, str]:
+    identity = {"projectName": plan.config.project_name}
+    if plan.config.package_name is not None:
+        identity["javaPackage"] = plan.config.package_name
+    return identity
+
+
+def managed_file_hashes(plan: BootstrapPlan, staged_root: Path) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+    for path, spec in sorted(plan.manifest.sync_contract.managed_files.items()):
+        target = staged_root / path
+        if not target.is_file():
+            raise UsageError(f"sync managed file does not exist after bootstrap: {path}")
+        result[path] = {"set": spec.managed_set, "sha256": sha256_file(target)}
+    return result
+
+
+def managed_region_hashes(plan: BootstrapPlan, staged_root: Path) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+    for key, spec in sorted(plan.manifest.sync_contract.managed_regions.items()):
+        target = staged_root / spec.path
+        if not target.is_file():
+            raise UsageError(f"sync managed region file does not exist after bootstrap: {spec.path}")
+        body = extract_managed_region(target.read_text(encoding="utf-8"), spec.region_id)
+        result[key] = {
+            "set": spec.managed_set,
+            "path": spec.path,
+            "id": spec.region_id,
+            "sha256": sha256_text(body),
+        }
+    return result
+
+
+def extract_managed_region(text: str, region_id: str) -> str:
+    begin = f"<!-- codex-bootstrap:begin {region_id} -->"
+    end = f"<!-- codex-bootstrap:end {region_id} -->"
+    if text.count(begin) != 1 or text.count(end) != 1:
+        raise UsageError(f"sync managed region {region_id} must have exactly one begin and end marker")
+    begin_index = text.index(begin) + len(begin)
+    end_index = text.index(end)
+    if end_index < begin_index:
+        raise UsageError(f"sync managed region {region_id} end marker appears before begin marker")
+    body = text[begin_index:end_index]
+    if body.startswith("\n"):
+        body = body[1:]
+    return body
+
+
+def sha256_file(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def sha256_text(value: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def detect_source_repository(repo_root: Path) -> str:
+    return git_output_or(
+        repo_root,
+        ["git", "remote", "get-url", "origin"],
+        "https://github.com/Jamezz/codex-bootstrap.git",
+    )
+
+
+def detect_source_ref(repo_root: Path) -> str:
+    return git_output_or(repo_root, ["git", "branch", "--show-current"], "main") or "main"
+
+
+def detect_source_commit(repo_root: Path) -> str:
+    return git_output_or(repo_root, ["git", "rev-parse", "HEAD"], "unknown")
+
+
+def git_output_or(repo_root: Path, command: list[str], fallback: str) -> str:
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return fallback
+    return result.stdout.strip() or fallback
 
 
 def generated_beans_config(plan: BootstrapPlan) -> str:
@@ -1866,6 +2090,60 @@ def parse_generated_docs(raw: Any) -> GeneratedDocs:
         run_commands=tuple(require_string_list(raw, "runCommands")),
         first_useful_edit=require_string(raw, "firstUsefulEdit"),
     )
+
+
+def parse_sync_contract(raw: Any) -> SyncContract:
+    if not isinstance(raw, dict):
+        raise UsageError("syncContract must be an object")
+    managed_sets: dict[str, ManagedSetSpec] = {}
+    for index, item in enumerate(require_object_list(raw, "managedSets")):
+        managed_set = require_string(item, "id")
+        files = tuple(
+            ManagedFileSpec(
+                path=require_string(file_item, "path"),
+                managed_set=managed_set,
+            )
+            for file_item in require_object_list(item, "files", allow_missing=True)
+            if require_string(file_item, "mode") == "whole-file"
+        )
+        regions = tuple(
+            ManagedRegionSpec(
+                path=require_string(region_item, "path"),
+                region_id=require_string(region_item, "id"),
+                managed_set=managed_set,
+            )
+            for region_item in require_object_list(item, "regions", allow_missing=True)
+        )
+        if managed_set in managed_sets:
+            raise UsageError(f"syncContract managedSets[{index}] duplicates id {managed_set}")
+        managed_sets[managed_set] = ManagedSetSpec(
+            managed_set=managed_set,
+            description=require_string(item, "description"),
+            files=files,
+            regions=regions,
+        )
+    return SyncContract(
+        version=require_int(raw, "version"),
+        managed_sets=managed_sets,
+        verification_commands=tuple(require_string_list(raw, "verificationCommands")),
+        migration_notes=tuple(require_string_list(raw, "migrationNotes")),
+    )
+
+
+def require_object_list(
+    raw: dict[str, Any], key: str, allow_missing: bool = False
+) -> list[dict[str, Any]]:
+    value = raw.get(key, [] if allow_missing else None)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise UsageError(f"{key} must be an array of objects")
+    return value
+
+
+def require_int(raw: dict[str, Any], key: str) -> int:
+    value = raw.get(key)
+    if not isinstance(value, int):
+        raise UsageError(f"{key} must be an integer")
+    return value
 
 
 def require_string(raw: dict[str, Any], key: str) -> str:

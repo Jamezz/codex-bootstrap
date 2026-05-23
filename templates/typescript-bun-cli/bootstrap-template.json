@@ -3,8 +3,18 @@
   "displayName": "TypeScript Bun CLI",
   "description": "A compact TypeScript command-line project with Bun, Biome, type checking, Bun tests, first-class runtime logging, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-cli",
-  "requiredInputs": ["name"],
+  "requiredInputs": [
+    "name"
+  ],
   "supportPaths": [
+    {
+      "source": "scripts/agent-bootstrap",
+      "destination": "scripts/agent-bootstrap"
+    },
+    {
+      "source": "scripts/agent-bootstrap.ps1",
+      "destination": "scripts/agent-bootstrap.ps1"
+    },
     {
       "source": "scripts/agent-beans",
       "destination": "scripts/agent-beans"
@@ -32,9 +42,16 @@
     {
       "source": "tools/supermeta-rules",
       "destination": "tools/supermeta-rules"
+    },
+    {
+      "source": "tools/supermeta-bootstrap",
+      "destination": "tools/supermeta-bootstrap"
     }
   ],
-  "verificationCommands": ["./scripts/check", "bun run src/main.ts"],
+  "verificationCommands": [
+    "./scripts/check",
+    "bun run src/main.ts"
+  ],
   "generatedDocs": {
     "summary": "This is a compact TypeScript Bun command-line project with tests, type checking, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
     "runtime": "Bun owns package installation, runtime execution, and tests. Runtime logging uses Pino, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
@@ -44,14 +61,160 @@
       "src/logging.ts",
       "package.json scripts"
     ],
-    "sourceRoots": ["src", "tools/supermeta-rules"],
-    "testRoots": ["tests", "supermeta-rules.json"],
-    "verificationCommands": ["./scripts/check"],
+    "sourceRoots": [
+      "src",
+      "tools/supermeta-rules"
+    ],
+    "testRoots": [
+      "tests",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
     "runCommands": [
       "bun run src/main.ts",
       "bun run src/main.ts \"Ada Lovelace\"",
       "LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts"
     ],
     "firstUsefulEdit": "Extend `src/cli.ts`, update `tests/cli.test.ts` first or in the same change, then rerun `./scripts/check`."
+  },
+  "syncContract": {
+    "version": 1,
+    "managedSets": [
+      {
+        "id": "agent-scripts",
+        "description": "Agent wrapper scripts and bootstrap sync entrypoints.",
+        "files": [
+          {
+            "path": "scripts/agent-bootstrap",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-bootstrap.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "supermeta-tools",
+        "description": "Shared Supermeta support tools copied into generated projects.",
+        "files": [
+          {
+            "path": "tools/supermeta-bootstrap/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/README.md",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "generated-docs",
+        "description": "Generated bootstrap sync instructions in project docs.",
+        "files": [],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/bootstrap-sync"
+          }
+        ]
+      },
+      {
+        "id": "language-checks",
+        "description": "Template verification and reusable rule configuration.",
+        "files": [
+          {
+            "path": "supermeta-rules.json",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      }
+    ],
+    "verificationCommands": [
+      "./scripts/agent-bootstrap sync --dry-run",
+      "./scripts/check"
+    ],
+    "migrationNotes": []
   }
 }
