@@ -112,7 +112,7 @@
     "firstUsefulEdit": "Extend `App.cs`, update `AppTests.cs` first or in the same change, then rerun `./scripts/check`."
   },
   "syncContract": {
-    "version": 1,
+    "version": 2,
     "managedSets": [
       {
         "id": "agent-scripts",
@@ -305,6 +305,7 @@
       },
       {
         "id": "language-checks",
+        "autoEnable": false,
         "description": "Template verification and reusable rule configuration.",
         "files": [
           {

@@ -170,9 +170,10 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
-        self.assertEqual(1, manifest.sync_contract.version)
+        self.assertEqual(2, manifest.sync_contract.version)
         self.assertIn("agent-scripts", manifest.sync_contract.managed_sets)
         self.assertIn("agent-nags", manifest.sync_contract.managed_sets)
+        self.assertFalse(manifest.sync_contract.managed_sets["language-checks"].auto_enable)
         self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
@@ -353,12 +354,14 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / ".codex-bootstrap" / "nags.json").is_file())
             self.assertTrue((checkout / ".codex-bootstrap" / "nags.local.json").is_file())
             self.assertFalse((checkout / ".codex-bootstrap" / "nag-state.json").exists())
+            self.assertIn(".codex-bootstrap/nag-state.json", read_text(checkout / ".gitignore"))
             sync_metadata = json.loads(
                 (checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8")
             )
             nags = json.loads((checkout / ".codex-bootstrap" / "nags.json").read_text(encoding="utf-8"))
             self.assertEqual(1, sync_metadata["schemaVersion"])
             self.assertEqual("java-gradle-cli", sync_metadata["template"]["id"])
+            self.assertEqual(2, sync_metadata["template"]["contractVersion"])
             self.assertEqual("sample-app", sync_metadata["identity"]["projectName"])
             self.assertEqual("com.acme.sample", sync_metadata["identity"]["javaPackage"])
             self.assertIn("agent-scripts", sync_metadata["managedSets"])

@@ -118,7 +118,7 @@ Apply when the plan has no conflicts:
 
 Sync updates only declared managed files and managed regions. It does not merge arbitrary product source under `src/` or `tests/`, and it reports conflicts instead of overwriting local edits.
 
-When the upstream sync contract adds a new managed set, sync enables it unless the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended to existing docs during that migration.
+When the upstream sync contract adds a new managed set, sync enables it unless the set is marked for manual opt-in or the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended to existing docs during that migration.
 
 ## Agent Nags
 
@@ -130,7 +130,7 @@ Generated projects include advisory reminders for bootstrap updates and wrapped-
 ./scripts/agent-nag snooze post-run-backlog-check --for 7d
 ```
 
-Wrappers may call nag hooks before and after managed execution. Nags are advisory by default and must not hide the exit code from builds, tests, sync, or coordination runs. Project-specific reminders belong in `.codex-bootstrap/nags.local.json`.
+Wrappers may call nag hooks before and after managed execution. Nags are advisory by default and must not hide the exit code from builds, tests, sync, or coordination runs. Project-specific reminders belong in `.codex-bootstrap/nags.local.json`; runtime state in `.codex-bootstrap/nag-state.json` is generated-project ignored.
 
 ## Coordinate Local Agents
 

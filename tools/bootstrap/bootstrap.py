@@ -290,6 +290,7 @@ class ManagedSetSpec:
     description: str
     files: tuple[ManagedFileSpec, ...]
     regions: tuple[ManagedRegionSpec, ...]
+    auto_enable: bool = True
 
 
 @dataclass(frozen=True)
@@ -795,7 +796,7 @@ def generated_bootstrap_sync_region(check_command: str) -> str:
 
 This project can resync Codex Bootstrap managed files and generated doc regions from the recorded bootstrap source.
 
-When upstream adds a new managed set, sync enables it unless the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended during that migration.
+When upstream adds a new managed set, sync enables it unless the set is marked for manual opt-in or the set id is listed in `.codex-bootstrap/sync.json` `optOut`. Missing generated doc regions are appended during that migration.
 
 Preview managed updates first:
 
@@ -822,7 +823,7 @@ def generated_agent_sync_region(check_command: str) -> str:
 - Run `./scripts/agent-bootstrap sync --dry-run` before applying bootstrap updates.
 - Inspect conflicts instead of forcing over local edits.
 - Apply managed updates with `./scripts/agent-bootstrap sync --apply` only when the plan is clean.
-- New upstream managed sets are enabled unless their set id is listed in `.codex-bootstrap/sync.json` `optOut`.
+- New upstream managed sets are enabled unless the set is marked for manual opt-in or its set id is listed in `.codex-bootstrap/sync.json` `optOut`.
 - After apply, run `{check_command}` and any extra verification commands printed by sync.
 - If this repo has `CHANGELOG.md`, update it when sync changes merge-relevant behavior.
 
@@ -1036,7 +1037,7 @@ Manage noisy reminders without deleting managed policy:
 ./scripts/agent-nag ack post-run-backlog-check
 ```
 
-Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. Runtime state lives in `.codex-bootstrap/nag-state.json`.
+Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. Runtime state lives in `.codex-bootstrap/nag-state.json` and is ignored by generated `.gitignore` rules.
 <!-- codex-bootstrap:end generated-docs/agent-nags -->
 """
 
@@ -2382,6 +2383,7 @@ def parse_sync_contract(raw: Any) -> SyncContract:
             description=require_string(item, "description"),
             files=files,
             regions=regions,
+            auto_enable=require_bool(item, "autoEnable", default=True),
         )
     return SyncContract(
         version=require_int(raw, "version"),
@@ -2404,6 +2406,13 @@ def require_int(raw: dict[str, Any], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int):
         raise UsageError(f"{key} must be an integer")
+    return value
+
+
+def require_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise UsageError(f"{key} must be a boolean")
     return value
 
 

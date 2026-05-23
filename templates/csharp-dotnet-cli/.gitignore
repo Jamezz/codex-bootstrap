@@ -5,6 +5,7 @@ TestResults/
 .nuget/
 
 *.log
+.codex-bootstrap/nag-state.json
 
 .idea/
 .vs/

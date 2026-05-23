@@ -5,6 +5,7 @@ dist/
 
 *.log
 *.tsbuildinfo
+.codex-bootstrap/nag-state.json
 
 .idea/
 .vscode/

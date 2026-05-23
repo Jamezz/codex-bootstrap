@@ -50,8 +50,12 @@ Use these buckets inside dated entries when they help:
   support tools, so generated project names no longer corrupt managed
   `tools/supermeta-*` helper code or tests.
 - Bootstrap sync now auto-enables newly introduced managed sets unless opted
-  out, appends missing generated doc regions during that migration, and records
-  the enabled sets in sync reports and metadata.
+  out or marked manual opt-in, appends missing generated doc regions/files
+  during that migration, applies multiple same-file region changes
+  cumulatively, and records enabled sets in sync reports and metadata.
+- Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
+  sync contract is version 2 with `language-checks` marked manual opt-in for
+  existing repos.
 
 ### Pages / Installer
 

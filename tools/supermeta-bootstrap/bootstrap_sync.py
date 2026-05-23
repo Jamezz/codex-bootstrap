@@ -112,6 +112,7 @@ class ManagedSetSpec:
     description: str
     files: tuple[ManagedFileSpec, ...]
     regions: tuple[ManagedRegionSpec, ...]
+    auto_enable: bool = True
 
 
 @dataclass(frozen=True)
@@ -260,6 +261,7 @@ def load_sync_contract(catalog_root: Path, template_id: str) -> SyncContract:
             description=require_string(item, "description"),
             files=files,
             regions=regions,
+            auto_enable=require_bool(item, "autoEnable", default=True),
         )
     return SyncContract(
         version=require_int(sync_raw, "version"),
@@ -295,8 +297,9 @@ def plan_managed_updates(
     new_managed_sets = tuple(
         sorted(
             managed_set
-            for managed_set in contract.managed_sets
+            for managed_set, spec in contract.managed_sets.items()
             if managed_set not in metadata.managed_sets and managed_set not in opt_out
+            and spec.auto_enable
         )
     )
     enabled_sets = (set(metadata.managed_sets) | set(new_managed_sets)) - opt_out
@@ -337,17 +340,32 @@ def plan_managed_updates(
             continue
         current = root / spec.path
         candidate = candidate_root / spec.path
-        if not current.is_file() or not candidate.is_file():
+        if not candidate.is_file():
             conflicts.append(SyncConflict(spec.path, f"managed region {spec.region_id} file is missing"))
             continue
         previous = metadata.managed_regions.get(key)
         try:
-            current_text = current.read_text(encoding="utf-8")
             candidate_text = candidate.read_text(encoding="utf-8")
             candidate_region = extract_region(candidate_text, spec.region_id)
         except SyncError as error:
             conflicts.append(SyncConflict(spec.path, str(error)))
             continue
+        if not current.is_file():
+            if previous is not None:
+                conflicts.append(SyncConflict(spec.path, f"managed region {spec.region_id} file is missing"))
+                continue
+            region_changes.append(
+                RegionChange(
+                    path=spec.path,
+                    region_id=spec.region_id,
+                    new_text=candidate_text,
+                    new_body=candidate_region.body,
+                    new_sha256=sha256_text(candidate_region.body),
+                    managed_set=spec.managed_set,
+                )
+            )
+            continue
+        current_text = current.read_text(encoding="utf-8")
         try:
             current_region = extract_region(current_text, spec.region_id)
         except SyncError as error:
@@ -449,7 +467,19 @@ def apply_sync_plan(
         destination.chmod(change.new_mode)
     for change in plan.region_changes:
         destination = root / change.path
-        destination.write_text(change.new_text, encoding="utf-8")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.is_file():
+            current_text = destination.read_text(encoding="utf-8")
+        else:
+            current_text = ""
+        if current_text:
+            if region_markers_absent(current_text, change.region_id):
+                next_text = append_region(current_text, change.region_id, change.new_body)
+            else:
+                next_text = replace_region(current_text, change.region_id, change.new_body)
+        else:
+            next_text = change.new_text
+        destination.write_text(next_text, encoding="utf-8")
 
     managed_files = dict(metadata.managed_files)
     for change in plan.file_changes:
@@ -726,6 +756,13 @@ def require_int(raw: dict[str, Any], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int):
         raise SyncError(f"{key} must be an integer")
+    return value
+
+
+def require_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise SyncError(f"{key} must be a boolean")
     return value
 
 

@@ -109,6 +109,7 @@ class SyncModelTest(unittest.TestCase):
                         "managedSets": [
                             {
                                 "id": "agent-scripts",
+                                "autoEnable": False,
                                 "description": "Agent scripts",
                                 "files": [
                                     {"path": "scripts/agent-bootstrap", "mode": "whole-file"}
@@ -131,6 +132,7 @@ class SyncModelTest(unittest.TestCase):
 
             self.assertEqual(1, contract.version)
             self.assertEqual(("agent-scripts",), tuple(contract.managed_sets))
+            self.assertFalse(contract.managed_sets["agent-scripts"].auto_enable)
             self.assertEqual(("scripts/agent-bootstrap",), tuple(contract.managed_files))
             self.assertEqual(
                 ("AGENTS.md:generated-docs/bootstrap-sync",), tuple(contract.managed_regions)
@@ -298,6 +300,147 @@ class SyncPlannerTest(unittest.TestCase):
 
 
 class SyncApplyTest(unittest.TestCase):
+    def test_apply_accumulates_multiple_missing_regions_in_one_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-multi-region-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "README.md", "# Sample App\n")
+            write_text(
+                candidate / "README.md",
+                "\n".join(
+                    [
+                        "# Sample App",
+                        managed_region("generated-docs/bootstrap-sync", "sync docs\n"),
+                        managed_region("generated-docs/agent-nags", "nag docs\n"),
+                    ]
+                )
+                + "\n",
+            )
+            metadata = metadata_for(
+                root,
+                managed_files={},
+                managed_regions={},
+                managed_sets=(),
+            )
+            contract = contract_for(
+                regions=[
+                    bootstrap_sync.ManagedRegionSpec(
+                        path="README.md",
+                        region_id="generated-docs/bootstrap-sync",
+                        managed_set="generated-docs",
+                    ),
+                    bootstrap_sync.ManagedRegionSpec(
+                        path="README.md",
+                        region_id="generated-docs/agent-nags",
+                        managed_set="generated-docs",
+                    ),
+                ],
+            )
+
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+            bootstrap_sync.apply_sync_plan(
+                root,
+                metadata,
+                contract,
+                plan,
+                new_commit="abcdef0123456789abcdef0123456789abcdef01",
+            )
+
+            readme = (root / "README.md").read_text(encoding="utf-8")
+            self.assertIn("sync docs", readme)
+            self.assertIn("nag docs", readme)
+
+    def test_apply_creates_missing_generated_doc_region_file_for_new_set(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-missing-doc-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(
+                candidate / "docs" / "OPERATIONS.md",
+                managed_region("generated-docs/agent-nags", "nag operations\n"),
+            )
+            metadata = metadata_for(
+                root,
+                managed_files={},
+                managed_regions={},
+                managed_sets=("agent-scripts",),
+            )
+            contract = bootstrap_sync.SyncContract(
+                version=1,
+                managed_sets={
+                    "agent-nags": bootstrap_sync.ManagedSetSpec(
+                        managed_set="agent-nags",
+                        description="Agent nags",
+                        files=(),
+                        regions=(
+                            bootstrap_sync.ManagedRegionSpec(
+                                path="docs/OPERATIONS.md",
+                                region_id="generated-docs/agent-nags",
+                                managed_set="agent-nags",
+                            ),
+                        ),
+                    ),
+                },
+                verification_commands=("./scripts/check",),
+                migration_notes=(),
+            )
+
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+            updated = bootstrap_sync.apply_sync_plan(
+                root,
+                metadata,
+                contract,
+                plan,
+                new_commit="abcdef0123456789abcdef0123456789abcdef01",
+            )
+
+            self.assertEqual((), plan.conflicts)
+            self.assertIn("nag operations", (root / "docs" / "OPERATIONS.md").read_text(encoding="utf-8"))
+            self.assertIn("docs/OPERATIONS.md:generated-docs/agent-nags", updated.managed_regions)
+
+    def test_does_not_auto_enable_managed_set_marked_for_manual_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-manual-set-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "supermeta-rules.json", '{"project": "custom"}\n')
+            write_text(candidate / "supermeta-rules.json", '{"project": "upstream"}\n')
+            metadata = metadata_for(
+                root,
+                managed_files={},
+                managed_regions={},
+                managed_sets=("agent-scripts",),
+            )
+            contract = bootstrap_sync.SyncContract(
+                version=1,
+                managed_sets={
+                    "language-checks": bootstrap_sync.ManagedSetSpec(
+                        managed_set="language-checks",
+                        description="Language checks",
+                        files=(
+                            bootstrap_sync.ManagedFileSpec(
+                                path="supermeta-rules.json",
+                                managed_set="language-checks",
+                            ),
+                        ),
+                        regions=(),
+                        auto_enable=False,
+                    ),
+                },
+                verification_commands=("./scripts/check",),
+                migration_notes=(),
+            )
+
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+
+            self.assertEqual((), plan.new_managed_sets)
+            self.assertEqual((), plan.file_changes)
+            self.assertEqual('{"project": "custom"}\n', (root / "supermeta-rules.json").read_text(encoding="utf-8"))
+
     def test_apply_auto_enables_new_managed_set_with_missing_generated_region(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bootstrap-sync-new-set-") as temp_dir:
             root = Path(temp_dir) / "project"

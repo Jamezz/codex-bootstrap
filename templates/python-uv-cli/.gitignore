@@ -9,6 +9,7 @@ dist/
 *.egg-info/
 *.log
 *.py[cod]
+.codex-bootstrap/nag-state.json
 
 .idea/
 .vscode/

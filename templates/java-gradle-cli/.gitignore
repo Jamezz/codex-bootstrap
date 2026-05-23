@@ -4,6 +4,7 @@ out/
 
 *.class
 *.log
+.codex-bootstrap/nag-state.json
 
 .idea/
 .vscode/

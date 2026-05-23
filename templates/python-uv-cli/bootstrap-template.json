@@ -105,7 +105,7 @@
     "firstUsefulEdit": "Extend `src/python_uv_cli/cli.py`, update `tests/test_cli.py` first or in the same change, then rerun `./scripts/check`."
   },
   "syncContract": {
-    "version": 1,
+    "version": 2,
     "managedSets": [
       {
         "id": "agent-scripts",
@@ -290,6 +290,7 @@
       },
       {
         "id": "language-checks",
+        "autoEnable": false,
         "description": "Template verification and reusable rule configuration.",
         "files": [
           {
