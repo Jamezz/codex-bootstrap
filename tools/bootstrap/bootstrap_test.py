@@ -517,6 +517,64 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             self.assertIn("Hello, Ada!", example_run.stdout)
 
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap sync smoke test")
+    def test_generated_project_sync_dry_run_and_conflict(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-sync-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            source_repo = temp_root / "source"
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(source_repo)
+            initialize_source_repo(source_repo)
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "python-uv-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+            commit_generated_project(checkout)
+
+            dry_run = run_checked(
+                [
+                    "./scripts/agent-bootstrap",
+                    "sync",
+                    "--dry-run",
+                    "--source-dir",
+                    str(source_repo),
+                ],
+                cwd=checkout,
+                timeout=180,
+            )
+            self.assertIn("Bootstrap sync plan:", dry_run.stdout)
+            self.assertIn("template: python-uv-cli", dry_run.stdout)
+
+            agent_task = checkout / "scripts" / "agent-task"
+            agent_task.write_text(
+                agent_task.read_text(encoding="utf-8") + "\n# local edit\n",
+                encoding="utf-8",
+            )
+            conflict = run_unchecked(
+                [
+                    "./scripts/agent-bootstrap",
+                    "sync",
+                    "--apply",
+                    "--allow-dirty",
+                    "--source-dir",
+                    str(source_repo),
+                ],
+                cwd=checkout,
+                timeout=180,
+            )
+            self.assertEqual(1, conflict.returncode)
+            self.assertIn("conflict: scripts/agent-task", conflict.stdout)
+
     @unittest.skipIf(shutil.which("dotnet") is None, "dotnet is required for C# template smoke test")
     @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
     def test_bootstrap_rewrites_csharp_template_into_standalone_project(self) -> None:
@@ -878,6 +936,41 @@ def copy_bootstrap_checkout(destination: Path) -> None:
 def initialize_fake_origin(checkout: Path) -> None:
     run_checked(["git", "init"], cwd=checkout)
     run_checked(["git", "remote", "add", "origin", "https://example.com/bootstrap.git"], cwd=checkout)
+
+
+def initialize_source_repo(source_repo: Path) -> None:
+    run_checked(["git", "init"], cwd=source_repo)
+    run_checked(["git", "add", "."], cwd=source_repo)
+    run_checked(
+        [
+            "git",
+            "-c",
+            "user.name=Codex Bootstrap Test",
+            "-c",
+            "user.email=codex-bootstrap@example.invalid",
+            "commit",
+            "-m",
+            "snapshot",
+        ],
+        cwd=source_repo,
+    )
+
+
+def commit_generated_project(checkout: Path) -> None:
+    run_checked(["git", "add", "."], cwd=checkout)
+    run_checked(
+        [
+            "git",
+            "-c",
+            "user.name=Codex Bootstrap Test",
+            "-c",
+            "user.email=codex-bootstrap@example.invalid",
+            "commit",
+            "-m",
+            "generated project",
+        ],
+        cwd=checkout,
+    )
 
 
 def write_example_cli(checkout: Path) -> None:
