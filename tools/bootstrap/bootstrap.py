@@ -639,6 +639,7 @@ def common_replacements(plan: BootstrapPlan) -> dict[str, str]:
         "../../scripts/agent-dotnet": "./scripts/agent-dotnet",
         "../../scripts/agent-beans": "./scripts/agent-beans",
         "../../scripts/agent-task": "./scripts/agent-task",
+        "../../scripts/agent-nag": "./scripts/agent-nag",
         "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
     }
 
@@ -764,6 +765,7 @@ def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
     (docs_dir / "OPERATIONS.md").write_text(generated_operations(plan), encoding="utf-8")
     (docs_dir / "DECISIONS.md").write_text(generated_decisions(plan), encoding="utf-8")
     write_generated_beans(plan, staged_root)
+    write_nag_policy_files(staged_root)
 
 
 def generated_project_docs_section() -> str:
@@ -1011,6 +1013,44 @@ Set `CODEX_AGENT_COORD_HOME` to coordinate through a specific directory. Use `./
 """
 
 
+def generated_nag_docs_region() -> str:
+    return """<!-- codex-bootstrap:begin generated-docs/agent-nags -->
+## Agent Nags
+
+This project includes advisory agent reminders for bootstrap updates, wrapped-command follow-up, and failure diagnostics.
+
+Run session-start checks near the start of substantial work:
+
+```bash
+./scripts/agent-nag run-hook session-start
+```
+
+Manage noisy reminders without deleting managed policy:
+
+```bash
+./scripts/agent-nag list
+./scripts/agent-nag snooze post-run-backlog-check --for 7d
+./scripts/agent-nag ack post-run-backlog-check
+```
+
+Project-specific reminders belong in `.codex-bootstrap/nags.local.json`. Runtime state lives in `.codex-bootstrap/nag-state.json`.
+<!-- codex-bootstrap:end generated-docs/agent-nags -->
+"""
+
+
+def generated_agent_nag_section() -> str:
+    return """<!-- codex-bootstrap:begin generated-docs/agent-nags -->
+## Agent Nags
+
+- Run `./scripts/agent-nag run-hook session-start` near the start of substantial work.
+- Treat nags as advisory unless the user or repo policy says otherwise.
+- Do not let a nag recommendation overwrite the real result of a build, test, or sync command.
+- Use `./scripts/agent-nag snooze post-run-backlog-check --for 7d` or `./scripts/agent-nag ack post-run-backlog-check` for noisy reminders.
+- Put repo-specific reminders in `.codex-bootstrap/nags.local.json`.
+<!-- codex-bootstrap:end generated-docs/agent-nags -->
+"""
+
+
 def generated_logging_readme_section() -> str:
     return """## Logging
 
@@ -1097,6 +1137,7 @@ Inspect stuck task state:
 ```
 
 {generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1174,6 +1215,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1250,6 +1292,7 @@ Inspect stuck task state:
 ```
 
 {generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1313,6 +1356,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1382,6 +1426,7 @@ uv run --no-editable python -m {module_name} "Ada Lovelace"
 {generated_logging_readme_section().replace("<run-command>", f"uv run --no-editable {plan.config.project_name}")}
 
 {generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1437,6 +1482,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1496,6 +1542,7 @@ bun run src/main.ts "Ada Lovelace"
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts")}
 
 {generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1548,6 +1595,7 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1624,6 +1672,7 @@ bun run src/main.ts --state file --state-file .mcp/state.json
 {generated_logging_readme_section().replace("<run-command>", "bun run src/main.ts --transport http")}
 
 {generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1679,6 +1728,7 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 {generated_windows_agent_section(plan)}
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1785,6 +1835,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ```
 
 {generated_agent_coordination_operations_section(check_command(plan))}
+{generated_nag_docs_region()}
 ## Windows
 
 ```powershell
@@ -1841,6 +1892,100 @@ def write_generated_beans(plan: BootstrapPlan, staged_root: Path) -> None:
     )
     for filename, content in generated_seed_beans(plan).items():
         (beans_dir / filename).write_text(content, encoding="utf-8")
+
+
+def write_nag_policy_files(staged_root: Path) -> None:
+    codex_dir = staged_root / ".codex-bootstrap"
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    (codex_dir / "nags.json").write_text(default_nag_policy_json(), encoding="utf-8")
+    (codex_dir / "nags.local.json").write_text(default_local_nag_policy_json(), encoding="utf-8")
+
+
+def default_nag_policy_json() -> str:
+    return """{
+  "nags": [
+    {
+      "action": "check-bootstrap-update",
+      "cadence": "24h",
+      "enabled": true,
+      "hook": "session-start",
+      "id": "bootstrap-update-check",
+      "message": "A newer Codex Bootstrap version is available. Run sync when convenient."
+    },
+    {
+      "action": "suggest-command",
+      "cadence": "per-run",
+      "commands": [["./scripts/agent-beans", "check"]],
+      "enabled": true,
+      "hook": "post-run",
+      "id": "post-run-backlog-check",
+      "message": "Wrapped execution completed. Refresh task context before handoff.",
+      "when": {
+        "exitCode": 0
+      }
+    },
+    {
+      "action": "suggest-command",
+      "cadence": "per-run",
+      "commands": [
+        ["./scripts/agent-task", "ps"],
+        ["./scripts/agent-beans", "list", "--ready"]
+      ],
+      "enabled": true,
+      "hook": "post-failure",
+      "id": "post-failure-diagnostics",
+      "message": "Command failed. Inspect task state before retrying."
+    }
+  ],
+  "schemaVersion": 1
+}
+"""
+
+
+def default_local_nag_policy_json() -> str:
+    return """{
+  "nags": [],
+  "schemaVersion": 1
+}
+"""
+
+
+def default_nag_policy() -> dict[str, object]:
+    return {
+        "schemaVersion": 1,
+        "nags": [
+            {
+                "id": "bootstrap-update-check",
+                "enabled": True,
+                "hook": "session-start",
+                "cadence": "24h",
+                "action": "check-bootstrap-update",
+                "message": "A newer Codex Bootstrap version is available. Run sync when convenient.",
+            },
+            {
+                "id": "post-run-backlog-check",
+                "enabled": True,
+                "hook": "post-run",
+                "when": {"exitCode": 0},
+                "cadence": "per-run",
+                "action": "suggest-command",
+                "message": "Wrapped execution completed. Refresh task context before handoff.",
+                "commands": [["./scripts/agent-beans", "check"]],
+            },
+            {
+                "id": "post-failure-diagnostics",
+                "enabled": True,
+                "hook": "post-failure",
+                "cadence": "per-run",
+                "action": "suggest-command",
+                "message": "Command failed. Inspect task state before retrying.",
+                "commands": [
+                    ["./scripts/agent-task", "ps"],
+                    ["./scripts/agent-beans", "list", "--ready"],
+                ],
+            },
+        ],
+    }
 
 
 def write_sync_metadata(plan: BootstrapPlan, staged_root: Path) -> None:
