@@ -767,6 +767,7 @@ def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
     (docs_dir / "DECISIONS.md").write_text(generated_decisions(plan), encoding="utf-8")
     write_generated_beans(plan, staged_root)
     write_nag_policy_files(staged_root)
+    write_checks_policy_file(plan, staged_root)
 
 
 def generated_project_docs_section() -> str:
@@ -829,6 +830,67 @@ def generated_agent_sync_region(check_command: str) -> str:
 
 {generated_upstream_suggestion_section()}
 <!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
+"""
+
+
+def generated_velocity_readme_region(check_command_text: str) -> str:
+    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
+## Velocity Tools
+
+Use the fast inner-loop verifier during development:
+
+```bash
+./scripts/agent-smart-check --plan-only
+./scripts/agent-fix-loop -- ./scripts/agent-smart-check
+```
+
+Run the full gate before handoff:
+
+```bash
+{check_command_text}
+```
+
+Generated lanes live in `.codex-bootstrap/checks.json`. Downstream-only lanes belong in `.codex-bootstrap/checks.local.json`.
+<!-- codex-bootstrap:end generated-docs/velocity-tools -->
+"""
+
+
+def generated_velocity_agent_region(check_command_text: str) -> str:
+    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
+## Velocity Tools
+
+- Use `./scripts/agent-fix-loop -- ./scripts/agent-smart-check` for fast inner-loop verification.
+- Use `{check_command_text}` before handoff; focused lanes are not a release gate.
+- Put downstream-only smart-check lanes in `.codex-bootstrap/checks.local.json`.
+- Do not let `agent-fix-loop` mutate source or lockfiles in v1.
+<!-- codex-bootstrap:end generated-docs/velocity-tools -->
+"""
+
+
+def generated_velocity_operations_region(check_command_text: str) -> str:
+    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
+## Velocity Tools
+
+Plan focused lanes:
+
+```bash
+./scripts/agent-smart-check --plan-only
+```
+
+Capture and classify a failing inner loop:
+
+```bash
+./scripts/agent-fix-loop -- ./scripts/agent-smart-check
+```
+
+Run the full handoff gate:
+
+```bash
+{check_command_text}
+```
+
+Generated lanes live in `.codex-bootstrap/checks.json`. Put project-only lane overrides in `.codex-bootstrap/checks.local.json`.
+<!-- codex-bootstrap:end generated-docs/velocity-tools -->
 """
 
 
@@ -1142,6 +1204,7 @@ Inspect stuck task state:
 
 {generated_agent_coordination_readme_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1220,6 +1283,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1297,6 +1361,7 @@ Inspect stuck task state:
 
 {generated_agent_coordination_readme_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1361,6 +1426,7 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1431,6 +1497,7 @@ uv run --no-editable python -m {module_name} "Ada Lovelace"
 
 {generated_agent_coordination_readme_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1487,6 +1554,7 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1547,6 +1615,7 @@ bun run src/main.ts "Ada Lovelace"
 
 {generated_agent_coordination_readme_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1600,6 +1669,7 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1677,6 +1747,7 @@ bun run src/main.ts --state file --state-file .mcp/state.json
 
 {generated_agent_coordination_readme_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
 {generated_windows_readme_section(plan)}
 ## Customization
 
@@ -1733,6 +1804,7 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 {generated_agent_beans_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
 {generated_agent_sync_region(check_command(plan))}
 ## Rules
 
@@ -1840,6 +1912,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 
 {generated_agent_coordination_operations_section(check_command(plan))}
 {generated_nag_docs_region()}
+{generated_velocity_operations_region(check_command(plan))}
 ## Windows
 
 ```powershell
@@ -1903,6 +1976,122 @@ def write_nag_policy_files(staged_root: Path) -> None:
     codex_dir.mkdir(parents=True, exist_ok=True)
     (codex_dir / "nags.json").write_text(default_nag_policy_json(), encoding="utf-8")
     (codex_dir / "nags.local.json").write_text(default_local_nag_policy_json(), encoding="utf-8")
+
+
+def write_checks_policy_file(plan: BootstrapPlan, staged_root: Path) -> None:
+    codex_dir = staged_root / ".codex-bootstrap"
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    (codex_dir / "checks.json").write_text(
+        json.dumps(default_checks_policy(plan), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def default_checks_policy(plan: BootstrapPlan) -> dict[str, object]:
+    return {
+        "schemaVersion": 1,
+        "templateId": plan.manifest.template_id,
+        "lanes": default_check_lanes(plan.manifest.template_type),
+    }
+
+
+def default_check_lanes(template_type: str) -> list[dict[str, object]]:
+    if template_type == "java-gradle-cli":
+        return [
+            {
+                "id": "java-test",
+                "description": "Java source or tests changed.",
+                "triggers": {"paths": ["src/main/java/**/*.java", "src/test/java/**/*.java"]},
+                "commands": [["./scripts/agent-gradle", ".", "test"]],
+                "escalatesTo": "full",
+            },
+            {
+                "id": "java-style",
+                "description": "Java style or Checkstyle config changed.",
+                "triggers": {
+                    "paths": [
+                        "src/main/java/**/*.java",
+                        "src/test/java/**/*.java",
+                        "config/checkstyle/**/*.xml",
+                    ],
+                },
+                "commands": [["./scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]],
+                "escalatesTo": "full",
+            },
+            {
+                "id": "full",
+                "description": "Complete Java verification.",
+                "commands": [["./scripts/agent-gradle", ".", "check"]],
+            },
+        ]
+    if template_type == "python-uv-cli":
+        return [
+            {
+                "id": "python-test",
+                "description": "Python source or tests changed.",
+                "triggers": {"paths": ["src/**/*.py", "tests/**/*.py"]},
+                "commands": [["uv", "run", "--no-editable", "pytest"]],
+                "escalatesTo": "full",
+            },
+            {
+                "id": "python-quality",
+                "description": "Python quality config or typed source changed.",
+                "triggers": {"paths": ["src/**/*.py", "tests/**/*.py", "pyproject.toml", "supermeta-rules.json"]},
+                "commands": [
+                    ["uv", "run", "ruff", "check", "src", "tests"],
+                    ["uv", "run", "mypy", "src", "tests"],
+                ],
+                "escalatesTo": "full",
+            },
+            {"id": "full", "description": "Complete Python verification.", "commands": [["./scripts/check"]]},
+        ]
+    if template_type == "csharp-dotnet-cli":
+        return [
+            {
+                "id": "dotnet-test",
+                "description": "C# source or tests changed.",
+                "triggers": {"paths": ["src/**/*.cs", "tests/**/*.cs"]},
+                "commands": [["./scripts/agent-dotnet", ".", "test"]],
+                "escalatesTo": "full",
+            },
+            {
+                "id": "dotnet-quality",
+                "description": "C# project or package configuration changed.",
+                "triggers": {"paths": ["*.slnx", "Directory.*.props", "src/**/*.csproj", "tests/**/*.csproj"]},
+                "commands": [["./scripts/check"]],
+                "escalatesTo": "full",
+            },
+            {"id": "full", "description": "Complete C# verification.", "commands": [["./scripts/check"]]},
+        ]
+    if template_type == "typescript-bun-mcp-server":
+        source_paths = [
+            "src/mcp.ts",
+            "src/http.ts",
+            "src/stdio.ts",
+            "src/state.ts",
+            "src/config.ts",
+            "src/**/*.ts",
+            "tests/**/*.ts",
+        ]
+    else:
+        source_paths = ["src/**/*.ts", "tests/**/*.ts"]
+    return [
+        {
+            "id": "typescript-test",
+            "description": "TypeScript source or tests changed.",
+            "triggers": {"paths": source_paths},
+            "commands": [["bun", "test"]],
+            "escalatesTo": "full",
+        },
+        {
+            "id": "typescript-quality",
+            "description": "TypeScript quality config or typed source changed.",
+            "triggers": {"paths": source_paths + ["package.json", "tsconfig.json", "biome.json"]},
+            "commands": [["bun", "run", "typecheck"], ["bun", "run", "lint"]],
+            "escalatesTo": "full",
+        },
+        {"id": "full", "description": "Complete TypeScript verification.", "commands": [["./scripts/check"]]},
+    ]
 
 
 def default_nag_policy_json() -> str:
