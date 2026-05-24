@@ -62,6 +62,19 @@ class FixLoopCliTest(unittest.TestCase):
 
             self.assertEqual(2, exit_code)
 
+    def test_success_preserves_child_output(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-success-output-") as temp_dir:
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(
+                ["--", "python3", "-c", "print('selected fast lane')"],
+                cwd=Path(temp_dir),
+                stdout=output,
+            )
+
+            self.assertEqual(0, exit_code)
+            self.assertIn("selected fast lane", output.text())
+
 
 class FixLoopDiagnosticsTest(unittest.TestCase):
     def test_json_output_reports_classification(self) -> None:

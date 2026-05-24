@@ -30,6 +30,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     ".github",
     ".gitattributes",
     ".gitignore",
+    ".codex-bootstrap",
     "AGENTS.md",
     "CHANGELOG.md",
     "README.md",

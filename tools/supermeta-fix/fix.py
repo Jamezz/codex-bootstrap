@@ -131,6 +131,8 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_ru
         if args.json:
             output.write(json.dumps(success_payload(result), indent=2, sort_keys=True) + "\n")
         else:
+            if result.output:
+                output.write(result.output)
             output.write("agent-fix-loop: command passed\n")
         return 0
     classification = classify_failure(result.output)

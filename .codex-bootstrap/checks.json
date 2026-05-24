@@ -1,0 +1,32 @@
+{
+  "lanes": [
+    {
+      "commands": [["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"]],
+      "description": "Python bootstrap, Pages, and Supermeta helper code changed.",
+      "escalatesTo": "full",
+      "id": "python-tools",
+      "triggers": {
+        "paths": ["tools/**/*.py", "site/**/*.py"]
+      }
+    },
+    {
+      "commands": [["./scripts/agent-gradle", "templates/java-gradle-cli", "check"]],
+      "description": "Java template or Gradle harness changed.",
+      "escalatesTo": "full",
+      "id": "java-template",
+      "triggers": {
+        "paths": ["templates/java-gradle-cli/**", "tools/supermeta-gradle/**", "scripts/agent-gradle"]
+      }
+    },
+    {
+      "commands": [
+        ["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"],
+        ["./scripts/agent-gradle", "templates/java-gradle-cli", "check"]
+      ],
+      "description": "Complete Codex Bootstrap verification.",
+      "id": "full"
+    }
+  ],
+  "schemaVersion": 1,
+  "templateId": "codex-bootstrap"
+}

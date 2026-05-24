@@ -56,6 +56,10 @@ Use these buckets inside dated entries when they help:
 - Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
   sync contract is version 2 with `language-checks` marked manual opt-in for
   existing repos.
+- Added the velocity tooling contract for generated projects:
+  `scripts/agent-smart-check`, `scripts/agent-fix-loop`, PowerShell wrappers,
+  `tools/supermeta-check/`, `tools/supermeta-fix/`, generated
+  `.codex-bootstrap/checks.json`, and the `velocity-tools` sync managed set.
 - Kept the generated `agent-nags` operations region stable across the
   260e1d8-to-contract-v2 hop so older helpers do not perform multiple region
   writes against the same file during that transition.
@@ -65,8 +69,16 @@ Use these buckets inside dated entries when they help:
 - Extended `templates.json` with sync capability metadata so catalog consumers
   can tell which templates support downstream resync.
 
+### Tooling
+
+- Added focused verification lane selection and deterministic failure
+  classification helpers for faster agent inner loops while keeping full checks
+  as the handoff gate.
+
 ### Verification
 
+- `python3 -m unittest discover -s tools/supermeta-check -p '*_test.py'`
+- `python3 -m unittest discover -s tools/supermeta-fix -p '*_test.py'`
 - `PYTHONPATH=tools/supermeta-bootstrap python3 -m unittest discover -s tools/supermeta-bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/pages -p '*_test.py'`

@@ -5,4 +5,5 @@ __pycache__/
 .gradle/
 .nuget/
 .worktrees/
+.codex-bootstrap/fix-loop/
 build/

@@ -408,6 +408,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / ".codex-bootstrap" / "nags.local.json").is_file())
             self.assertFalse((checkout / ".codex-bootstrap" / "nag-state.json").exists())
             self.assertIn(".codex-bootstrap/nag-state.json", read_text(checkout / ".gitignore"))
+            self.assertIn(".codex-bootstrap/fix-loop/", read_text(checkout / ".gitignore"))
             sync_metadata = json.loads(
                 (checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8")
             )
@@ -549,6 +550,32 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("CODEX_AGENT_COORD_HOME", operations)
             self.assertIn("checks.local.json", operations)
             assert_generated_nag_docs(self, readme, agents, operations)
+
+            smart_check = run_checked(
+                [
+                    "./scripts/agent-smart-check",
+                    "--changed",
+                    "src/main/java/com/acme/sample/App.java",
+                    "--plan-only",
+                    "--json",
+                ],
+                cwd=checkout,
+            )
+            smart_payload = json.loads(smart_check.stdout)
+            self.assertFalse(smart_payload["executed"])
+            self.assertIn("full", [item["id"] for item in smart_payload["plan"]])
+            fix_loop = run_checked(
+                [
+                    "./scripts/agent-fix-loop",
+                    "--",
+                    "./scripts/agent-smart-check",
+                    "--changed",
+                    "src/main/java/com/acme/sample/App.java",
+                    "--plan-only",
+                ],
+                cwd=checkout,
+            )
+            self.assertIn("agent-smart-check", fix_loop.stdout)
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
             run_checked(
