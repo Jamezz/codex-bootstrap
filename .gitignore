@@ -4,4 +4,5 @@ __pycache__/
 .dotnet/
 .gradle/
 .nuget/
+.worktrees/
 build/
