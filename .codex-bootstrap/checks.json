@@ -1,30 +1,88 @@
 {
   "lanes": [
     {
-      "commands": [["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"]],
+      "commands": [["python3", "-m", "unittest", "discover", "-s", "tools/supermeta-check", "-p", "*_test.py"]],
+      "cost": "fast",
+      "description": "Smart-check helper changed.",
+      "escalatesTo": "full",
+      "id": "smart-check",
+      "requires": ["python3"],
+      "tags": ["python", "smart-check", "test"],
+      "timeoutSeconds": 120,
+      "triggers": {
+        "paths": [
+          ".codex-bootstrap/checks.json",
+          "scripts/agent-smart-check",
+          "scripts/agent-smart-check.ps1",
+          "tools/supermeta-check/**/*.py"
+        ]
+      }
+    },
+    {
+      "commands": [["python3", "-m", "unittest", "discover", "-s", "tools/supermeta-fix", "-p", "*_test.py"]],
+      "cost": "fast",
+      "description": "Fix-loop helper changed.",
+      "escalatesTo": "full",
+      "id": "fix-loop",
+      "requires": ["python3"],
+      "tags": ["python", "fix-loop", "test"],
+      "timeoutSeconds": 120,
+      "triggers": {
+        "paths": [
+          "scripts/agent-fix-loop",
+          "scripts/agent-fix-loop.ps1",
+          "tools/supermeta-fix/**/*.py"
+        ]
+      }
+    },
+    {
+      "commands": [
+        {
+          "argv": ["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"],
+          "timeoutSeconds": 900
+        }
+      ],
+      "cost": "standard",
       "description": "Python bootstrap, Pages, and Supermeta helper code changed.",
       "escalatesTo": "full",
       "id": "python-tools",
+      "requires": ["python3"],
+      "tags": ["python", "tools", "test"],
+      "timeoutSeconds": 900,
       "triggers": {
         "paths": ["tools/**/*.py", "site/**/*.py"]
       }
     },
     {
       "commands": [["./scripts/agent-gradle", "templates/java-gradle-cli", "check"]],
+      "cost": "standard",
       "description": "Java template or Gradle harness changed.",
       "escalatesTo": "full",
       "id": "java-template",
+      "requires": ["java"],
+      "tags": ["java", "gradle", "template"],
+      "timeoutSeconds": 600,
       "triggers": {
         "paths": ["templates/java-gradle-cli/**", "tools/supermeta-gradle/**", "scripts/agent-gradle"]
       }
     },
     {
       "commands": [
-        ["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"],
-        ["./scripts/agent-gradle", "templates/java-gradle-cli", "check"]
+        {
+          "argv": ["python3", "-m", "unittest", "discover", "-s", "tools", "-p", "*_test.py"],
+          "timeoutSeconds": 900
+        },
+        {
+          "argv": ["./scripts/agent-gradle", "templates/java-gradle-cli", "check"],
+          "timeoutSeconds": 600
+        }
       ],
+      "cost": "full",
       "description": "Complete Codex Bootstrap verification.",
-      "id": "full"
+      "id": "full",
+      "requires": ["python3", "java"],
+      "tags": ["full"],
+      "timeoutSeconds": 1200
     }
   ],
   "schemaVersion": 1,

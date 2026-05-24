@@ -142,12 +142,14 @@ Generated projects include focused verification and failure-diagnostic helpers:
 
 ```bash
 ./scripts/agent-smart-check --plan-only
-./scripts/agent-fix-loop -- ./scripts/agent-smart-check
+./scripts/agent-smart-check --self-test
+./scripts/agent-smart-check --fast-only
+./scripts/agent-fix-loop --timeout 600 -- ./scripts/agent-smart-check
 ```
 
-`agent-smart-check` reads `.codex-bootstrap/checks.json` and optional `.codex-bootstrap/checks.local.json` to pick focused lanes from changed files. Focused lanes are for inner-loop work; run the template full check before handoff.
+`agent-smart-check` reads `.codex-bootstrap/checks.json` and optional `.codex-bootstrap/checks.local.json` to pick focused lanes from changed files. Lanes can declare `cost`, `tags`, `requires`, and `timeoutSeconds`; use `--fast-only`, `--tag`, `--timeout`, and `--self-test` to keep the local loop tight. Focused lanes are for inner-loop work; run the template full check before handoff.
 
-`agent-fix-loop` captures command output to `.codex-bootstrap/fix-loop/last.log`, classifies common failures, and prints next diagnostic actions without mutating source or lockfiles in v1.
+`agent-fix-loop` captures command output to `.codex-bootstrap/fix-loop/last.log`, classifies common failures, records attempt/evidence JSON, and can run read-only diagnostics between retries without mutating source or lockfiles in v1.
 
 ## Coordinate Local Agents
 

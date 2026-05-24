@@ -53,6 +53,20 @@ class ClassificationTest(unittest.TestCase):
 
 
 class FixLoopCliTest(unittest.TestCase):
+    def test_timeout_returns_124_and_classifies_timeout(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-timeout-") as temp_dir:
+            root = Path(temp_dir)
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(
+                ["--timeout", "0.1", "--", "python3", "-c", "import time; time.sleep(2)"],
+                cwd=root,
+                stdout=output,
+            )
+
+            self.assertEqual(124, exit_code)
+            self.assertIn("timeout", output.text())
+
     def test_captures_child_output_and_preserves_exit_code(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fix-loop-cli-") as temp_dir:
             root = Path(temp_dir)
@@ -131,6 +145,47 @@ class FixLoopCliTest(unittest.TestCase):
 
 
 class FixLoopDiagnosticsTest(unittest.TestCase):
+    def test_diagnostics_run_between_failed_attempts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-retry-diagnostics-") as temp_dir:
+            root = Path(temp_dir)
+            output = fix.CapturedOutput()
+            events: list[tuple[str, tuple[str, ...]]] = []
+            child_results = [
+                fix.CommandResult(("fake-check",), 4, "address already in use\n"),
+                fix.CommandResult(("fake-check",), 0, "passed after diagnostics\n"),
+            ]
+
+            def command_runner(
+                command: tuple[str, ...] | list[str],
+                cwd: Path,
+                timeout_seconds: float | None = None,
+            ) -> fix.CommandResult:
+                events.append(("child", tuple(command)))
+                return child_results.pop(0)
+
+            def diagnostic_runner(command: tuple[str, ...] | list[str], cwd: Path) -> fix.CommandResult:
+                events.append(("diagnostic", tuple(command)))
+                return fix.CommandResult(tuple(command), 0, "diagnostic ok\n")
+
+            exit_code = fix.run_cli(
+                ["--run-diagnostics", "--max-attempts", "2", "--", "fake-check"],
+                cwd=root,
+                stdout=output,
+                command_runner=command_runner,
+                diagnostic_runner=diagnostic_runner,
+            )
+
+            self.assertEqual(0, exit_code)
+            self.assertEqual(
+                [
+                    ("child", ("fake-check",)),
+                    ("diagnostic", ("./scripts/agent-task", "ps")),
+                    ("child", ("fake-check",)),
+                ],
+                events,
+            )
+            self.assertIn("passed after diagnostics", output.text())
+
     def test_json_output_reports_classification(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fix-loop-json-") as temp_dir:
             root = Path(temp_dir)
@@ -146,6 +201,9 @@ class FixLoopDiagnosticsTest(unittest.TestCase):
             payload = json.loads(output.text())
             self.assertEqual("port-busy", payload["classification"]["id"])
             self.assertEqual(4, payload["exitCode"])
+            self.assertEqual(1, payload["attemptCount"])
+            self.assertEqual("address already in use", payload["evidenceLine"])
+            self.assertEqual("port-busy", payload["attempts"][0]["classification"]["id"])
 
     def test_read_only_diagnostic_failure_does_not_replace_child_exit_code(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fix-loop-diag-") as temp_dir:

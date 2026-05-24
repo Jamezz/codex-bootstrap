@@ -13,7 +13,7 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Add or update `bootstrap-template.json` when a template's generated contract changes.
 - Keep generated starters compact but production-shaped: docs, tests, agent notes, and a real build path.
 - Keep generated docs and Beans support first-class for every starter: architecture, operations, active decisions, `.beans.yml`, seeded starter backlog, and `scripts/agent-beans`.
-- Keep velocity tooling practical and conservative: `agent-smart-check` accelerates inner loops, `agent-fix-loop` captures and classifies failures, and full template checks remain the handoff gate.
+- Keep velocity tooling practical and conservative: `agent-smart-check` accelerates inner loops with lane `cost`, `tags`, `requires`, and timeouts; `agent-fix-loop` captures classified attempt evidence; full template checks remain the handoff gate.
 - Keep non-generated product source files at 1000 lines or less.
 - Exception: `tools/bootstrap/bootstrap.py` may exceed 1000 lines because it owns the destructive launcher, template rewrite dispatch, and generated-project docs in one tested control surface. Split it only when the boundary is obvious and keeps the bootstrap flow easier to audit.
 - Keep Java package layers at 7 top-level types or fewer before splitting into context-shaped subpackages.

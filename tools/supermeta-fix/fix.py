@@ -34,6 +34,22 @@ class CommandResult:
     output: str
 
 
+@dataclass(frozen=True)
+class AttemptResult:
+    attempt: int
+    result: CommandResult
+    classification: FailureClassification | None
+    diagnostics: tuple[CommandResult, ...]
+
+
+@dataclass(frozen=True)
+class FixLoopResult:
+    command: tuple[str, ...]
+    exit_code: int
+    output: str
+    attempts: tuple[AttemptResult, ...]
+
+
 class CapturedOutput:
     def __init__(self) -> None:
         self.parts: list[str] = []
@@ -119,11 +135,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--run-diagnostics", action="store_true")
     parser.add_argument("--max-attempts", type=int, default=1)
+    parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("child_command", nargs=argparse.REMAINDER)
     return parser.parse_args(argv)
 
 
-def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_runner=None) -> int:
+def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_runner=None, command_runner=None) -> int:
     args = parse_args(argv)
     root = (cwd or Path.cwd()).resolve()
     output = stdout or sys.stdout
@@ -132,7 +149,15 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_ru
         error_output = output if stdout is not None else sys.stderr
         print("agent-fix-loop: child command is required after --", file=error_output)
         return 2
-    result = run_with_attempts(child_command, root, max(args.max_attempts, 1))
+    result = run_with_attempts(
+        child_command,
+        root,
+        max(args.max_attempts, 1),
+        timeout_seconds=args.timeout,
+        run_diagnostics=args.run_diagnostics,
+        diagnostic_runner=diagnostic_runner or run_child,
+        command_runner=command_runner or run_child,
+    )
     try:
         write_last_log(root, result.output)
     except OSError as error:
@@ -146,8 +171,8 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_ru
                 output.write(result.output)
             output.write("agent-fix-loop: command passed\n")
         return 0
-    classification = classify_failure(result.output)
-    diagnostics = maybe_run_diagnostics(root, classification, args.run_diagnostics, diagnostic_runner or run_child)
+    classification = final_classification(result)
+    diagnostics = final_diagnostics(result)
     if args.json:
         output.write(json.dumps(failure_payload(result, classification, diagnostics), indent=2, sort_keys=True) + "\n")
     else:
@@ -155,20 +180,39 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_ru
     return result.exit_code
 
 
-def run_with_attempts(command: tuple[str, ...], cwd: Path, max_attempts: int) -> CommandResult:
+def run_with_attempts(
+    command: tuple[str, ...],
+    cwd: Path,
+    max_attempts: int,
+    timeout_seconds: float | None = None,
+    run_diagnostics: bool = False,
+    diagnostic_runner=None,
+    command_runner=None,
+) -> FixLoopResult:
+    child_runner = command_runner or run_child
+    diag_runner = diagnostic_runner or run_child
     outputs: list[str] = []
+    attempts: list[AttemptResult] = []
     result = CommandResult(command=command, exit_code=1, output="")
     for attempt in range(1, max_attempts + 1):
-        result = run_child(command, cwd)
+        result = run_command_runner(child_runner, command, cwd, timeout_seconds)
         outputs.append(result.output)
+        classification = None
+        diagnostics: tuple[CommandResult, ...] = ()
         if result.exit_code == 0:
+            attempts.append(AttemptResult(attempt, result, classification, diagnostics))
             break
+        classification = classify_failure(result.output)
+        diagnostics = maybe_run_diagnostics(cwd, classification, run_diagnostics, diag_runner)
+        attempts.append(AttemptResult(attempt, result, classification, diagnostics))
+        if diagnostics:
+            outputs.append(format_diagnostic_outputs(diagnostics))
         if attempt < max_attempts:
             outputs.append(f"\nagent-fix-loop: retrying command after failed attempt {attempt}\n")
-    return CommandResult(command=result.command, exit_code=result.exit_code, output="".join(outputs))
+    return FixLoopResult(command=result.command, exit_code=result.exit_code, output="".join(outputs), attempts=tuple(attempts))
 
 
-def run_child(command: tuple[str, ...] | list[str], cwd: Path) -> CommandResult:
+def run_child(command: tuple[str, ...] | list[str], cwd: Path, timeout_seconds: float | None = None) -> CommandResult:
     command_tuple = tuple(command)
     try:
         completed = subprocess.run(
@@ -178,7 +222,12 @@ def run_child(command: tuple[str, ...] | list[str], cwd: Path) -> CommandResult:
             stderr=subprocess.STDOUT,
             text=True,
             check=False,
+            timeout=timeout_seconds,
         )
+    except subprocess.TimeoutExpired as error:
+        output = timeout_output(error)
+        output += f"agent-fix-loop: command timed out after {timeout_seconds:g}s: {' '.join(command_tuple)}\n"
+        return CommandResult(command=command_tuple, exit_code=124, output=output)
     except FileNotFoundError as error:
         return CommandResult(
             command=command_tuple,
@@ -198,6 +247,31 @@ def run_child(command: tuple[str, ...] | list[str], cwd: Path) -> CommandResult:
             output=f"agent-fix-loop: could not execute {' '.join(command_tuple)}: {error}\n",
         )
     return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
+
+
+def run_command_runner(runner, command: tuple[str, ...], cwd: Path, timeout_seconds: float | None) -> CommandResult:
+    try:
+        return runner(command, cwd, timeout_seconds=timeout_seconds)
+    except TypeError:
+        return runner(command, cwd)
+
+
+def timeout_output(error: subprocess.TimeoutExpired) -> str:
+    output = error.output or ""
+    if isinstance(output, bytes):
+        output = output.decode(errors="replace")
+    return output
+
+
+def format_diagnostic_outputs(diagnostics: tuple[CommandResult, ...]) -> str:
+    parts: list[str] = []
+    for diagnostic in diagnostics:
+        parts.append(f"\nagent-fix-loop: diagnostic {' '.join(diagnostic.command)} exited {diagnostic.exit_code}\n")
+        if diagnostic.output:
+            parts.append(diagnostic.output)
+            if not diagnostic.output.endswith("\n"):
+                parts.append("\n")
+    return "".join(parts)
 
 
 def write_last_log(root: Path, output: str) -> Path:
@@ -228,17 +302,20 @@ def print_classification(classification: FailureClassification, diagnostics: tup
             output.write(diagnostic.output)
 
 
-def success_payload(result: CommandResult) -> dict[str, object]:
+def success_payload(result: FixLoopResult) -> dict[str, object]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "command": list(result.command),
         "exitCode": result.exit_code,
         "logPath": str(LAST_LOG),
+        "attemptCount": len(result.attempts),
+        "evidenceLine": first_evidence_line(result.output),
+        "attempts": [attempt_payload(attempt) for attempt in result.attempts],
     }
 
 
 def failure_payload(
-    result: CommandResult,
+    result: FixLoopResult,
     classification: FailureClassification,
     diagnostics: tuple[CommandResult, ...],
 ) -> dict[str, object]:
@@ -247,6 +324,9 @@ def failure_payload(
         "command": list(result.command),
         "exitCode": result.exit_code,
         "logPath": str(LAST_LOG),
+        "attemptCount": len(result.attempts),
+        "evidenceLine": first_evidence_line(result.output),
+        "attempts": [attempt_payload(attempt) for attempt in result.attempts],
         "classification": {
             "id": classification.classification_id,
             "summary": classification.summary,
@@ -260,6 +340,56 @@ def failure_payload(
             }
             for diagnostic in diagnostics
         ],
+    }
+
+
+def final_classification(result: FixLoopResult) -> FailureClassification:
+    for attempt in reversed(result.attempts):
+        if attempt.classification is not None:
+            return attempt.classification
+    return classify_failure(result.output)
+
+
+def final_diagnostics(result: FixLoopResult) -> tuple[CommandResult, ...]:
+    for attempt in reversed(result.attempts):
+        if attempt.diagnostics:
+            return attempt.diagnostics
+    return ()
+
+
+def first_evidence_line(output: str) -> str:
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+def attempt_payload(attempt: AttemptResult) -> dict[str, object]:
+    return {
+        "attempt": attempt.attempt,
+        "command": list(attempt.result.command),
+        "exitCode": attempt.result.exit_code,
+        "evidenceLine": first_evidence_line(attempt.result.output),
+        "classification": classification_payload(attempt.classification),
+        "diagnostics": [
+            {
+                "command": list(diagnostic.command),
+                "exitCode": diagnostic.exit_code,
+                "output": diagnostic.output,
+            }
+            for diagnostic in attempt.diagnostics
+        ],
+    }
+
+
+def classification_payload(classification: FailureClassification | None) -> dict[str, object] | None:
+    if classification is None:
+        return None
+    return {
+        "id": classification.classification_id,
+        "summary": classification.summary,
+        "nextActions": list(classification.next_actions),
     }
 
 

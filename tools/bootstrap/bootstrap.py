@@ -15,6 +15,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    from tools.bootstrap.velocity import (
+        generated_velocity_agent_region,
+        generated_velocity_operations_region,
+        generated_velocity_readme_region,
+        write_checks_policy_file,
+    )
+except ModuleNotFoundError:
+    from velocity import (
+        generated_velocity_agent_region,
+        generated_velocity_operations_region,
+        generated_velocity_readme_region,
+        write_checks_policy_file,
+    )
+
 
 DEFAULT_TEMPLATE = "java-gradle-cli"
 TEMPLATE_MANIFEST = "bootstrap-template.json"
@@ -768,7 +783,7 @@ def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
     (docs_dir / "DECISIONS.md").write_text(generated_decisions(plan), encoding="utf-8")
     write_generated_beans(plan, staged_root)
     write_nag_policy_files(staged_root)
-    write_checks_policy_file(plan, staged_root)
+    write_checks_policy_file(plan.manifest.template_id, plan.manifest.template_type, staged_root)
 
 
 def generated_project_docs_section() -> str:
@@ -831,67 +846,6 @@ def generated_agent_sync_region(check_command: str) -> str:
 
 {generated_upstream_suggestion_section()}
 <!-- codex-bootstrap:end generated-docs/bootstrap-sync -->
-"""
-
-
-def generated_velocity_readme_region(check_command_text: str) -> str:
-    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
-## Velocity Tools
-
-Use the fast inner-loop verifier during development:
-
-```bash
-./scripts/agent-smart-check --plan-only
-./scripts/agent-fix-loop -- ./scripts/agent-smart-check
-```
-
-Run the full gate before handoff:
-
-```bash
-{check_command_text}
-```
-
-Generated lanes live in `.codex-bootstrap/checks.json`. Downstream-only lanes belong in `.codex-bootstrap/checks.local.json`.
-<!-- codex-bootstrap:end generated-docs/velocity-tools -->
-"""
-
-
-def generated_velocity_agent_region(check_command_text: str) -> str:
-    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
-## Velocity Tools
-
-- Use `./scripts/agent-fix-loop -- ./scripts/agent-smart-check` for fast inner-loop verification.
-- Use `{check_command_text}` before handoff; focused lanes are not a release gate.
-- Put downstream-only smart-check lanes in `.codex-bootstrap/checks.local.json`.
-- Do not let `agent-fix-loop` mutate source or lockfiles in v1.
-<!-- codex-bootstrap:end generated-docs/velocity-tools -->
-"""
-
-
-def generated_velocity_operations_region(check_command_text: str) -> str:
-    return f"""<!-- codex-bootstrap:begin generated-docs/velocity-tools -->
-## Velocity Tools
-
-Plan focused lanes:
-
-```bash
-./scripts/agent-smart-check --plan-only
-```
-
-Capture and classify a failing inner loop:
-
-```bash
-./scripts/agent-fix-loop -- ./scripts/agent-smart-check
-```
-
-Run the full handoff gate:
-
-```bash
-{check_command_text}
-```
-
-Generated lanes live in `.codex-bootstrap/checks.json`. Put project-only lane overrides in `.codex-bootstrap/checks.local.json`.
-<!-- codex-bootstrap:end generated-docs/velocity-tools -->
 """
 
 
@@ -1977,165 +1931,6 @@ def write_nag_policy_files(staged_root: Path) -> None:
     codex_dir.mkdir(parents=True, exist_ok=True)
     (codex_dir / "nags.json").write_text(default_nag_policy_json(), encoding="utf-8")
     (codex_dir / "nags.local.json").write_text(default_local_nag_policy_json(), encoding="utf-8")
-
-
-def write_checks_policy_file(plan: BootstrapPlan, staged_root: Path) -> None:
-    codex_dir = staged_root / ".codex-bootstrap"
-    codex_dir.mkdir(parents=True, exist_ok=True)
-    (codex_dir / "checks.json").write_text(
-        format_checks_policy(default_checks_policy(plan)) + "\n",
-        encoding="utf-8",
-    )
-
-
-def format_checks_policy(policy: dict[str, object]) -> str:
-    return format_json_value(policy, 0)
-
-
-def format_json_value(value: object, indent: int) -> str:
-    inline = inline_json_value(value)
-    if inline is not None and len(inline) + indent <= 80:
-        return inline
-    prefix = " " * indent
-    child_prefix = " " * (indent + 2)
-    if isinstance(value, dict):
-        lines = ["{"]
-        items = sorted(value.items())
-        for index, (key, child) in enumerate(items):
-            comma = "," if index < len(items) - 1 else ""
-            lines.append(f"{child_prefix}{json.dumps(key)}: {format_json_value(child, indent + 2)}{comma}")
-        lines.append(f"{prefix}}}")
-        return "\n".join(lines)
-    if isinstance(value, list):
-        lines = ["["]
-        for index, child in enumerate(value):
-            comma = "," if index < len(value) - 1 else ""
-            lines.append(f"{child_prefix}{format_json_value(child, indent + 2)}{comma}")
-        lines.append(f"{prefix}]")
-        return "\n".join(lines)
-    return json.dumps(value)
-
-
-def inline_json_value(value: object) -> str | None:
-    if isinstance(value, list) and all(is_json_scalar(item) for item in value):
-        return json.dumps(value, separators=(", ", ": "))
-    if isinstance(value, list) and all(
-        isinstance(item, list) and all(is_json_scalar(child) for child in item)
-        for item in value
-    ):
-        return json.dumps(value, separators=(", ", ": "))
-    return None
-
-
-def is_json_scalar(value: object) -> bool:
-    return value is None or isinstance(value, str | int | float | bool)
-
-
-def default_checks_policy(plan: BootstrapPlan) -> dict[str, object]:
-    return {
-        "schemaVersion": 1,
-        "templateId": plan.manifest.template_id,
-        "lanes": default_check_lanes(plan.manifest.template_type),
-    }
-
-
-def default_check_lanes(template_type: str) -> list[dict[str, object]]:
-    if template_type == "java-gradle-cli":
-        return [
-            {
-                "id": "java-test",
-                "description": "Java source or tests changed.",
-                "triggers": {"paths": ["src/main/java/**/*.java", "src/test/java/**/*.java"]},
-                "commands": [["./scripts/agent-gradle", ".", "test"]],
-                "escalatesTo": "full",
-            },
-            {
-                "id": "java-style",
-                "description": "Java style or Checkstyle config changed.",
-                "triggers": {
-                    "paths": [
-                        "src/main/java/**/*.java",
-                        "src/test/java/**/*.java",
-                        "config/checkstyle/**/*.xml",
-                    ],
-                },
-                "commands": [["./scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]],
-                "escalatesTo": "full",
-            },
-            {
-                "id": "full",
-                "description": "Complete Java verification.",
-                "commands": [["./scripts/agent-gradle", ".", "check"]],
-            },
-        ]
-    if template_type == "python-uv-cli":
-        return [
-            {
-                "id": "python-test",
-                "description": "Python source or tests changed.",
-                "triggers": {"paths": ["src/**/*.py", "tests/**/*.py"]},
-                "commands": [["uv", "run", "--no-editable", "pytest"]],
-                "escalatesTo": "full",
-            },
-            {
-                "id": "python-quality",
-                "description": "Python quality config or typed source changed.",
-                "triggers": {"paths": ["src/**/*.py", "tests/**/*.py", "pyproject.toml", "supermeta-rules.json"]},
-                "commands": [
-                    ["uv", "run", "ruff", "check", "src", "tests"],
-                    ["uv", "run", "mypy", "src", "tests"],
-                ],
-                "escalatesTo": "full",
-            },
-            {"id": "full", "description": "Complete Python verification.", "commands": [["./scripts/check"]]},
-        ]
-    if template_type == "csharp-dotnet-cli":
-        return [
-            {
-                "id": "dotnet-test",
-                "description": "C# source or tests changed.",
-                "triggers": {"paths": ["src/**/*.cs", "tests/**/*.cs"]},
-                "commands": [["./scripts/agent-dotnet", ".", "test"]],
-                "escalatesTo": "full",
-            },
-            {
-                "id": "dotnet-quality",
-                "description": "C# project or package configuration changed.",
-                "triggers": {"paths": ["*.slnx", "Directory.*.props", "src/**/*.csproj", "tests/**/*.csproj"]},
-                "commands": [["./scripts/check"]],
-                "escalatesTo": "full",
-            },
-            {"id": "full", "description": "Complete C# verification.", "commands": [["./scripts/check"]]},
-        ]
-    if template_type == "typescript-bun-mcp-server":
-        source_paths = [
-            "src/mcp.ts",
-            "src/http.ts",
-            "src/stdio.ts",
-            "src/state.ts",
-            "src/config.ts",
-            "src/**/*.ts",
-            "tests/**/*.ts",
-        ]
-    else:
-        source_paths = ["src/**/*.ts", "tests/**/*.ts"]
-    return [
-        {
-            "id": "typescript-test",
-            "description": "TypeScript source or tests changed.",
-            "triggers": {"paths": source_paths},
-            "commands": [["bun", "test"]],
-            "escalatesTo": "full",
-        },
-        {
-            "id": "typescript-quality",
-            "description": "TypeScript quality config or typed source changed.",
-            "triggers": {"paths": source_paths + ["package.json", "tsconfig.json", "biome.json"]},
-            "commands": [["bun", "run", "typecheck"], ["bun", "run", "lint"]],
-            "escalatesTo": "full",
-        },
-        {"id": "full", "description": "Complete TypeScript verification.", "commands": [["./scripts/check"]]},
-    ]
 
 
 def default_nag_policy_json() -> str:

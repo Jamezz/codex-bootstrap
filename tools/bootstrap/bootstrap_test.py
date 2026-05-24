@@ -434,7 +434,14 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("docs/OPERATIONS.md:generated-docs/velocity-tools", sync_metadata["managedRegions"])
             self.assertEqual(1, checks["schemaVersion"])
             self.assertEqual("java-gradle-cli", checks["templateId"])
-            self.assertIn("full", [lane["id"] for lane in checks["lanes"]])
+            lanes_by_id = {lane["id"]: lane for lane in checks["lanes"]}
+            self.assertIn("full", lanes_by_id)
+            self.assertEqual("fast", lanes_by_id["java-test"]["cost"])
+            self.assertIn("test", lanes_by_id["java-test"]["tags"])
+            self.assertEqual(["java"], lanes_by_id["java-test"]["requires"])
+            self.assertEqual(180, lanes_by_id["java-test"]["timeoutSeconds"])
+            self.assertEqual("full", lanes_by_id["full"]["cost"])
+            self.assertEqual(600, lanes_by_id["full"]["timeoutSeconds"])
             self.assertEqual(1, nags["schemaVersion"])
             self.assertIn("bootstrap-update-check", [item["id"] for item in nags["nags"]])
             self.assertIn("post-run-backlog-check", [item["id"] for item in nags["nags"]])
@@ -539,6 +546,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("## Bootstrap Sync", agents)
             self.assertIn("agent-fix-loop", readme)
             self.assertIn("agent-smart-check", agents)
+            self.assertIn("--self-test", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn(
@@ -564,6 +572,10 @@ class BootstrapSmokeTest(unittest.TestCase):
             smart_payload = json.loads(smart_check.stdout)
             self.assertFalse(smart_payload["executed"])
             self.assertIn("full", [item["id"] for item in smart_payload["plan"]])
+            self.assertEqual("fast", smart_payload["plan"][0]["cost"])
+            self.assertIn("java", smart_payload["plan"][0]["requires"])
+            smart_self_test = run_checked(["./scripts/agent-smart-check", "--self-test", "--json"], cwd=checkout)
+            self.assertTrue(json.loads(smart_self_test.stdout)["ok"])
             fix_loop = run_checked(
                 [
                     "./scripts/agent-fix-loop",

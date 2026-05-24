@@ -60,6 +60,9 @@ Use these buckets inside dated entries when they help:
   `scripts/agent-smart-check`, `scripts/agent-fix-loop`, PowerShell wrappers,
   `tools/supermeta-check/`, `tools/supermeta-fix/`, generated
   `.codex-bootstrap/checks.json`, and the `velocity-tools` sync managed set.
+- Extended generated smart-check lanes with `cost`, `tags`, `requires`, and
+  `timeoutSeconds` metadata so agents can select cheaper lanes and fail fast on
+  missing tools before subprocess launch.
 - Kept the generated `agent-nags` operations region stable across the
   260e1d8-to-contract-v2 hop so older helpers do not perform multiple region
   writes against the same file during that transition.
@@ -74,6 +77,12 @@ Use these buckets inside dated entries when they help:
 - Added focused verification lane selection and deterministic failure
   classification helpers for faster agent inner loops while keeping full checks
   as the handoff gate.
+- Added smart-check `--self-test`, `--fast-only`, `--tag`, and `--timeout`
+  controls, plus per-command timeout support.
+- Added fix-loop command timeouts, diagnostic-aware retries, and richer JSON
+  reports with attempt counts, evidence lines, diagnostics, and log paths.
+- Split velocity doc and check-policy generation from
+  `tools/bootstrap/bootstrap.py` into `tools/bootstrap/velocity.py`.
 
 ### Verification
 

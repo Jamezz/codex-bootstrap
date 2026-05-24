@@ -48,7 +48,46 @@ class PolicyLoadingTest(unittest.TestCase):
             self.assertEqual((), warnings)
             self.assertEqual("python-uv-cli", policy.template_id)
             self.assertEqual(("python-test", "full"), tuple(policy.lanes))
-            self.assertEqual((("uv", "run", "--no-editable", "pytest"),), policy.lanes["python-test"].commands)
+            self.assertEqual((("uv", "run", "--no-editable", "pytest"),), tuple(command.argv for command in policy.lanes["python-test"].commands))
+
+    def test_loads_lane_metadata_and_command_timeouts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-metadata-") as temp_dir:
+            root = Path(temp_dir)
+            write_json(
+                root / ".codex-bootstrap" / "checks.json",
+                {
+                    "schemaVersion": 1,
+                    "templateId": "python-uv-cli",
+                    "lanes": [
+                        {
+                            "id": "python-test",
+                            "description": "Python tests",
+                            "cost": "fast",
+                            "tags": ["test", "python"],
+                            "requires": ["uv"],
+                            "timeoutSeconds": 45,
+                            "triggers": {"paths": ["src/**/*.py"]},
+                            "commands": [
+                                {
+                                    "argv": ["uv", "run", "--no-editable", "pytest"],
+                                    "timeoutSeconds": 12,
+                                }
+                            ],
+                        },
+                        {"id": "full", "description": "Full check", "commands": [["./scripts/check"]]},
+                    ],
+                },
+            )
+
+            policy, warnings = check.load_effective_policy(root)
+            lane = policy.lanes["python-test"]
+
+            self.assertEqual((), warnings)
+            self.assertEqual("fast", lane.cost)
+            self.assertEqual(("test", "python"), lane.tags)
+            self.assertEqual(("uv",), lane.requires)
+            self.assertEqual(45, lane.timeout_seconds)
+            self.assertEqual(12, lane.commands[0].timeout_seconds)
 
     def test_merges_local_override_by_lane_id(self) -> None:
         with tempfile.TemporaryDirectory(prefix="smart-check-local-") as temp_dir:
@@ -76,7 +115,7 @@ class PolicyLoadingTest(unittest.TestCase):
             policy, warnings = check.load_effective_policy(root)
 
             self.assertEqual((), warnings)
-            self.assertEqual((("uv", "run", "--no-editable", "pytest", "tests/test_cli.py"),), policy.lanes["python-test"].commands)
+            self.assertEqual((("uv", "run", "--no-editable", "pytest", "tests/test_cli.py"),), tuple(command.argv for command in policy.lanes["python-test"].commands))
             self.assertEqual(("docs", "full", "python-test"), tuple(sorted(policy.lanes)))
 
     def test_invalid_local_override_warns_and_uses_generated_policy(self) -> None:
@@ -125,17 +164,25 @@ class LaneSelectionTest(unittest.TestCase):
                     lane_id="python-test",
                     description="Python tests",
                     triggers=check.CheckTriggers(paths=("src/**/*.py", "tests/**/*.py")),
-                    commands=(("uv", "run", "--no-editable", "pytest"),),
+                    commands=(check.CheckCommand(argv=("uv", "run", "--no-editable", "pytest"), timeout_seconds=None),),
                     escalates_to="full",
                     stop_on_failure=True,
+                    cost="fast",
+                    tags=("test",),
+                    requires=("uv",),
+                    timeout_seconds=None,
                 ),
                 "full": check.CheckLane(
                     lane_id="full",
                     description="Full check",
                     triggers=check.CheckTriggers(paths=()),
-                    commands=(("./scripts/check",),),
+                    commands=(check.CheckCommand(argv=("./scripts/check",), timeout_seconds=None),),
                     escalates_to=None,
                     stop_on_failure=True,
+                    cost="full",
+                    tags=("full",),
+                    requires=(),
+                    timeout_seconds=None,
                 ),
             },
         )
@@ -161,12 +208,28 @@ class LaneSelectionTest(unittest.TestCase):
         self.assertEqual(("full",), tuple(item.lane.lane_id for item in plan.items))
         self.assertEqual("forced full lane", plan.items[0].reason)
 
+    def test_fast_only_filters_out_non_fast_lanes(self) -> None:
+        policy = default_policy()
+
+        plan = check.select_lanes(policy, ("src/python_uv_cli/cli.py",), force_full=False, fast_only=True, tags=())
+
+        self.assertEqual(("python-test",), tuple(item.lane.lane_id for item in plan.items))
+
+    def test_tag_filter_selects_matching_lanes(self) -> None:
+        policy = default_policy()
+
+        plan = check.select_lanes(policy, ("src/python_uv_cli/cli.py",), force_full=False, fast_only=False, tags=("test",))
+
+        self.assertEqual(("python-test", "full"), tuple(item.lane.lane_id for item in plan.items))
+
 
 class GitChangedFilesTest(unittest.TestCase):
     def test_explicit_changed_files_bypass_git(self) -> None:
-        args = check.parse_args(["--changed", "src/app.py", "tests/test_app.py", "--plan-only"])
+        args = check.parse_args(["--changed", "src/app.py", "tests/test_app.py", "--plan-only", "--timeout", "9", "--tag", "test"])
 
         self.assertEqual(("src/app.py", "tests/test_app.py"), tuple(args.changed))
+        self.assertEqual(9, args.timeout)
+        self.assertEqual(("test",), tuple(args.tag))
 
     @unittest.skipIf(shutil.which("git") is None, "git is required")
     def test_detects_staged_unstaged_and_untracked_files(self) -> None:
@@ -237,6 +300,8 @@ class CliExecutionTest(unittest.TestCase):
             payload = json.loads(output.text())
             self.assertEqual(["python-test", "full"], [item["id"] for item in payload["plan"]])
             self.assertFalse(payload["executed"])
+            self.assertEqual("fast", payload["plan"][0]["cost"])
+            self.assertIn("test", payload["plan"][0]["tags"])
 
     def test_executes_commands_and_returns_first_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="smart-check-exec-") as temp_dir:
@@ -265,6 +330,81 @@ class CliExecutionTest(unittest.TestCase):
             self.assertEqual(7, exit_code)
             self.assertIn("python-test", output.text())
 
+    def test_missing_required_tool_fails_before_command_execution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-requires-") as temp_dir:
+            root = Path(temp_dir)
+            write_json(
+                root / ".codex-bootstrap" / "checks.json",
+                {
+                    "schemaVersion": 1,
+                    "templateId": "python-uv-cli",
+                    "lanes": [
+                        {
+                            "id": "python-test",
+                            "description": "Python tests",
+                            "triggers": {"paths": ["src/**/*.py"]},
+                            "requires": ["__missing_codex_tool__"],
+                            "commands": [["python3", "-c", "print('should not run')"]],
+                        },
+                        {"id": "full", "description": "Full", "commands": [["python3", "-c", "print('full')"]]},
+                    ],
+                },
+            )
+            output = check.CapturedOutput()
+
+            def fail_if_called(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> check.CommandResult:
+                raise AssertionError(f"command should not run: {command}")
+
+            exit_code = check.run_cli(
+                ["--changed", "src/app.py"],
+                cwd=root,
+                stdout=output,
+                command_runner=fail_if_called,
+            )
+
+            self.assertEqual(127, exit_code)
+            self.assertIn("missing required tool", output.text())
+
+    def test_command_timeout_returns_timeout_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-timeout-") as temp_dir:
+            root = Path(temp_dir)
+            result = check.run_command(
+                ["python3", "-c", "import time; time.sleep(2)"],
+                root,
+                timeout_seconds=0.1,
+            )
+
+            self.assertEqual(124, result.exit_code)
+            self.assertIn("timed out", result.output)
+
+    def test_self_test_reports_invalid_escalation_target(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-self-test-") as temp_dir:
+            root = Path(temp_dir)
+            write_json(
+                root / ".codex-bootstrap" / "checks.json",
+                {
+                    "schemaVersion": 1,
+                    "templateId": "python-uv-cli",
+                    "lanes": [
+                        {
+                            "id": "python-test",
+                            "description": "Python tests",
+                            "triggers": {"paths": ["src/**/*.py"]},
+                            "commands": [["python3", "-m", "unittest"]],
+                            "escalatesTo": "missing",
+                        },
+                        {"id": "full", "description": "Full", "commands": [["./scripts/check"]]},
+                    ],
+                },
+            )
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--self-test", "--json"], cwd=root, stdout=output)
+
+            self.assertEqual(2, exit_code)
+            payload = json.loads(output.text())
+            self.assertIn("unknown escalatesTo target missing", payload["errors"][0])
+
 
 def write_default_policy(root: Path) -> None:
     write_json(root / ".codex-bootstrap" / "checks.json", default_policy_json())
@@ -278,6 +418,9 @@ def default_policy_json() -> dict[str, object]:
             {
                 "id": "python-test",
                 "description": "Python tests",
+                "cost": "fast",
+                "tags": ["test", "python"],
+                "requires": ["uv"],
                 "triggers": {"paths": ["src/**/*.py", "tests/**/*.py"]},
                 "commands": [["uv", "run", "--no-editable", "pytest"]],
                 "escalatesTo": "full",
@@ -285,6 +428,8 @@ def default_policy_json() -> dict[str, object]:
             {
                 "id": "full",
                 "description": "Full check",
+                "cost": "full",
+                "tags": ["full"],
                 "commands": [["./scripts/check"]],
             },
         ],

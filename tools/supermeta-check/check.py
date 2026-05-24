@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -28,13 +29,23 @@ class CheckTriggers:
 
 
 @dataclass(frozen=True)
+class CheckCommand:
+    argv: tuple[str, ...]
+    timeout_seconds: float | None
+
+
+@dataclass(frozen=True)
 class CheckLane:
     lane_id: str
     description: str
     triggers: CheckTriggers
-    commands: tuple[tuple[str, ...], ...]
+    commands: tuple[CheckCommand, ...]
     escalates_to: str | None
     stop_on_failure: bool
+    cost: str = "standard"
+    tags: tuple[str, ...] = ()
+    requires: tuple[str, ...] = ()
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,10 @@ def parse_lane(raw: dict[str, Any], generated: bool) -> CheckLane:
         commands=parse_commands(commands_raw),
         escalates_to=optional_nullable_string(raw, "escalatesTo"),
         stop_on_failure=optional_bool(raw, "stopOnFailure", True),
+        cost=optional_string(raw, "cost") or "standard",
+        tags=tuple(require_string_list(raw, "tags", allow_missing=True)),
+        requires=tuple(require_string_list(raw, "requires", allow_missing=True)),
+        timeout_seconds=optional_positive_number(raw, "timeoutSeconds"),
     )
 
 
@@ -162,26 +177,48 @@ def merge_policy(generated: CheckPolicy, local: CheckPolicy) -> CheckPolicy:
             commands=override.commands if override.commands else base.commands,
             escalates_to=override.escalates_to if override.escalates_to is not None else base.escalates_to,
             stop_on_failure=override.stop_on_failure,
+            cost=override.cost if override.cost != "standard" or base.cost == "standard" else base.cost,
+            tags=override.tags if override.tags else base.tags,
+            requires=override.requires if override.requires else base.requires,
+            timeout_seconds=override.timeout_seconds if override.timeout_seconds is not None else base.timeout_seconds,
         )
     return CheckPolicy(schema_version=generated.schema_version, template_id=generated.template_id, lanes=lanes)
 
 
-def select_lanes(policy: CheckPolicy, changed_files: tuple[str, ...], force_full: bool) -> CheckPlan:
+def select_lanes(
+    policy: CheckPolicy,
+    changed_files: tuple[str, ...],
+    force_full: bool,
+    fast_only: bool = False,
+    tags: tuple[str, ...] = (),
+) -> CheckPlan:
     if force_full:
         return CheckPlan((PlanItem(require_lane(policy, "full"), "forced full lane"),))
     if not changed_files:
-        return CheckPlan((PlanItem(require_lane(policy, "full"), "no changed files; using full lane"),))
+        full_lane = require_lane(policy, "full")
+        if fast_only and full_lane.cost != "fast":
+            return CheckPlan(())
+        return CheckPlan((PlanItem(full_lane, "no changed files; using full lane"),))
     selected: list[PlanItem] = []
     seen: set[str] = set()
     for lane in policy.lanes.values():
         if lane.lane_id == "full":
             continue
+        if fast_only and lane.cost != "fast":
+            continue
+        if tags and not set(tags).intersection(lane.tags):
+            continue
         reason = match_reason(lane, changed_files)
         if reason:
             add_lane(policy, lane.lane_id, reason, selected, seen)
             if lane.escalates_to:
-                add_lane(policy, lane.escalates_to, f"escalated from {lane.lane_id}", selected, seen)
+                escalated_lane = require_lane(policy, lane.escalates_to)
+                if not fast_only or escalated_lane.cost == "fast":
+                    add_lane(policy, lane.escalates_to, f"escalated from {lane.lane_id}", selected, seen)
     if not selected:
+        full_lane = require_lane(policy, "full")
+        if fast_only and full_lane.cost != "fast":
+            return CheckPlan(())
         add_lane(policy, "full", "no lane matched changed files", selected, seen)
     return CheckPlan(tuple(selected))
 
@@ -275,13 +312,40 @@ def require_string_list(raw: dict[str, Any], key: str, allow_missing: bool = Fal
     return value
 
 
-def parse_commands(raw: list[Any]) -> tuple[tuple[str, ...], ...]:
-    commands: list[tuple[str, ...]] = []
+def optional_positive_number(raw: dict[str, Any], key: str) -> float | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise SmartCheckError(f"{key} must be a positive number")
+    return float(value)
+
+
+def parse_commands(raw: list[Any]) -> tuple[CheckCommand, ...]:
+    commands: list[CheckCommand] = []
     for index, command in enumerate(raw):
-        if not isinstance(command, list) or not all(isinstance(item, str) and item for item in command):
-            raise SmartCheckError(f"commands[{index}] must be an array of non-empty strings")
-        commands.append(tuple(command))
+        if isinstance(command, list):
+            commands.append(CheckCommand(argv=parse_argv(command, f"commands[{index}]"), timeout_seconds=None))
+            continue
+        if isinstance(command, dict):
+            raw_argv = command.get("argv")
+            if not isinstance(raw_argv, list):
+                raise SmartCheckError(f"commands[{index}].argv must be an array of non-empty strings")
+            commands.append(
+                CheckCommand(
+                    argv=parse_argv(raw_argv, f"commands[{index}].argv"),
+                    timeout_seconds=optional_positive_number(command, "timeoutSeconds"),
+                )
+            )
+            continue
+        raise SmartCheckError(f"commands[{index}] must be an array or object")
     return tuple(commands)
+
+
+def parse_argv(raw: list[Any], label: str) -> tuple[str, ...]:
+    if not raw or not all(isinstance(item, str) and item for item in raw):
+        raise SmartCheckError(f"{label} must be an array of non-empty strings")
+    return tuple(raw)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -291,6 +355,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--full", action="store_true")
+    parser.add_argument("--fast-only", action="store_true")
+    parser.add_argument("--tag", action="append", default=[])
+    parser.add_argument("--timeout", type=float, default=None)
+    parser.add_argument("--self-test", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -303,14 +371,33 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
         policy, warnings = load_effective_policy(root)
         for warning in warnings:
             print(f"agent-smart-check: {warning}", file=sys.stderr)
+        if args.self_test:
+            return print_self_test(policy, args.json, output, warnings)
         changed_files = tuple(args.changed) if args.changed else detect_changed_files(root, args.since)
-        plan = select_lanes(policy, changed_files, force_full=args.full)
+        plan = select_lanes(
+            policy,
+            changed_files,
+            force_full=args.full,
+            fast_only=args.fast_only,
+            tags=tuple(args.tag),
+        )
         results: list[CommandResult] = []
         exit_code = 0
         if not args.plan_only:
             for item in plan.items:
+                missing = missing_requirements(item.lane)
+                if missing:
+                    result = CommandResult(
+                        command=("requires", missing[0]),
+                        exit_code=127,
+                        output=f"agent-smart-check: missing required tool for {item.lane.lane_id}: {missing[0]}\n",
+                    )
+                    results.append(result)
+                    output.write(result.output)
+                    return print_result(plan, results, args.json, True, result.exit_code, output, warnings)
                 for command in item.lane.commands:
-                    result = runner(list(command), root)
+                    timeout_seconds = args.timeout or command.timeout_seconds or item.lane.timeout_seconds
+                    result = run_command_runner(runner, list(command.argv), root, timeout_seconds)
                     results.append(result)
                     if result.output:
                         output.write(result.output)
@@ -357,16 +444,91 @@ def detect_changed_files(root: Path, since: str) -> tuple[str, ...]:
     return tuple(changed)
 
 
-def run_command(command: list[str], cwd: Path) -> CommandResult:
-    completed = subprocess.run(
-        command,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-    )
-    return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
+def run_command(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> CommandResult:
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+        return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
+    except subprocess.TimeoutExpired as error:
+        output = timeout_output(error)
+        output += f"agent-smart-check: command timed out after {timeout_seconds:g}s: {' '.join(command)}\n"
+        return CommandResult(command=tuple(command), exit_code=124, output=output)
+
+
+def run_command_runner(runner, command: list[str], cwd: Path, timeout_seconds: float | None) -> CommandResult:
+    try:
+        return runner(command, cwd, timeout_seconds=timeout_seconds)
+    except TypeError:
+        return runner(command, cwd)
+
+
+def timeout_output(error: subprocess.TimeoutExpired) -> str:
+    output = error.output or ""
+    if isinstance(output, bytes):
+        output = output.decode(errors="replace")
+    return output
+
+
+def missing_requirements(lane: CheckLane) -> tuple[str, ...]:
+    return tuple(requirement for requirement in lane.requires if shutil.which(requirement) is None)
+
+
+def print_self_test(policy: CheckPolicy, as_json: bool, output, warnings: tuple[str, ...]) -> int:
+    errors = self_test_errors(policy)
+    if as_json:
+        output.write(
+            json.dumps(
+                {
+                    "schemaVersion": SCHEMA_VERSION,
+                    "ok": not errors,
+                    "errors": errors,
+                    "warnings": list(warnings),
+                    "lanes": [
+                        {
+                            "id": lane.lane_id,
+                            "cost": lane.cost,
+                            "tags": list(lane.tags),
+                            "requires": list(lane.requires),
+                            "commandCount": len(lane.commands),
+                        }
+                        for lane in policy.lanes.values()
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        return 0 if not errors else 2
+    if errors:
+        output.write("agent-smart-check: self-test failed\n")
+        for error in errors:
+            output.write(f"  {error}\n")
+        return 2
+    output.write("agent-smart-check: self-test passed\n")
+    return 0
+
+
+def self_test_errors(policy: CheckPolicy) -> list[str]:
+    errors: list[str] = []
+    if "full" not in policy.lanes:
+        errors.append("missing required full lane")
+    for lane in policy.lanes.values():
+        if not lane.commands:
+            errors.append(f"lane {lane.lane_id} has no commands")
+        if lane.escalates_to and lane.escalates_to not in policy.lanes:
+            errors.append(f"lane {lane.lane_id} references unknown escalatesTo target {lane.escalates_to}")
+        for index, command in enumerate(lane.commands):
+            if not command.argv:
+                errors.append(f"lane {lane.lane_id} command {index} has empty argv")
+    return errors
 
 
 def print_result(
@@ -386,7 +548,9 @@ def print_result(
         output.write(f"  reason: {item.reason}\n")
         output.write("  commands:\n")
         for command in item.lane.commands:
-            output.write(f"    {' '.join(command)}\n")
+            effective_timeout = command.timeout_seconds or item.lane.timeout_seconds
+            suffix = f" (timeout {effective_timeout:g}s)" if effective_timeout else ""
+            output.write(f"    {' '.join(command.argv)}{suffix}\n")
     return exit_code
 
 
@@ -407,7 +571,18 @@ def result_payload(
                 "id": item.lane.lane_id,
                 "description": item.lane.description,
                 "reason": item.reason,
-                "commands": [list(command) for command in item.lane.commands],
+                "cost": item.lane.cost,
+                "tags": list(item.lane.tags),
+                "requires": list(item.lane.requires),
+                "timeoutSeconds": item.lane.timeout_seconds,
+                "commands": [list(command.argv) for command in item.lane.commands],
+                "commandDetails": [
+                    {
+                        "argv": list(command.argv),
+                        "timeoutSeconds": command.timeout_seconds or item.lane.timeout_seconds,
+                    }
+                    for command in item.lane.commands
+                ],
             }
             for item in plan.items
         ],
