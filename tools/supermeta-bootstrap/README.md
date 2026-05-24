@@ -9,7 +9,14 @@ Use dry-run first:
 ./scripts/agent-bootstrap sync --dry-run
 ```
 
-When testing from a local Codex Bootstrap checkout, `--source-dir` records that checkout's current branch as the next `source.ref`. Use `--source-ref <ref>` to override it explicitly.
+When testing from a local Codex Bootstrap checkout, `--source-dir` records that checkout's current branch as the next `source.ref`. Use `--source-ref <ref>` to override it explicitly; for remote syncs, the override also selects the ref to fetch.
+
+If an older generated sync runner applied a beta source dir but left `.codex-bootstrap/sync.json` pointing at `main`, rerun the new helper with the branch override:
+
+```bash
+./scripts/agent-bootstrap sync --apply --allow-dirty --source-ref codex/branch-name
+./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-ref codex/branch-name
+```
 
 Apply when the plan has no conflicts:
 

@@ -829,6 +829,10 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Bootstrap sync plan:", dry_run.stdout)
             self.assertIn("template: python-uv-cli", dry_run.stdout)
             self.assertIn("candidate-ref: codex/source-dir-beta", dry_run.stdout)
+            self.assertIn(
+                f"follow-up-dry-run: ./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-dir {source_repo.resolve()} --source-ref codex/source-dir-beta",
+                dry_run.stdout,
+            )
 
             apply = run_checked(
                 [
@@ -842,6 +846,10 @@ class BootstrapSmokeTest(unittest.TestCase):
                 timeout=180,
             )
             self.assertIn("candidate-ref: codex/source-dir-beta", apply.stdout)
+            self.assertIn(
+                f"follow-up-dry-run: ./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-dir {source_repo.resolve()} --source-ref codex/source-dir-beta",
+                apply.stdout,
+            )
             sync_metadata = json.loads((checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8"))
             self.assertEqual("codex/source-dir-beta", sync_metadata["source"]["ref"])
 
@@ -1588,6 +1596,8 @@ def assert_generated_upstream_suggestion_contract(
         test_case.assertIn("Verification that should pass:", text)
     test_case.assertIn("read `.codex-bootstrap/sync.json`", agents)
     test_case.assertIn("./scripts/agent-bootstrap sync --dry-run", agents)
+    test_case.assertIn("./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-ref <ref>", readme)
+    test_case.assertIn("repairs stale metadata on apply", agents)
 
 
 def assert_generated_nag_docs(

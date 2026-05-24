@@ -821,7 +821,14 @@ Preview managed updates first:
 ./scripts/agent-bootstrap sync --dry-run
 ```
 
-When testing from a local Codex Bootstrap checkout, `--source-dir` records that checkout's current branch as the next `source.ref`. Use `--source-ref <ref>` to override it explicitly.
+When testing from a local Codex Bootstrap checkout, `--source-dir` records that checkout's current branch as the next `source.ref`. Use `--source-ref <ref>` to override it explicitly; for remote syncs, the override also selects the ref to fetch.
+
+If an older generated sync runner applied a beta source dir but left `.codex-bootstrap/sync.json` pointing at `main`, rerun the new helper with the branch override:
+
+```bash
+./scripts/agent-bootstrap sync --apply --allow-dirty --source-ref <ref>
+./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-ref <ref>
+```
 
 Apply only when the plan has no conflicts:
 
@@ -840,7 +847,7 @@ def generated_agent_sync_region(check_command: str) -> str:
 ## Bootstrap Sync
 
 - Run `./scripts/agent-bootstrap sync --dry-run` before applying bootstrap updates.
-- For local beta syncs, pair `--source-dir` with the branch being tested or pass `--source-ref <ref>` explicitly.
+- For local beta syncs, pair `--source-dir` with the branch being tested or pass `--source-ref <ref>` explicitly; the override selects the remote ref and repairs stale metadata on apply.
 - Inspect conflicts instead of forcing over local edits.
 - Apply managed updates with `./scripts/agent-bootstrap sync --apply` only when the plan is clean.
 - New upstream managed sets are enabled unless the set is marked for manual opt-in or its set id is listed in `.codex-bootstrap/sync.json` `optOut`.

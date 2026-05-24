@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -712,6 +714,64 @@ class SyncApplyTest(unittest.TestCase):
             self.assertEqual("codex/velocity-toolkit", persisted.source_ref)
             self.assertEqual("abcdef0123456789abcdef0123456789abcdef01", persisted.source_commit)
 
+    def test_cli_source_ref_override_uses_override_for_remote_candidate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-remote-source-ref-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            source = Path(temp_dir) / "source"
+            source.mkdir()
+            write_fake_bootstrap_source(source, "main\n")
+            bootstrap_sync.run_checked(["git", "init"], cwd=source)
+            bootstrap_sync.run_checked(["git", "checkout", "-b", "main"], cwd=source)
+            commit_project_snapshot(source)
+            main_commit = bootstrap_sync.git_output(["git", "rev-parse", "HEAD"], cwd=source, fallback="")
+
+            bootstrap_sync.run_checked(["git", "checkout", "-b", "codex/velocity-toolkit"], cwd=source)
+            write_fake_bootstrap_source(source, "beta\n")
+            commit_project_snapshot(source)
+            beta_commit = bootstrap_sync.git_output(["git", "rev-parse", "HEAD"], cwd=source, fallback="")
+            bootstrap_sync.run_checked(["git", "checkout", "main"], cwd=source)
+
+            write_text(root / "scripts" / "agent-bootstrap", "main\n")
+            metadata_for(
+                root,
+                source_repository=str(source),
+                source_ref="main",
+                source_commit=main_commit,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                    }
+                },
+                managed_regions={},
+            )
+            commit_project_snapshot(root)
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                exit_code = bootstrap_sync.main(
+                    [
+                        "sync",
+                        "--apply",
+                        "--project-root",
+                        str(root),
+                        "--source-ref",
+                        "codex/velocity-toolkit",
+                    ]
+                )
+
+            self.assertEqual(0, exit_code)
+            self.assertIn(f"candidate-commit: {beta_commit}", output.getvalue())
+            self.assertIn("candidate-ref: codex/velocity-toolkit", output.getvalue())
+            self.assertIn(
+                "follow-up-dry-run: ./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-ref codex/velocity-toolkit",
+                output.getvalue(),
+            )
+            self.assertEqual("beta\n", (root / "scripts" / "agent-bootstrap").read_text(encoding="utf-8"))
+            persisted = bootstrap_sync.load_sync_metadata(root)
+            self.assertEqual("codex/velocity-toolkit", persisted.source_ref)
+            self.assertEqual(beta_commit, persisted.source_commit)
+
     def test_refuses_apply_with_conflicts(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bootstrap-sync-cli-conflict-") as temp_dir:
             root = Path(temp_dir) / "project"
@@ -904,6 +964,23 @@ def write_text(path: Path, value: str) -> None:
     path.write_text(value, encoding="utf-8")
 
 
+def write_fake_bootstrap_source(root: Path, generated_script_text: str) -> None:
+    write_text(
+        root / "bootstrap",
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "mkdir -p scripts\n"
+        "cat > scripts/agent-bootstrap <<'BOOTSTRAP_EOF'\n"
+        f"{generated_script_text}"
+        "BOOTSTRAP_EOF\n",
+    )
+    (root / "bootstrap").chmod(0o755)
+    write_json(
+        root / "templates" / "python-uv-cli" / "bootstrap-template.json",
+        manifest_with_sync_contract(files=["scripts/agent-bootstrap"]),
+    )
+
+
 def file_mode(path: Path) -> int:
     return path.stat().st_mode & 0o777
 
@@ -933,15 +1010,18 @@ def metadata_for(
     managed_files: dict[str, dict[str, str]],
     managed_regions: dict[str, dict[str, str]],
     managed_sets: tuple[str, ...] = ("agent-scripts", "generated-docs"),
+    source_repository: str = "file:///tmp/codex-bootstrap",
+    source_ref: str = "main",
+    source_commit: str = "0123456789abcdef0123456789abcdef01234567",
 ) -> bootstrap_sync.SyncMetadata:
     write_json(
         root / ".codex-bootstrap" / "sync.json",
         {
             "schemaVersion": 1,
             "source": {
-                "repository": "file:///tmp/codex-bootstrap",
-                "ref": "main",
-                "commit": "0123456789abcdef0123456789abcdef01234567",
+                "repository": source_repository,
+                "ref": source_ref,
+                "commit": source_commit,
             },
             "template": {"id": "python-uv-cli", "contractVersion": 1},
             "identity": {"projectName": "sample-app"},

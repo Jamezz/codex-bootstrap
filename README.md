@@ -120,6 +120,15 @@ For local beta testing from a checkout or worktree, keep the source ref aligned 
 ./scripts/agent-bootstrap sync --dry-run --source-dir /path/to/codex-bootstrap --source-ref codex/branch-name
 ```
 
+If an older generated sync runner applied a beta source dir but left
+`.codex-bootstrap/sync.json` pointing at `main`, rerun the new helper with the
+branch override to repair metadata before trusting plain dry-run or nag output:
+
+```bash
+./scripts/agent-bootstrap sync --apply --allow-dirty --source-ref codex/branch-name
+./scripts/agent-bootstrap sync --dry-run --allow-dirty --source-ref codex/branch-name
+```
+
 Apply when the plan has no conflicts:
 
 ```bash

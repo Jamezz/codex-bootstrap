@@ -55,6 +55,9 @@ Use these buckets inside dated entries when they help:
   cumulatively, and records enabled sets in sync reports and metadata.
 - Bootstrap sync now records the actual source branch when applying from
   `--source-dir`, and accepts `--source-ref` for explicit beta-branch syncs.
+- `--source-ref` now selects the remote ref to fetch instead of only relabeling
+  metadata, and sync plans print a follow-up dry-run command when the candidate
+  ref differs from the recorded source ref.
 - Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
   sync contract is version 2 with `language-checks` marked manual opt-in for
   existing repos.

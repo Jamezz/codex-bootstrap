@@ -7,6 +7,7 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -604,17 +605,20 @@ def run_sync_command(args: argparse.Namespace) -> int:
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
         explicit_source_ref = getattr(args, "source_ref", None)
-        if args.candidate_root is not None:
-            candidate_root = args.candidate_root.resolve()
+        source_dir = args.source_dir.resolve() if args.source_dir else None
+        candidate_root_arg = args.candidate_root.resolve() if args.candidate_root is not None else None
+        if candidate_root_arg is not None:
+            candidate_root = candidate_root_arg
             candidate_commit = args.candidate_commit
             candidate_ref = explicit_source_ref
             contract = load_sync_contract(candidate_root, metadata.template_id)
         else:
             source_root, candidate_commit, detected_ref, temp_dir = prepare_candidate_from_source(
                 metadata,
-                args.source_dir.resolve() if args.source_dir else None,
+                source_dir,
+                explicit_source_ref,
             )
-            candidate_ref = explicit_source_ref or detected_ref
+            candidate_ref = detected_ref
             contract = load_sync_contract(source_root, metadata.template_id)
             candidate_root = regenerate_candidate_project(source_root, metadata)
         git_status = getattr(args, "git_status_override", None)
@@ -624,7 +628,20 @@ def run_sync_command(args: argparse.Namespace) -> int:
             print("Bootstrap sync refused: worktree has local changes; pass --allow-dirty to continue.")
             return 1
         plan = plan_managed_updates(root, candidate_root, metadata, contract, git_status=git_status)
-        print_sync_plan(metadata, contract, plan, candidate_commit, candidate_ref)
+        print_sync_plan(
+            metadata,
+            contract,
+            plan,
+            candidate_commit,
+            candidate_ref,
+            source_override_followup(
+                metadata,
+                candidate_ref,
+                source_dir,
+                candidate_root_arg,
+                candidate_commit,
+            ),
+        )
         if plan.conflicts:
             return 1
         if args.apply:
@@ -641,6 +658,7 @@ def print_sync_plan(
     plan: SyncPlan,
     candidate_commit: str,
     candidate_ref: str | None = None,
+    followup_command: str | None = None,
 ) -> None:
     print("Bootstrap sync plan:")
     print(f"  template: {metadata.template_id}")
@@ -661,6 +679,26 @@ def print_sync_plan(
         print(f"  migration-note: {note}")
     for command in plan.verification_commands:
         print(f"  verify: {command}")
+    if followup_command:
+        print(f"  follow-up-dry-run: {followup_command}")
+
+
+def source_override_followup(
+    metadata: SyncMetadata,
+    candidate_ref: str | None,
+    source_dir: Path | None,
+    candidate_root: Path | None,
+    candidate_commit: str,
+) -> str | None:
+    if not candidate_ref or candidate_ref == metadata.source_ref:
+        return None
+    command = ["./scripts/agent-bootstrap", "sync", "--dry-run", "--allow-dirty"]
+    if source_dir is not None:
+        command.extend(["--source-dir", str(source_dir)])
+    if candidate_root is not None:
+        command.extend(["--candidate-root", str(candidate_root), "--candidate-commit", candidate_commit])
+    command.extend(["--source-ref", candidate_ref])
+    return shlex.join(command)
 
 
 def bootstrap_args(metadata: SyncMetadata) -> list[str]:
@@ -684,21 +722,28 @@ def bootstrap_args(metadata: SyncMetadata) -> list[str]:
 
 
 def prepare_candidate_from_source(
-    metadata: SyncMetadata, source_dir: Path | None
+    metadata: SyncMetadata,
+    source_dir: Path | None,
+    source_ref_override: str | None = None,
 ) -> tuple[Path, str, str, tempfile.TemporaryDirectory[str] | None]:
     temp_dir = tempfile.TemporaryDirectory(prefix="codex-bootstrap-sync-")
     checkout = Path(temp_dir.name) / "source"
     if source_dir is not None:
         shutil.copytree(source_dir, checkout, ignore=shutil.ignore_patterns(".git"))
         commit = git_output(["git", "rev-parse", "HEAD"], cwd=source_dir, fallback="local-source")
-        source_ref = git_output(["git", "branch", "--show-current"], cwd=source_dir, fallback=metadata.source_ref)
+        source_ref = source_ref_override or git_output(
+            ["git", "branch", "--show-current"],
+            cwd=source_dir,
+            fallback=metadata.source_ref,
+        )
         return checkout, commit, source_ref, temp_dir
     run_checked(["git", "clone", "--depth", "1", metadata.source_repository, str(checkout)], cwd=Path.cwd())
-    if run_unchecked(["git", "-C", str(checkout), "checkout", "--detach", metadata.source_ref]).returncode != 0:
-        run_checked(["git", "-C", str(checkout), "fetch", "--depth", "1", "origin", metadata.source_ref], cwd=Path.cwd())
+    source_ref = source_ref_override or metadata.source_ref
+    if run_unchecked(["git", "-C", str(checkout), "checkout", "--detach", source_ref]).returncode != 0:
+        run_checked(["git", "-C", str(checkout), "fetch", "--depth", "1", "origin", source_ref], cwd=Path.cwd())
         run_checked(["git", "-C", str(checkout), "checkout", "--detach", "FETCH_HEAD"], cwd=Path.cwd())
     commit = git_output(["git", "rev-parse", "HEAD"], cwd=checkout, fallback="unknown")
-    return checkout, commit, metadata.source_ref, temp_dir
+    return checkout, commit, source_ref, temp_dir
 
 
 def regenerate_candidate_project(source_root: Path, metadata: SyncMetadata) -> Path:
