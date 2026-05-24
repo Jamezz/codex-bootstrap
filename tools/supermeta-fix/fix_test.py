@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -60,6 +61,39 @@ class FixLoopCliTest(unittest.TestCase):
             exit_code = fix.run_cli([], cwd=Path(temp_dir), stdout=output)
 
             self.assertEqual(2, exit_code)
+
+
+class FixLoopDiagnosticsTest(unittest.TestCase):
+    def test_json_output_reports_classification(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-json-") as temp_dir:
+            root = Path(temp_dir)
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(
+                ["--json", "--", "python3", "-c", "import sys; print('address already in use'); sys.exit(4)"],
+                cwd=root,
+                stdout=output,
+            )
+
+            self.assertEqual(4, exit_code)
+            payload = json.loads(output.text())
+            self.assertEqual("port-busy", payload["classification"]["id"])
+            self.assertEqual(4, payload["exitCode"])
+
+    def test_read_only_diagnostic_failure_does_not_replace_child_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-diag-") as temp_dir:
+            root = Path(temp_dir)
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(
+                ["--run-diagnostics", "--", "python3", "-c", "import sys; print('address already in use'); sys.exit(4)"],
+                cwd=root,
+                stdout=output,
+                diagnostic_runner=lambda command, cwd: fix.CommandResult(tuple(command), 99, "diagnostic failed"),
+            )
+
+            self.assertEqual(4, exit_code)
+            self.assertIn("diagnostic failed", output.text())
 
 
 if __name__ == "__main__":

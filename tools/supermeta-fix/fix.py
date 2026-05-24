@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -115,22 +116,43 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_cli(argv: list[str], cwd: Path | None = None, stdout=None) -> int:
+def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_runner=None) -> int:
     args = parse_args(argv)
     root = (cwd or Path.cwd()).resolve()
     output = stdout or sys.stdout
     child_command = tuple(args.child_command[1:] if args.child_command[:1] == ["--"] else args.child_command)
     if not child_command:
-        print("agent-fix-loop: child command is required after --", file=sys.stderr)
+        error_output = output if stdout is not None else sys.stderr
+        print("agent-fix-loop: child command is required after --", file=error_output)
         return 2
-    result = run_child(child_command, root)
+    result = run_with_attempts(child_command, root, max(args.max_attempts, 1))
     write_last_log(root, result.output)
     if result.exit_code == 0:
-        output.write("agent-fix-loop: command passed\n")
+        if args.json:
+            output.write(json.dumps(success_payload(result), indent=2, sort_keys=True) + "\n")
+        else:
+            output.write("agent-fix-loop: command passed\n")
         return 0
     classification = classify_failure(result.output)
-    print_classification(classification, (), output)
+    diagnostics = maybe_run_diagnostics(root, classification, args.run_diagnostics, diagnostic_runner or run_child)
+    if args.json:
+        output.write(json.dumps(failure_payload(result, classification, diagnostics), indent=2, sort_keys=True) + "\n")
+    else:
+        print_classification(classification, diagnostics, output)
     return result.exit_code
+
+
+def run_with_attempts(command: tuple[str, ...], cwd: Path, max_attempts: int) -> CommandResult:
+    outputs: list[str] = []
+    result = CommandResult(command=command, exit_code=1, output="")
+    for attempt in range(1, max_attempts + 1):
+        result = run_child(command, cwd)
+        outputs.append(result.output)
+        if result.exit_code == 0:
+            break
+        if attempt < max_attempts:
+            outputs.append(f"\nagent-fix-loop: retrying command after failed attempt {attempt}\n")
+    return CommandResult(command=result.command, exit_code=result.exit_code, output="".join(outputs))
 
 
 def run_child(command: tuple[str, ...] | list[str], cwd: Path) -> CommandResult:
@@ -152,6 +174,15 @@ def write_last_log(root: Path, output: str) -> Path:
     return destination
 
 
+def maybe_run_diagnostics(root: Path, classification: FailureClassification, enabled: bool, runner) -> tuple[CommandResult, ...]:
+    if not enabled:
+        return ()
+    results: list[CommandResult] = []
+    for command in classification.diagnostics:
+        results.append(runner(command, root))
+    return tuple(results)
+
+
 def print_classification(classification: FailureClassification, diagnostics: tuple[CommandResult, ...], output) -> None:
     output.write(f"agent-fix-loop: {classification.classification_id}\n")
     output.write(f"  {classification.summary}\n")
@@ -162,6 +193,41 @@ def print_classification(classification: FailureClassification, diagnostics: tup
         output.write(f"  diagnostic {' '.join(diagnostic.command)} exited {diagnostic.exit_code}\n")
         if diagnostic.output:
             output.write(diagnostic.output)
+
+
+def success_payload(result: CommandResult) -> dict[str, object]:
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "command": list(result.command),
+        "exitCode": result.exit_code,
+        "logPath": str(LAST_LOG),
+    }
+
+
+def failure_payload(
+    result: CommandResult,
+    classification: FailureClassification,
+    diagnostics: tuple[CommandResult, ...],
+) -> dict[str, object]:
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "command": list(result.command),
+        "exitCode": result.exit_code,
+        "logPath": str(LAST_LOG),
+        "classification": {
+            "id": classification.classification_id,
+            "summary": classification.summary,
+            "nextActions": list(classification.next_actions),
+        },
+        "diagnostics": [
+            {
+                "command": list(diagnostic.command),
+                "exitCode": diagnostic.exit_code,
+                "output": diagnostic.output,
+            }
+            for diagnostic in diagnostics
+        ],
+    }
 
 
 def main() -> int:
