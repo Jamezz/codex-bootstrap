@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import argparse
 import fnmatch
 import json
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,6 +53,24 @@ class PlanItem:
 @dataclass(frozen=True)
 class CheckPlan:
     items: tuple[PlanItem, ...]
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    command: tuple[str, ...]
+    exit_code: int
+    output: str
+
+
+class CapturedOutput:
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+
+    def write(self, text: str) -> None:
+        self.parts.append(text)
+
+    def text(self) -> str:
+        return "".join(self.parts)
 
 
 def load_effective_policy(root: Path) -> tuple[CheckPolicy, tuple[str, ...]]:
@@ -158,9 +179,17 @@ def match_reason(lane: CheckLane, changed_files: tuple[str, ...]) -> str | None:
     for changed_file in changed_files:
         normalized = changed_file.replace("\\", "/")
         for pattern in lane.triggers.paths:
-            if fnmatch.fnmatch(normalized, pattern):
+            if matches_path_pattern(normalized, pattern):
                 return f"matched {normalized} with {pattern}"
     return None
+
+
+def matches_path_pattern(path: str, pattern: str) -> bool:
+    if fnmatch.fnmatch(path, pattern):
+        return True
+    if "/**/" in pattern:
+        return fnmatch.fnmatch(path, pattern.replace("/**/", "/"))
+    return False
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -228,3 +257,137 @@ def parse_commands(raw: list[Any]) -> tuple[tuple[str, ...], ...]:
             raise SmartCheckError(f"commands[{index}] must be an array of non-empty strings")
         commands.append(tuple(command))
     return tuple(commands)
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run focused Codex Bootstrap verification lanes.")
+    parser.add_argument("--since", default="")
+    parser.add_argument("--changed", nargs="*", default=[])
+    parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--full", action="store_true")
+    return parser.parse_args(argv)
+
+
+def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runner=None) -> int:
+    args = parse_args(argv)
+    root = (cwd or Path.cwd()).resolve()
+    output = stdout or sys.stdout
+    runner = command_runner or run_command
+    try:
+        policy, warnings = load_effective_policy(root)
+        for warning in warnings:
+            print(f"agent-smart-check: {warning}", file=sys.stderr)
+        changed_files = tuple(args.changed) if args.changed else detect_changed_files(root, args.since)
+        plan = select_lanes(policy, changed_files, force_full=args.full)
+        results: list[CommandResult] = []
+        exit_code = 0
+        if not args.plan_only:
+            for item in plan.items:
+                for command in item.lane.commands:
+                    result = runner(list(command), root)
+                    results.append(result)
+                    if result.output:
+                        output.write(result.output)
+                    if result.exit_code != 0:
+                        exit_code = result.exit_code
+                        if item.lane.stop_on_failure:
+                            return print_result(plan, results, args.json, True, exit_code, output)
+        return print_result(plan, results, args.json, not args.plan_only, exit_code, output)
+    except SmartCheckError as error:
+        print(f"agent-smart-check: {error}", file=sys.stderr)
+        return 2
+
+
+def detect_changed_files(root: Path, since: str) -> tuple[str, ...]:
+    if since:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", since, "--"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return tuple(line for line in result.stdout.splitlines() if line)
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1"],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if status.returncode != 0:
+        return ()
+    changed: list[str] = []
+    for line in status.stdout.splitlines():
+        if not line:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        changed.append(path)
+    return tuple(changed)
+
+
+def run_command(command: list[str], cwd: Path) -> CommandResult:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
+
+
+def print_result(
+    plan: CheckPlan,
+    results: list[CommandResult],
+    as_json: bool,
+    executed: bool,
+    exit_code: int,
+    output,
+) -> int:
+    if as_json:
+        output.write(json.dumps(result_payload(plan, results, executed, exit_code), indent=2, sort_keys=True) + "\n")
+        return exit_code
+    for item in plan.items:
+        output.write(f"agent-smart-check: selected {item.lane.lane_id}\n")
+        output.write(f"  reason: {item.reason}\n")
+        output.write("  commands:\n")
+        for command in item.lane.commands:
+            output.write(f"    {' '.join(command)}\n")
+    return exit_code
+
+
+def result_payload(plan: CheckPlan, results: list[CommandResult], executed: bool, exit_code: int) -> dict[str, Any]:
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "executed": executed,
+        "exitCode": exit_code,
+        "plan": [
+            {
+                "id": item.lane.lane_id,
+                "description": item.lane.description,
+                "reason": item.reason,
+                "commands": [list(command) for command in item.lane.commands],
+            }
+            for item in plan.items
+        ],
+        "results": [
+            {"command": list(result.command), "exitCode": result.exit_code}
+            for result in results
+        ],
+    }
+
+
+def main() -> int:
+    return run_cli(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

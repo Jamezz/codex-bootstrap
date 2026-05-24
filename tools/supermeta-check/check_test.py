@@ -137,6 +137,71 @@ class LaneSelectionTest(unittest.TestCase):
         self.assertEqual("forced full lane", plan.items[0].reason)
 
 
+class GitChangedFilesTest(unittest.TestCase):
+    def test_explicit_changed_files_bypass_git(self) -> None:
+        args = check.parse_args(["--changed", "src/app.py", "tests/test_app.py", "--plan-only"])
+
+        self.assertEqual(("src/app.py", "tests/test_app.py"), tuple(args.changed))
+
+
+class CliExecutionTest(unittest.TestCase):
+    def test_plan_only_prints_selected_lanes(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-cli-") as temp_dir:
+            root = Path(temp_dir)
+            write_default_policy(root)
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--changed", "src/python_uv_cli/cli.py", "--plan-only"], cwd=root, stdout=output)
+
+            self.assertEqual(0, exit_code)
+            self.assertIn("agent-smart-check: selected python-test", output.text())
+            self.assertIn("uv run --no-editable pytest", output.text())
+
+    def test_json_plan_only_outputs_machine_readable_plan(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-json-") as temp_dir:
+            root = Path(temp_dir)
+            write_default_policy(root)
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(
+                ["--changed", "src/python_uv_cli/cli.py", "--plan-only", "--json"],
+                cwd=root,
+                stdout=output,
+            )
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(output.text())
+            self.assertEqual(["python-test", "full"], [item["id"] for item in payload["plan"]])
+            self.assertFalse(payload["executed"])
+
+    def test_executes_commands_and_returns_first_failure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-exec-") as temp_dir:
+            root = Path(temp_dir)
+            write_json(
+                root / ".codex-bootstrap" / "checks.json",
+                {
+                    "schemaVersion": 1,
+                    "templateId": "python-uv-cli",
+                    "lanes": [
+                        {
+                            "id": "python-test",
+                            "description": "Python tests",
+                            "triggers": {"paths": ["src/**/*.py"]},
+                            "commands": [["python3", "-c", "import sys; sys.exit(7)"]],
+                            "stopOnFailure": True,
+                        },
+                        {"id": "full", "description": "Full", "commands": [["python3", "-c", "print('full')"]]},
+                    ],
+                },
+            )
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--changed", "src/app.py"], cwd=root, stdout=output)
+
+            self.assertEqual(7, exit_code)
+            self.assertIn("python-test", output.text())
+
+
 def write_default_policy(root: Path) -> None:
     write_json(root / ".codex-bootstrap" / "checks.json", default_policy_json())
 
