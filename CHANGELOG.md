@@ -53,6 +53,8 @@ Use these buckets inside dated entries when they help:
   out or marked manual opt-in, appends missing generated doc regions/files
   during that migration, applies multiple same-file region changes
   cumulatively, and records enabled sets in sync reports and metadata.
+- Bootstrap sync now records the actual source branch when applying from
+  `--source-dir`, and accepts `--source-ref` for explicit beta-branch syncs.
 - Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
   sync contract is version 2 with `language-checks` marked manual opt-in for
   existing repos.
@@ -83,6 +85,8 @@ Use these buckets inside dated entries when they help:
   reports with attempt counts, evidence lines, diagnostics, and log paths.
 - Split velocity doc and check-policy generation from
   `tools/bootstrap/bootstrap.py` into `tools/bootstrap/velocity.py`.
+- Made `tools/supermeta-check` and `tools/supermeta-fix` importable so root
+  `python3 -m unittest discover -s tools -p '*_test.py'` includes their tests.
 
 ### Verification
 

@@ -798,6 +798,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             checkout = temp_root / "sample-app"
             copy_bootstrap_checkout(source_repo)
             initialize_source_repo(source_repo)
+            run_checked(["git", "checkout", "-b", "codex/source-dir-beta"], cwd=source_repo)
             copy_bootstrap_checkout(checkout)
             initialize_fake_origin(checkout)
 
@@ -827,6 +828,22 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             self.assertIn("Bootstrap sync plan:", dry_run.stdout)
             self.assertIn("template: python-uv-cli", dry_run.stdout)
+            self.assertIn("candidate-ref: codex/source-dir-beta", dry_run.stdout)
+
+            apply = run_checked(
+                [
+                    "./scripts/agent-bootstrap",
+                    "sync",
+                    "--apply",
+                    "--source-dir",
+                    str(source_repo),
+                ],
+                cwd=checkout,
+                timeout=180,
+            )
+            self.assertIn("candidate-ref: codex/source-dir-beta", apply.stdout)
+            sync_metadata = json.loads((checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8"))
+            self.assertEqual("codex/source-dir-beta", sync_metadata["source"]["ref"])
 
             agent_task = checkout / "scripts" / "agent-task"
             agent_task.write_text(
@@ -1590,7 +1607,9 @@ def assert_velocity_manifest_contract(test_case: unittest.TestCase, manifest: Te
     test_case.assertIn("velocity-tools", manifest.sync_contract.managed_sets)
     test_case.assertIn("scripts/agent-smart-check", manifest.sync_contract.managed_files)
     test_case.assertIn("scripts/agent-fix-loop", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-check/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-check/check.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-fix/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/fix.py", manifest.sync_contract.managed_files)
     test_case.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
     test_case.assertIn("README.md:generated-docs/velocity-tools", manifest.sync_contract.managed_regions)

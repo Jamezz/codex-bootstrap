@@ -670,6 +670,48 @@ class SyncApplyTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
 
+    def test_cli_apply_records_explicit_source_ref(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-source-ref-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "same\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "same\n")
+            metadata_for(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                    }
+                },
+                managed_regions={},
+            )
+            write_json(
+                candidate / "templates" / "python-uv-cli" / "bootstrap-template.json",
+                manifest_with_sync_contract(files=["scripts/agent-bootstrap"]),
+            )
+            commit_project_snapshot(root)
+
+            exit_code = bootstrap_sync.main(
+                [
+                    "sync",
+                    "--apply",
+                    "--project-root",
+                    str(root),
+                    "--candidate-root",
+                    str(candidate),
+                    "--candidate-commit",
+                    "abcdef0123456789abcdef0123456789abcdef01",
+                    "--source-ref",
+                    "codex/velocity-toolkit",
+                ]
+            )
+
+            self.assertEqual(0, exit_code)
+            persisted = bootstrap_sync.load_sync_metadata(root)
+            self.assertEqual("codex/velocity-toolkit", persisted.source_ref)
+            self.assertEqual("abcdef0123456789abcdef0123456789abcdef01", persisted.source_commit)
+
     def test_refuses_apply_with_conflicts(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bootstrap-sync-cli-conflict-") as temp_dir:
             root = Path(temp_dir) / "project"
@@ -818,6 +860,38 @@ class CandidateRegenerationTest(unittest.TestCase):
 
         self.assertIn("tools/supermeta-bootstrap/bootstrap_sync.py", wrapper)
         self.assertIn("Invoke-PythonChecked", wrapper)
+
+    def test_source_dir_candidate_reports_checked_out_branch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-source-dir-ref-") as temp_dir:
+            source = Path(temp_dir) / "source"
+            source.mkdir()
+            write_text(source / "bootstrap", "#!/usr/bin/env bash\n")
+            bootstrap_sync.run_checked(["git", "init"], cwd=source)
+            bootstrap_sync.run_checked(["git", "checkout", "-b", "codex/velocity-toolkit"], cwd=source)
+            bootstrap_sync.run_checked(["git", "add", "."], cwd=source)
+            bootstrap_sync.run_checked(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Codex Bootstrap Test",
+                    "-c",
+                    "user.email=codex-bootstrap@example.invalid",
+                    "commit",
+                    "-m",
+                    "snapshot",
+                ],
+                cwd=source,
+            )
+            metadata = metadata_for(Path(temp_dir) / "project", managed_files={}, managed_regions={})
+
+            _checkout, _commit, source_ref, temp_checkout = bootstrap_sync.prepare_candidate_from_source(
+                metadata,
+                source,
+            )
+            try:
+                self.assertEqual("codex/velocity-toolkit", source_ref)
+            finally:
+                temp_checkout.cleanup()
 
 
 def write_json(path: Path, payload: dict[str, object]) -> None:

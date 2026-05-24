@@ -114,6 +114,12 @@ Preview managed updates:
 ./scripts/agent-bootstrap sync --dry-run
 ```
 
+For local beta testing from a checkout or worktree, keep the source ref aligned with the branch being tested:
+
+```bash
+./scripts/agent-bootstrap sync --dry-run --source-dir /path/to/codex-bootstrap --source-ref codex/branch-name
+```
+
 Apply when the plan has no conflicts:
 
 ```bash

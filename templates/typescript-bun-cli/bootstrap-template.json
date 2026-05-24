@@ -238,6 +238,10 @@
             "mode": "whole-file"
           },
           {
+            "path": "tools/supermeta-check/__init__.py",
+            "mode": "whole-file"
+          },
+          {
             "path": "tools/supermeta-check/check.py",
             "mode": "whole-file"
           },
@@ -247,6 +251,10 @@
           },
           {
             "path": "tools/supermeta-check/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/__init__.py",
             "mode": "whole-file"
           },
           {

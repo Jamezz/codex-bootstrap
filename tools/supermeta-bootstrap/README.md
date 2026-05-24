@@ -9,6 +9,8 @@ Use dry-run first:
 ./scripts/agent-bootstrap sync --dry-run
 ```
 
+When testing from a local Codex Bootstrap checkout, `--source-dir` records that checkout's current branch as the next `source.ref`. Use `--source-ref <ref>` to override it explicitly.
+
 Apply when the plan has no conflicts:
 
 ```bash
