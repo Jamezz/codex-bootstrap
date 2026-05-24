@@ -92,6 +92,13 @@ def classify_failure(output: str) -> FailureClassification:
             ("Inspect task processes and recent logs before retrying.", "./scripts/agent-task ps"),
             (("./scripts/agent-task", "ps"),),
         )
+    if "waiting for" in lowered and "lock" in lowered or "lock contention" in lowered or "could not acquire" in lowered:
+        return FailureClassification(
+            "lock-contention",
+            "A local coordination or build lock is busy.",
+            ("Inspect running processes before retrying.", "./scripts/agent-task ps"),
+            (("./scripts/agent-task", "ps"),),
+        )
     if ("bootstrap sync" in lowered and "conflict" in lowered) or ("managed region" in lowered and "conflict" in lowered):
         return FailureClassification(
             "sync-conflict",
@@ -126,7 +133,11 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, diagnostic_ru
         print("agent-fix-loop: child command is required after --", file=error_output)
         return 2
     result = run_with_attempts(child_command, root, max(args.max_attempts, 1))
-    write_last_log(root, result.output)
+    try:
+        write_last_log(root, result.output)
+    except OSError as error:
+        output.write(f"agent-fix-loop: could not write {LAST_LOG}: {error}\n")
+        return 2
     if result.exit_code == 0:
         if args.json:
             output.write(json.dumps(success_payload(result), indent=2, sort_keys=True) + "\n")
@@ -158,14 +169,34 @@ def run_with_attempts(command: tuple[str, ...], cwd: Path, max_attempts: int) ->
 
 
 def run_child(command: tuple[str, ...] | list[str], cwd: Path) -> CommandResult:
-    completed = subprocess.run(
-        list(command),
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-    )
+    command_tuple = tuple(command)
+    try:
+        completed = subprocess.run(
+            list(command_tuple),
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        return CommandResult(
+            command=command_tuple,
+            exit_code=127,
+            output=f"agent-fix-loop: could not execute {' '.join(command_tuple)}: {error}\n",
+        )
+    except PermissionError as error:
+        return CommandResult(
+            command=command_tuple,
+            exit_code=126,
+            output=f"agent-fix-loop: could not execute {' '.join(command_tuple)}: {error}\n",
+        )
+    except OSError as error:
+        return CommandResult(
+            command=command_tuple,
+            exit_code=1,
+            output=f"agent-fix-loop: could not execute {' '.join(command_tuple)}: {error}\n",
+        )
     return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
 
 

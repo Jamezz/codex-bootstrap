@@ -74,7 +74,12 @@ class CapturedOutput:
 
 
 def load_effective_policy(root: Path) -> tuple[CheckPolicy, tuple[str, ...]]:
-    generated = parse_policy(load_json(root / CHECKS_POLICY), generated=True)
+    generated_raw = load_json(root / CHECKS_POLICY)
+    try:
+        generated = parse_policy(generated_raw, generated=True)
+    except SmartCheckError as error:
+        generated = parse_generated_full_lane_policy(generated_raw, error)
+        return generated, (f"invalid generated check policy {CHECKS_POLICY}: {error}; using full lane",)
     local_path = root / LOCAL_POLICY
     if not local_path.exists():
         return generated, ()
@@ -83,6 +88,26 @@ def load_effective_policy(root: Path) -> tuple[CheckPolicy, tuple[str, ...]]:
     except (SmartCheckError, OSError, json.JSONDecodeError) as error:
         return generated, (f"ignored invalid local check policy {LOCAL_POLICY}: {error}",)
     return merge_policy(generated, local), ()
+
+
+def parse_generated_full_lane_policy(raw: dict[str, Any], original_error: SmartCheckError) -> CheckPolicy:
+    raw_lanes = raw.get("lanes")
+    if not isinstance(raw_lanes, list):
+        raise original_error
+    for item in raw_lanes:
+        if not isinstance(item, dict) or item.get("id") != "full":
+            continue
+        try:
+            full_lane = parse_lane(item, generated=True)
+        except SmartCheckError:
+            raise original_error
+        template_id = raw.get("templateId", "")
+        return CheckPolicy(
+            schema_version=SCHEMA_VERSION,
+            template_id=template_id if isinstance(template_id, str) else "",
+            lanes={"full": full_lane},
+        )
+    raise original_error
 
 
 def parse_policy(raw: dict[str, Any], generated: bool, template_id: str | None = None) -> CheckPolicy:
@@ -292,8 +317,8 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
                     if result.exit_code != 0:
                         exit_code = result.exit_code
                         if item.lane.stop_on_failure:
-                            return print_result(plan, results, args.json, True, exit_code, output)
-        return print_result(plan, results, args.json, not args.plan_only, exit_code, output)
+                            return print_result(plan, results, args.json, True, exit_code, output, warnings)
+        return print_result(plan, results, args.json, not args.plan_only, exit_code, output, warnings)
     except SmartCheckError as error:
         print(f"agent-smart-check: {error}", file=sys.stderr)
         return 2
@@ -351,9 +376,10 @@ def print_result(
     executed: bool,
     exit_code: int,
     output,
+    warnings: tuple[str, ...] = (),
 ) -> int:
     if as_json:
-        output.write(json.dumps(result_payload(plan, results, executed, exit_code), indent=2, sort_keys=True) + "\n")
+        output.write(json.dumps(result_payload(plan, results, executed, exit_code, warnings), indent=2, sort_keys=True) + "\n")
         return exit_code
     for item in plan.items:
         output.write(f"agent-smart-check: selected {item.lane.lane_id}\n")
@@ -364,11 +390,18 @@ def print_result(
     return exit_code
 
 
-def result_payload(plan: CheckPlan, results: list[CommandResult], executed: bool, exit_code: int) -> dict[str, Any]:
+def result_payload(
+    plan: CheckPlan,
+    results: list[CommandResult],
+    executed: bool,
+    exit_code: int,
+    warnings: tuple[str, ...] = (),
+) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "executed": executed,
         "exitCode": exit_code,
+        "warnings": list(warnings),
         "plan": [
             {
                 "id": item.lane.lane_id,

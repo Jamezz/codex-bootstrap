@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -89,6 +91,29 @@ class PolicyLoadingTest(unittest.TestCase):
             self.assertIn("ignored invalid local check policy", warnings[0])
             self.assertEqual(("python-test", "full"), tuple(policy.lanes))
 
+    def test_invalid_generated_lane_falls_back_to_full_when_possible(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-bad-generated-") as temp_dir:
+            root = Path(temp_dir)
+            write_json(
+                root / ".codex-bootstrap" / "checks.json",
+                {
+                    "schemaVersion": 1,
+                    "templateId": "python-uv-cli",
+                    "lanes": [
+                        {"id": "broken", "commands": "not an array"},
+                        {"id": "full", "description": "Full check", "commands": [["./scripts/check"]]},
+                    ],
+                },
+            )
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--changed", "src/app.py", "--plan-only", "--json"], cwd=root, stdout=output)
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(output.text())
+            self.assertEqual(["full"], [item["id"] for item in payload["plan"]])
+            self.assertIn("invalid generated check policy", payload["warnings"][0])
+
 
 class LaneSelectionTest(unittest.TestCase):
     def test_selects_matching_lane_and_full_escalation(self) -> None:
@@ -142,6 +167,45 @@ class GitChangedFilesTest(unittest.TestCase):
         args = check.parse_args(["--changed", "src/app.py", "tests/test_app.py", "--plan-only"])
 
         self.assertEqual(("src/app.py", "tests/test_app.py"), tuple(args.changed))
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_detects_staged_unstaged_and_untracked_files(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-git-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            run_git(root, "config", "user.email", "agent@example.invalid")
+            run_git(root, "config", "user.name", "Agent")
+            (root / "tracked.py").write_text("print('old')\n", encoding="utf-8")
+            (root / "staged.py").write_text("print('old')\n", encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "initial")
+            (root / "tracked.py").write_text("print('new')\n", encoding="utf-8")
+            (root / "staged.py").write_text("print('new')\n", encoding="utf-8")
+            (root / "untracked.py").write_text("print('new')\n", encoding="utf-8")
+            run_git(root, "add", "staged.py")
+
+            changed = check.detect_changed_files(root, since="")
+
+            self.assertEqual(("staged.py", "tracked.py", "untracked.py"), tuple(sorted(changed)))
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_since_uses_git_diff_name_only(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-since-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            run_git(root, "config", "user.email", "agent@example.invalid")
+            run_git(root, "config", "user.name", "Agent")
+            (root / "first.py").write_text("print('first')\n", encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "first")
+            base = run_git(root, "rev-parse", "HEAD").stdout.strip()
+            (root / "second.py").write_text("print('second')\n", encoding="utf-8")
+            run_git(root, "add", ".")
+            run_git(root, "commit", "-m", "second")
+
+            changed = check.detect_changed_files(root, since=base)
+
+            self.assertEqual(("second.py",), changed)
 
 
 class CliExecutionTest(unittest.TestCase):
@@ -230,6 +294,20 @@ def default_policy_json() -> dict[str, object]:
 def default_policy() -> check.CheckPolicy:
     raw = default_policy_json()
     return check.parse_policy(raw, generated=True)
+
+
+def run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)} failed:\n{result.stdout}")
+    return result
 
 
 if __name__ == "__main__":

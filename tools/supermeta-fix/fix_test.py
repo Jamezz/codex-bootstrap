@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -30,6 +31,20 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual("gradle-stale-class", classification.classification_id)
         self.assertIn("./scripts/agent-gradle . clean test", classification.next_actions)
 
+    def test_classifies_style_type_unit_timeout_and_sync_failures(self) -> None:
+        cases = {
+            "biome check failed": "style-check",
+            "mypy error: incompatible type": "typecheck",
+            "FAILED tests/test_app.py::test_cli": "unit-test",
+            "command timed out after 30s": "timeout",
+            "Bootstrap sync conflict: managed region changed": "sync-conflict",
+            "waiting for Gradle home lock": "lock-contention",
+        }
+
+        for output, expected in cases.items():
+            with self.subTest(output=output):
+                self.assertEqual(expected, fix.classify_failure(output).classification_id)
+
     def test_unknown_failure_has_log_action(self) -> None:
         classification = fix.classify_failure("surprising failure")
 
@@ -53,6 +68,45 @@ class FixLoopCliTest(unittest.TestCase):
             log_text = (root / ".codex-bootstrap" / "fix-loop" / "last.log").read_text(encoding="utf-8")
             self.assertIn("bad typecheck", log_text)
             self.assertIn("agent-fix-loop:", output.text())
+
+    def test_missing_executable_is_captured_and_classified(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-missing-exec-") as temp_dir:
+            root = Path(temp_dir)
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(["--", "__definitely_missing_codex_tool__"], cwd=root, stdout=output)
+
+            self.assertEqual(127, exit_code)
+            self.assertIn("missing-tool", output.text())
+            self.assertIn("__definitely_missing_codex_tool__", (root / ".codex-bootstrap" / "fix-loop" / "last.log").read_text(encoding="utf-8"))
+
+    def test_log_write_failure_returns_usage_error(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-log-failure-") as temp_dir:
+            root = Path(temp_dir)
+            codex_path = root / ".codex-bootstrap"
+            codex_path.write_text("not a directory", encoding="utf-8")
+            output = fix.CapturedOutput()
+
+            exit_code = fix.run_cli(["--", "python3", "-c", "print('cannot log')"], cwd=root, stdout=output)
+
+            self.assertEqual(2, exit_code)
+            self.assertIn("could not write", output.text())
+
+    def test_does_not_mutate_source_files(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fix-loop-no-mutate-") as temp_dir:
+            root = Path(temp_dir)
+            source = root / "src.py"
+            source.write_text("VALUE = 1\n", encoding="utf-8")
+            before = source.read_text(encoding="utf-8")
+
+            fix.run_cli(
+                ["--", "python3", "-c", "import sys; print('FAILED test'); sys.exit(3)"],
+                cwd=root,
+                stdout=fix.CapturedOutput(),
+            )
+
+            self.assertEqual(before, source.read_text(encoding="utf-8"))
+            self.assertFalse(os.path.exists(root / "src.py.tmp"))
 
     def test_requires_child_command(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fix-loop-no-child-") as temp_dir:
