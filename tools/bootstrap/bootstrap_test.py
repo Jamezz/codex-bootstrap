@@ -91,6 +91,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
                 "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
@@ -104,6 +110,7 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
 
     def test_stage_template_does_not_rewrite_copied_support_tools(self) -> None:
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-stage-") as temp_dir:
@@ -171,6 +178,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
                 "tools/supermeta-gradle",
                 "tools/supermeta-agent",
                 "tools/supermeta-beans",
@@ -192,6 +205,7 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
         self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", manifest.sync_contract.managed_regions)
         self.assertIn("README.md:generated-docs/agent-nags", manifest.sync_contract.managed_regions)
+        assert_velocity_manifest_contract(self, manifest)
 
     def test_loads_python_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "python-uv-cli")
@@ -216,6 +230,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
                 "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
@@ -229,6 +249,7 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
 
     def test_loads_typescript_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
@@ -253,6 +274,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
                 "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
@@ -266,6 +293,7 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
 
     def test_loads_typescript_mcp_server_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-mcp-server")
@@ -290,6 +318,12 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-nag.ps1",
                 "scripts/agent-task",
                 "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
                 "tools/supermeta-agent",
                 "tools/supermeta-beans",
                 "tools/supermeta-task",
@@ -303,6 +337,7 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
 
 
 class SafetyTest(unittest.TestCase):
@@ -1510,6 +1545,18 @@ def assert_generated_nag_docs(
         test_case.assertIn("./scripts/agent-nag run-hook session-start", text)
         test_case.assertIn("./scripts/agent-nag snooze post-run-backlog-check --for 7d", text)
     test_case.assertIn("Treat nags as advisory", agents)
+
+
+def assert_velocity_manifest_contract(test_case: unittest.TestCase, manifest: TemplateManifest) -> None:
+    test_case.assertIn("velocity-tools", manifest.sync_contract.managed_sets)
+    test_case.assertIn("scripts/agent-smart-check", manifest.sync_contract.managed_files)
+    test_case.assertIn("scripts/agent-fix-loop", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-check/check.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-fix/fix.py", manifest.sync_contract.managed_files)
+    test_case.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
+    test_case.assertIn("README.md:generated-docs/velocity-tools", manifest.sync_contract.managed_regions)
+    test_case.assertIn("AGENTS.md:generated-docs/velocity-tools", manifest.sync_contract.managed_regions)
+    test_case.assertIn("docs/OPERATIONS.md:generated-docs/velocity-tools", manifest.sync_contract.managed_regions)
 
 
 def run_checked(

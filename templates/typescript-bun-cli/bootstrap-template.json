@@ -48,6 +48,30 @@
       "destination": "scripts/agent-task.ps1"
     },
     {
+      "source": "scripts/agent-smart-check",
+      "destination": "scripts/agent-smart-check"
+    },
+    {
+      "source": "scripts/agent-smart-check.ps1",
+      "destination": "scripts/agent-smart-check.ps1"
+    },
+    {
+      "source": "scripts/agent-fix-loop",
+      "destination": "scripts/agent-fix-loop"
+    },
+    {
+      "source": "scripts/agent-fix-loop.ps1",
+      "destination": "scripts/agent-fix-loop.ps1"
+    },
+    {
+      "source": "tools/supermeta-check",
+      "destination": "tools/supermeta-check"
+    },
+    {
+      "source": "tools/supermeta-fix",
+      "destination": "tools/supermeta-fix"
+    },
+    {
       "source": "tools/supermeta-agent",
       "destination": "tools/supermeta-agent"
     },
@@ -190,6 +214,70 @@
           {
             "path": "docs/OPERATIONS.md",
             "id": "generated-docs/agent-nags"
+          }
+        ]
+      },
+      {
+        "id": "velocity-tools",
+        "description": "Focused verification and failure-diagnostic helpers for fast agent inner loops.",
+        "files": [
+          {
+            "path": "scripts/agent-smart-check",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-smart-check.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-fix-loop",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-fix-loop.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/check_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/fix.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/fix_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": ".codex-bootstrap/checks.json",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/velocity-tools"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/velocity-tools"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/velocity-tools"
           }
         ]
       },

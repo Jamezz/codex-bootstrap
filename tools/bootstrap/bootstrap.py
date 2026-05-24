@@ -1982,9 +1982,52 @@ def write_checks_policy_file(plan: BootstrapPlan, staged_root: Path) -> None:
     codex_dir = staged_root / ".codex-bootstrap"
     codex_dir.mkdir(parents=True, exist_ok=True)
     (codex_dir / "checks.json").write_text(
-        json.dumps(default_checks_policy(plan), indent=2, sort_keys=True) + "\n",
+        format_checks_policy(default_checks_policy(plan)) + "\n",
         encoding="utf-8",
     )
+
+
+def format_checks_policy(policy: dict[str, object]) -> str:
+    return format_json_value(policy, 0)
+
+
+def format_json_value(value: object, indent: int) -> str:
+    inline = inline_json_value(value)
+    if inline is not None and len(inline) + indent <= 80:
+        return inline
+    prefix = " " * indent
+    child_prefix = " " * (indent + 2)
+    if isinstance(value, dict):
+        lines = ["{"]
+        items = sorted(value.items())
+        for index, (key, child) in enumerate(items):
+            comma = "," if index < len(items) - 1 else ""
+            lines.append(f"{child_prefix}{json.dumps(key)}: {format_json_value(child, indent + 2)}{comma}")
+        lines.append(f"{prefix}}}")
+        return "\n".join(lines)
+    if isinstance(value, list):
+        lines = ["["]
+        for index, child in enumerate(value):
+            comma = "," if index < len(value) - 1 else ""
+            lines.append(f"{child_prefix}{format_json_value(child, indent + 2)}{comma}")
+        lines.append(f"{prefix}]")
+        return "\n".join(lines)
+    return json.dumps(value)
+
+
+def inline_json_value(value: object) -> str | None:
+    if isinstance(value, list) and all(is_json_scalar(item) for item in value):
+        return json.dumps(value, separators=(", ", ": "))
+    if isinstance(value, list) and all(
+        isinstance(item, list) and all(is_json_scalar(child) for child in item)
+        for item in value
+    ):
+        return json.dumps(value, separators=(", ", ": "))
+    return None
+
+
+def is_json_scalar(value: object) -> bool:
+    return value is None or isinstance(value, str | int | float | bool)
 
 
 def default_checks_policy(plan: BootstrapPlan) -> dict[str, object]:
