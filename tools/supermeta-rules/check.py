@@ -25,10 +25,29 @@ class Finding:
 
 @dataclass(frozen=True)
 class JavaClassBlock:
+    kind: str
     name: str
     start: int
     end: int
     annotations: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class JavaRecordType:
+    package_name: str
+    name: str
+    qualified_type_name: str
+
+
+@dataclass(frozen=True)
+class JavaSourceContext:
+    relative_path: Path
+    source: str
+    class_blocks: list[JavaClassBlock]
+    package_name: str
+    explicit_imports: frozenset[str]
+    wildcard_imports: frozenset[str]
+    declared_record_names: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -46,7 +65,13 @@ JAVA_IMPORT_RE = re.compile(
     r"^\s*import\s+(?P<static>static\s+)?"
     r"(?P<target>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\.\*)?)\s*;\s*$"
 )
-JAVA_CLASS_RE = re.compile(r"\b(?:class|record|interface|enum)\s+(?P<name>[A-Za-z_$][\w$]*)[^{]*\{")
+JAVA_PACKAGE_RE = re.compile(
+    r"^\s*package\s+(?P<name>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*;",
+    re.MULTILINE,
+)
+JAVA_CLASS_RE = re.compile(
+    r"\b(?P<kind>class|record|interface|enum)\s+(?P<name>[A-Za-z_$][\w$]*)[^{]*\{"
+)
 JAVA_METHOD_RE = re.compile(
     r"(?P<return>[A-Za-z_$][\w$<>\[\].?,\s]*?)\s+"
     r"(?P<name>[A-Za-z_$][\w$]*)\s*"
@@ -55,7 +80,20 @@ JAVA_METHOD_RE = re.compile(
     re.MULTILINE,
 )
 JAVA_CONTROL_NAMES = {"catch", "for", "if", "switch", "synchronized", "try", "while"}
-JAVA_MODIFIERS = {"abstract", "final", "native", "private", "protected", "public", "static", "strictfp", "synchronized"}
+JAVA_MODIFIERS = {
+    "abstract",
+    "final",
+    "native",
+    "private",
+    "protected",
+    "public",
+    "static",
+    "strictfp",
+    "synchronized",
+}
+JAVA_CONSTRUCTOR_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>)?"
+JAVA_NEW_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
+JAVA_REFERENCE_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -261,6 +299,27 @@ def suggest_java_wildcard_import(normalized_import: str) -> str:
     return f"{static_prefix}{package_or_type}.*"
 
 
+def java_package_name(source: str) -> str:
+    match = JAVA_PACKAGE_RE.search(source)
+    if match is None:
+        return ""
+    return match.group("name")
+
+
+def java_imports(source: str) -> tuple[set[str], set[str]]:
+    explicit_imports: set[str] = set()
+    wildcard_imports: set[str] = set()
+    for import_line in source.splitlines():
+        normalized = normalize_java_import(import_line)
+        if normalized is None or normalized.startswith("static "):
+            continue
+        if normalized.endswith(".*"):
+            wildcard_imports.add(normalized.removesuffix(".*"))
+        else:
+            explicit_imports.add(normalized)
+    return explicit_imports, wildcard_imports
+
+
 def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_lombok_boilerplate must be an array")
@@ -275,9 +334,18 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
         ignore_annotations = tuple(require_string_list(rule, "ignore_annotations", default=[]))
         allow_methods = set(require_string_list(rule, "allow_methods", default=[]))
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        source_files = list(iter_matching_files(root, paths, include, exclude))
+        source_contexts: list[JavaSourceContext] = []
+        record_types: set[JavaRecordType] = set()
+        require_record_builder = require_bool(rule, "require_record_builder", default=False)
+
+        for source_file in source_files:
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             class_blocks = iter_java_class_blocks(stripped_source)
+            package_name = java_package_name(stripped_source)
+            explicit_imports, wildcard_imports = java_imports(stripped_source)
+            declared_record_types = java_record_types(package_name, class_blocks, ignore_annotations)
+            declared_record_names = {record_type.name for record_type in declared_record_types}
             findings.extend(
                 find_lombok_method_boilerplate(
                     name,
@@ -286,6 +354,17 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
                     class_blocks,
                     ignore_annotations,
                     allow_methods,
+                )
+            )
+            source_contexts.append(
+                JavaSourceContext(
+                    relative_path=source_file.relative_to(root),
+                    source=stripped_source,
+                    class_blocks=class_blocks,
+                    package_name=package_name,
+                    explicit_imports=frozenset(explicit_imports),
+                    wildcard_imports=frozenset(wildcard_imports),
+                    declared_record_names=frozenset(declared_record_names),
                 )
             )
             findings.extend(
@@ -297,6 +376,24 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
                     ignore_annotations,
                 )
             )
+            if require_record_builder:
+                findings.extend(
+                    find_lombok_record_builder_requirement(
+                        name, source_file.relative_to(root), class_blocks, ignore_annotations
+                    )
+                )
+                record_types.update(declared_record_types)
+
+        if require_record_builder and record_types:
+            for source_context in source_contexts:
+                findings.extend(
+                    find_lombok_record_constructor_calls(
+                        name,
+                        source_context,
+                        ignore_annotations,
+                        record_types,
+                    )
+                )
 
     return findings
 
@@ -368,6 +465,199 @@ def find_lombok_builder_boilerplate(
     return findings
 
 
+def find_lombok_record_builder_requirement(
+    rule_name: str,
+    relative_path: Path,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for class_block in class_blocks:
+        if class_block.kind != "record":
+            continue
+        if annotations_match_any(class_block.annotations, ignore_annotations):
+            continue
+        if annotations_match_any(class_block.annotations, ("Builder",)):
+            continue
+        findings.append(
+            Finding(
+                rule=rule_name,
+                path=relative_path,
+                message=(
+                    f"{class_block.name} is a record and should use Lombok @Builder for readability; "
+                    f"{lombok_suggestion(ignore_annotations)}"
+                ),
+            )
+        )
+    return findings
+
+
+def find_lombok_record_constructor_calls(
+    rule_name: str,
+    source_context: JavaSourceContext,
+    ignore_annotations: tuple[str, ...],
+    record_types: set[JavaRecordType],
+) -> list[Finding]:
+    if not record_types:
+        return []
+
+    findings: list[Finding] = []
+    accessible_names = accessible_record_names(source_context, record_types)
+    for name in sorted(accessible_names):
+        findings.extend(
+            find_record_constructor_pattern(
+                rule_name,
+                source_context,
+                ignore_annotations,
+                rf"\bnew\s+{JAVA_NEW_TYPE_ARGS_RE}{re.escape(name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*\(",
+                f"{name} instances should be built with {name}.builder() for readability; "
+                f"{lombok_suggestion(ignore_annotations)}",
+            )
+        )
+        findings.extend(
+            find_record_constructor_pattern(
+                rule_name,
+                source_context,
+                ignore_annotations,
+                rf"(?<![.\w$]){re.escape(name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}"
+                rf"\s*::\s*{JAVA_REFERENCE_TYPE_ARGS_RE}new\b",
+                f"{name} constructor references should use {name}.builder() for readability; "
+                f"{lombok_suggestion(ignore_annotations)}",
+            )
+        )
+    for record_name, qualified_name in sorted(qualified_record_constructor_targets(source_context, record_types)):
+        findings.extend(
+            find_record_constructor_pattern(
+                rule_name,
+                source_context,
+                ignore_annotations,
+                rf"\bnew\s+{JAVA_NEW_TYPE_ARGS_RE}{re.escape(qualified_name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*\(",
+                f"{record_name} instances should be built with {record_name}.builder() for readability; "
+                f"{lombok_suggestion(ignore_annotations)}",
+            )
+        )
+        findings.extend(
+            find_record_constructor_pattern(
+                rule_name,
+                source_context,
+                ignore_annotations,
+                rf"\b{re.escape(qualified_name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}"
+                rf"\s*::\s*{JAVA_REFERENCE_TYPE_ARGS_RE}new\b",
+                f"{record_name} constructor references should use {record_name}.builder() for readability; "
+                f"{lombok_suggestion(ignore_annotations)}",
+            )
+        )
+    return findings
+
+
+def find_record_constructor_pattern(
+    rule_name: str,
+    source_context: JavaSourceContext,
+    ignore_annotations: tuple[str, ...],
+    pattern: str,
+    message: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for match in re.finditer(pattern, source_context.source):
+        if is_position_inside_ignored_class(match.start(), source_context.class_blocks, ignore_annotations):
+            continue
+        findings.append(
+            Finding(
+                rule=rule_name,
+                path=source_context.relative_path,
+                message=message,
+            )
+        )
+    return findings
+
+
+def accessible_record_names(source_context: JavaSourceContext, record_types: set[JavaRecordType]) -> set[str]:
+    names = set(source_context.declared_record_names)
+    explicit_imports_by_name = {
+        import_name.rsplit(".", 1)[-1]: import_name
+        for import_name in source_context.explicit_imports
+    }
+    for record_type in record_types:
+        qualified_name = qualified_java_name(record_type.package_name, record_type.qualified_type_name)
+        explicitly_imported_type = explicit_imports_by_name.get(record_type.name)
+        if explicitly_imported_type == qualified_name:
+            names.add(record_type.name)
+            continue
+        if explicitly_imported_type is not None:
+            continue
+        if record_type.qualified_type_name == record_type.name:
+            if record_type.package_name == source_context.package_name:
+                names.add(record_type.name)
+            elif record_type.package_name in source_context.wildcard_imports:
+                names.add(record_type.name)
+            continue
+        owner_qualified_name = qualified_java_name(
+            record_type.package_name,
+            record_type.qualified_type_name.rsplit(".", 1)[0],
+        )
+        if owner_qualified_name in source_context.wildcard_imports:
+            names.add(record_type.name)
+    return names
+
+
+def qualified_record_constructor_targets(
+    source_context: JavaSourceContext,
+    record_types: set[JavaRecordType],
+) -> set[tuple[str, str]]:
+    targets: set[tuple[str, str]] = set()
+    for record_type in record_types:
+        canonical_name = qualified_java_name(record_type.package_name, record_type.qualified_type_name)
+        if canonical_name != record_type.name:
+            targets.add((record_type.name, canonical_name))
+        if record_type.qualified_type_name == record_type.name:
+            continue
+        if record_type_package_type_is_visible(source_context, record_type):
+            targets.add((record_type.name, record_type.qualified_type_name))
+    return targets
+
+
+def record_type_package_type_is_visible(source_context: JavaSourceContext, record_type: JavaRecordType) -> bool:
+    if record_type.package_name == source_context.package_name:
+        return True
+    if record_type.package_name in source_context.wildcard_imports:
+        return True
+    owner_name = record_type.qualified_type_name.split(".", 1)[0]
+    owner_qualified_name = qualified_java_name(record_type.package_name, owner_name)
+    return owner_qualified_name in source_context.explicit_imports
+
+
+def qualified_java_name(package_name: str, type_name: str) -> str:
+    if not package_name:
+        return type_name
+    return f"{package_name}.{type_name}"
+
+
+def java_record_types(
+    package_name: str,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+) -> set[JavaRecordType]:
+    record_types: set[JavaRecordType] = set()
+    for class_block in class_blocks:
+        if class_block.kind != "record":
+            continue
+        if annotations_match_any(class_block.annotations, ignore_annotations):
+            continue
+        enclosing_type_names = [
+            candidate.name
+            for candidate in sorted(class_blocks, key=lambda item: item.start)
+            if candidate.start < class_block.start and class_block.end <= candidate.end
+        ]
+        record_types.add(
+            JavaRecordType(
+                package_name=package_name,
+                name=class_block.name,
+                qualified_type_name=".".join([*enclosing_type_names, class_block.name]),
+            )
+        )
+    return record_types
+
+
 def iter_java_class_blocks(source: str) -> list[JavaClassBlock]:
     blocks: list[JavaClassBlock] = []
     for match in JAVA_CLASS_RE.finditer(source):
@@ -377,6 +667,7 @@ def iter_java_class_blocks(source: str) -> list[JavaClassBlock]:
             continue
         blocks.append(
             JavaClassBlock(
+                kind=match.group("kind"),
                 name=match.group("name"),
                 start=match.start(),
                 end=close_brace + 1,
@@ -493,6 +784,18 @@ def method_is_inside_ignored_class(
 ) -> bool:
     return any(
         class_block.start <= method.start <= class_block.end
+        and annotations_match_any(class_block.annotations, ignore_annotations)
+        for class_block in class_blocks
+    )
+
+
+def is_position_inside_ignored_class(
+    position: int,
+    class_blocks: list[JavaClassBlock],
+    ignore_annotations: tuple[str, ...],
+) -> bool:
+    return any(
+        class_block.start <= position <= class_block.end
         and annotations_match_any(class_block.annotations, ignore_annotations)
         for class_block in class_blocks
     )
@@ -809,6 +1112,13 @@ def require_string_list(
     value = rule.get(key, default)
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise ValueError(f"{key} must be an array of non-empty strings")
+    return value
+
+
+def require_bool(rule: dict[str, Any], key: str, default: bool = False) -> bool:
+    value = rule.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
     return value
 
 

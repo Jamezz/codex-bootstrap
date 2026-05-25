@@ -45,7 +45,10 @@ public final class LoggingConfig {
             );
         }
 
-        return new Config(level, LogFormat.valueOf(formatName.toUpperCase(Locale.ROOT)));
+        return Config.builder()
+            .level(level)
+            .format(LogFormat.valueOf(formatName.toUpperCase(Locale.ROOT)))
+            .build();
     }
 
     public static void configure(Config config) {
@@ -109,6 +112,7 @@ public final class LoggingConfig {
         JSON
     }
 
+    @lombok.Builder
     record Config(ch.qos.logback.classic.Level level, LogFormat format) {
     }
 }

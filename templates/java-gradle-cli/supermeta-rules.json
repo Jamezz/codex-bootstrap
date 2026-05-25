@@ -33,7 +33,8 @@
       "include": ["**/*.java"],
       "exclude": ["**/generated/**"],
       "ignore_annotations": [],
-      "allow_methods": []
+      "allow_methods": [],
+      "require_record_builder": true
     }
   ],
   "project_callouts": [

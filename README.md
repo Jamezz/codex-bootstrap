@@ -246,7 +246,7 @@ General source rules:
 - route language-specific lint and reusable heuristic gates through `tools/supermeta-rules/` project callouts;
 - enforce wildcard imports for Java source unless a project explicitly allowlists an import;
 - report unused Java imports as warnings instead of build-breaking errors;
-- enforce Lombok over handwritten getter, setter, and builder boilerplate for Java source unless a project configures an ignore annotation.
+- enforce Lombok over handwritten getter, setter, and builder boilerplate for Java source unless a project configures an ignore annotation; for records, require Lombok `@Builder` patterns for maximum readability and ensure record creation uses the builder pattern.
 
 Prefer compatibility-breaking cleanup over preserving early template mistakes. These templates exist to start new projects cleanly, so change the contract when the new contract is better.
 

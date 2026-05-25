@@ -22,7 +22,12 @@ final class LoggingConfigTest {
     @AfterEach
     void restoreErr() {
         System.setErr(originalErr);
-        LoggingConfig.configure(new LoggingConfig.Config(Level.OFF, LoggingConfig.LogFormat.TEXT));
+        LoggingConfig.configure(
+            LoggingConfig.Config.builder()
+                .level(Level.OFF)
+                .format(LoggingConfig.LogFormat.TEXT)
+                .build()
+        );
     }
 
     @Test
@@ -70,7 +75,12 @@ final class LoggingConfigTest {
     void writesTextLogsToStderr() {
         ByteArrayOutputStream err = captureErr();
 
-        LoggingConfig.configure(new LoggingConfig.Config(Level.INFO, LoggingConfig.LogFormat.TEXT));
+        LoggingConfig.configure(
+            LoggingConfig.Config.builder()
+                .level(Level.INFO)
+                .format(LoggingConfig.LogFormat.TEXT)
+                .build()
+        );
         LoggerFactory.getLogger("java-gradle-cli")
             .info("command completed {}", keyValue("exitCode", 0));
 
@@ -84,7 +94,12 @@ final class LoggingConfigTest {
     void writesJsonLogsToStderr() {
         ByteArrayOutputStream err = captureErr();
 
-        LoggingConfig.configure(new LoggingConfig.Config(Level.INFO, LoggingConfig.LogFormat.JSON));
+        LoggingConfig.configure(
+            LoggingConfig.Config.builder()
+                .level(Level.INFO)
+                .format(LoggingConfig.LogFormat.JSON)
+                .build()
+        );
         LoggerFactory.getLogger("java-gradle-cli")
             .info("command completed {}", keyValue("exitCode", 0));
 

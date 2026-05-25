@@ -562,6 +562,585 @@ final class Person {
             self.assertGreaterEqual(len(findings), 1)
             self.assertTrue(any("builder" in finding.message.lower() for finding in findings))
 
+    def test_rejects_records_without_lombok_builder_when_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+record CliResult(int exitCode, String out, String err) {
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("java-lombok-boilerplate", findings[0].rule)
+            self.assertIn("should use Lombok @Builder", findings[0].message)
+            self.assertIn("use Lombok", findings[0].message)
+
+    def test_allows_records_with_lombok_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(
+                root,
+                """
+@Builder
+record CliResult(int exitCode, String out, String err) {
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_rejects_record_constructor_calls_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/Person.java",
+                """package example;
+
+record CliResult(int exitCode, String out, String err) {
+}
+
+final class Caller {
+    CliResult run() {
+        return new CliResult(0, "", "");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertGreaterEqual(len(findings), 2)
+            self.assertTrue(
+                any("should be built with CliResult.builder() for readability" in finding.message for finding in findings)
+            )
+            self.assertTrue(
+                any("CliResult is a record and should use Lombok @Builder" in finding.message for finding in findings)
+            )
+
+    def test_rejects_record_constructor_calls_even_when_record_has_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/Person.java",
+                """package example;
+
+@Builder
+record CliResult(int exitCode, String out, String err) {
+}
+
+final class Caller {
+    CliResult run() {
+        return new CliResult(0, "", "");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("should be built with CliResult.builder() for readability", findings[0].message)
+
+    def test_rejects_record_constructor_calls_in_different_file_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/CliResult.java",
+                """package example.model;
+
+record CliResult(int exitCode, String out, String err) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.model.CliResult;
+
+final class Caller {
+    CliResult run() {
+        return new CliResult(0, "", "");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertGreaterEqual(len(findings), 2)
+            self.assertTrue(
+                any(
+                    "should be built with CliResult.builder() for readability" in finding.message
+                    for finding in findings
+                )
+            )
+            self.assertTrue(
+                any(
+                    "CliResult is a record and should use Lombok @Builder" in finding.message
+                    for finding in findings
+                )
+            )
+
+    def test_rejects_qualified_and_generic_record_constructor_calls_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/Box.java",
+                """package example.model;
+
+@Builder
+record Box<T>(T value) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+final class Caller {
+    example.model.Box<String> runQualified() {
+        return new example.model.Box<String>("");
+    }
+
+    example.model.Box<String> runDiamond() {
+        return new example.model.Box<>("");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(2, len(findings))
+            self.assertTrue(
+                all("should be built with Box.builder() for readability" in finding.message for finding in findings)
+            )
+
+    def test_rejects_explicit_constructor_type_arguments_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/Box.java",
+                """package example.model;
+
+@Builder
+record Box<T>(T value) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.model.Box;
+
+final class Caller {
+    Box<String> runSimple() {
+        return new <String> Box<>("");
+    }
+
+    Box<String> runQualified() {
+        return new <String> example.model.Box<>("");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(2, len(findings))
+            self.assertTrue(
+                all("should be built with Box.builder() for readability" in finding.message for finding in findings)
+            )
+
+    def test_rejects_nested_record_constructor_calls_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/LoggingConfig.java",
+                """package example;
+
+final class LoggingConfig {
+    @Builder
+    record Config(String level, String format) {
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/Caller.java",
+                """package example;
+
+final class Caller {
+    LoggingConfig.Config run() {
+        return new LoggingConfig.Config("info", "json");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("should be built with Config.builder() for readability", findings[0].message)
+
+    def test_rejects_imported_nested_record_constructor_calls_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/LoggingConfig.java",
+                """package example;
+
+final class LoggingConfig {
+    @Builder
+    record Config(String level, String format) {
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.LoggingConfig.Config;
+
+final class Caller {
+    Config run() {
+        return new Config("info", "json");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("should be built with Config.builder() for readability", findings[0].message)
+
+    def test_allows_non_record_constructor_with_nested_record_simple_name_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/LoggingConfig.java",
+                """package example;
+
+final class LoggingConfig {
+    @Builder
+    record Config(String level, String format) {
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/Config.java",
+                """package example;
+
+final class Config {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/Caller.java",
+                """package example;
+
+final class Caller {
+    Config run() {
+        return new Config();
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_rejects_record_constructor_references_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/CliResult.java",
+                """package example.model;
+
+@Builder
+record CliResult(int exitCode, String out, String err) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.model.CliResult;
+
+interface ResultFactory {
+    CliResult create(int exitCode, String out, String err);
+}
+
+final class Caller {
+    ResultFactory factory() {
+        return CliResult::new;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("constructor references should use CliResult.builder()", findings[0].message)
+
+    def test_rejects_constructor_reference_type_arguments_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/Box.java",
+                """package example.model;
+
+@Builder
+record Box<T>(T value) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.model.Box;
+
+interface BoxFactory<T> {
+    Box<T> create(T value);
+}
+
+final class Caller {
+    BoxFactory<String> factory() {
+        return Box::<String>new;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("constructor references should use Box.builder()", findings[0].message)
+
+    def test_rejects_wildcard_imported_record_constructor_calls_when_builder_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/CliResult.java",
+                """package example.model;
+
+@Builder
+record CliResult(int exitCode, String out, String err) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.model.*;
+
+final class Caller {
+    CliResult run() {
+        return new CliResult(0, "", "");
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("should be built with CliResult.builder() for readability", findings[0].message)
+
+    def test_allows_non_record_constructor_with_record_name_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/Result.java",
+                """package example.model;
+
+@Builder
+record Result(int exitCode) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/other/Result.java",
+                """package example.other;
+
+final class Result {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+import example.other.Result;
+
+final class Caller {
+    Result run() {
+        return new Result();
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_allows_same_simple_constructor_without_record_import_or_package_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/model/Result.java",
+                """package example.model;
+
+@Builder
+record Result(int exitCode) {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Result.java",
+                """package example.service;
+
+final class Result {
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/service/Caller.java",
+                """package example.service;
+
+final class Caller {
+    Result run() {
+        return new Result();
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_allows_record_constructor_calls_with_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/Person.java",
+                """package example;
+
+@Builder
+record CliResult(int exitCode, String out, String err) {
+}
+
+final class Caller {
+    CliResult run() {
+        return CliResult.builder()
+            .exitCode(0)
+            .out("")
+            .err("")
+            .build();
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(
+                java_lombok_boilerplate_config(require_record_builder=True),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
     def test_method_ignore_annotation_suppresses_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -663,6 +1242,17 @@ final class Person {
             with self.assertRaisesRegex(ValueError, "ignore_annotations must be an array of non-empty strings"):
                 check.run_rules(config, root)
 
+    def test_rejects_invalid_require_record_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_lombok_sample(root, "record CliResult(int exitCode, String out, String err) {}")
+
+            config = java_lombok_boilerplate_config()
+            config["java_lombok_boilerplate"][0]["require_record_builder"] = "yes"
+
+            with self.assertRaisesRegex(ValueError, "require_record_builder must be a boolean"):
+                check.run_rules(config, root)
+
 
 def write_source(root: Path, relative_path: str, source: str) -> Path:
     path = root / relative_path
@@ -750,6 +1340,7 @@ def write_lombok_sample(root: Path, class_body: str) -> Path:
 def java_lombok_boilerplate_config(
     ignore_annotations: list[str] | None = None,
     allow_methods: list[str] | None = None,
+    require_record_builder: bool = False,
 ) -> dict[str, object]:
     return {
         "java_lombok_boilerplate": [
@@ -760,6 +1351,7 @@ def java_lombok_boilerplate_config(
                 "exclude": ["**/generated/**"],
                 "ignore_annotations": [] if ignore_annotations is None else ignore_annotations,
                 "allow_methods": [] if allow_methods is None else allow_methods,
+                "require_record_builder": require_record_builder,
             }
         ]
     }

@@ -52,13 +52,14 @@ final class AppTest {
             new PrintStream(out, true, StandardCharsets.UTF_8),
             new PrintStream(err, true, StandardCharsets.UTF_8)
         );
-        return new CliResult(
-            exitCode,
-            out.toString(StandardCharsets.UTF_8),
-            err.toString(StandardCharsets.UTF_8)
-        );
+        return CliResult.builder()
+            .exitCode(exitCode)
+            .out(out.toString(StandardCharsets.UTF_8))
+            .err(err.toString(StandardCharsets.UTF_8))
+            .build();
     }
 
+    @lombok.Builder
     private record CliResult(int exitCode, String out, String err) {
     }
 }
