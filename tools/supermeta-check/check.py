@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -13,10 +14,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import hygiene
+
 
 CHECKS_POLICY = Path(".codex-bootstrap/checks.json")
 LOCAL_POLICY = Path(".codex-bootstrap/checks.local.json")
 SCHEMA_VERSION = 1
+HYGIENE_REVIEW_EXIT_CODE = hygiene.REVIEW_NEEDED_EXIT_CODE
 
 
 class SmartCheckError(Exception):
@@ -359,6 +363,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--tag", action="append", default=[])
     parser.add_argument("--timeout", type=float, default=None)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--no-hygiene", action="store_true")
+    parser.add_argument("--hygiene-only", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -374,6 +380,47 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
         if args.self_test:
             return print_self_test(policy, args.json, output, warnings)
         changed_files = tuple(args.changed) if args.changed else detect_changed_files(root, args.since)
+        hygiene_result = disabled_hygiene_result()
+        if not args.no_hygiene:
+            hygiene_config = hygiene.HygieneConfig()
+            planned_hygiene = hygiene.plan_hygiene(
+                root,
+                changed_files,
+                detect_git_status(root),
+                hygiene_config,
+            )
+            hygiene_result = hygiene.apply_hygiene_actions(
+                root,
+                planned_hygiene,
+                hygiene_config,
+                dry_run=args.plan_only,
+            )
+            if not args.plan_only and hygiene_result.actions and not hygiene_result.review_needed and not args.changed:
+                changed_files = detect_changed_files(root, args.since)
+        if args.hygiene_only:
+            return print_hygiene_only_result(hygiene_result, args.json, output, dry_run=args.plan_only)
+        if hygiene_result.review_needed and not args.plan_only:
+            if args.json:
+                output.write(
+                    json.dumps(
+                        {
+                            "schemaVersion": SCHEMA_VERSION,
+                            "executed": False,
+                            "exitCode": HYGIENE_REVIEW_EXIT_CODE,
+                            "warnings": list(warnings),
+                            "hygiene": hygiene_payload(hygiene_result),
+                            "plan": [],
+                            "results": [],
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+            else:
+                print_hygiene_human(hygiene_result, output, dry_run=False)
+                output.write("agent-smart-check: hygiene needs review; verification skipped\n")
+            return HYGIENE_REVIEW_EXIT_CODE
         plan = select_lanes(
             policy,
             changed_files,
@@ -394,7 +441,7 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
                     )
                     results.append(result)
                     output.write(result.output)
-                    return print_result(plan, results, args.json, True, result.exit_code, output, warnings)
+                    return print_result(plan, results, args.json, True, result.exit_code, output, warnings, hygiene_result)
                 for command in item.lane.commands:
                     timeout_seconds = args.timeout or command.timeout_seconds or item.lane.timeout_seconds
                     result = run_command_runner(runner, list(command.argv), root, timeout_seconds)
@@ -404,8 +451,8 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
                     if result.exit_code != 0:
                         exit_code = result.exit_code
                         if item.lane.stop_on_failure:
-                            return print_result(plan, results, args.json, True, exit_code, output, warnings)
-        return print_result(plan, results, args.json, not args.plan_only, exit_code, output, warnings)
+                            return print_result(plan, results, args.json, True, exit_code, output, warnings, hygiene_result)
+        return print_result(plan, results, args.json, not args.plan_only, exit_code, output, warnings, hygiene_result)
     except SmartCheckError as error:
         print(f"agent-smart-check: {error}", file=sys.stderr)
         return 2
@@ -438,10 +485,39 @@ def detect_changed_files(root: Path, since: str) -> tuple[str, ...]:
         if not line:
             continue
         path = line[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        changed.append(path)
+        changed.append(normalize_git_status_path(path))
     return tuple(changed)
+
+
+def detect_git_status(root: Path) -> dict[str, str]:
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1"],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if status.returncode != 0:
+        return {}
+    entries: dict[str, str] = {}
+    for line in status.stdout.splitlines():
+        if not line:
+            continue
+        code = line[:2]
+        path = line[3:]
+        entries[normalize_git_status_path(path).replace("\\", "/")] = code
+    return entries
+
+
+def normalize_git_status_path(path: str) -> str:
+    if " -> " in path:
+        path = path.split(" -> ", 1)[1]
+    if path.startswith('"'):
+        parts = shlex.split(path)
+        if len(parts) == 1:
+            return parts[0]
+    return path
 
 
 def run_command(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> CommandResult:
@@ -531,6 +607,64 @@ def self_test_errors(policy: CheckPolicy) -> list[str]:
     return errors
 
 
+def disabled_hygiene_result() -> hygiene.HygieneResult:
+    return hygiene.HygieneResult(enabled=False, review_needed=False, actions=())
+
+
+def print_hygiene_only_result(result: hygiene.HygieneResult, as_json: bool, output, dry_run: bool) -> int:
+    if as_json:
+        output.write(
+            json.dumps(
+                {
+                    "schemaVersion": SCHEMA_VERSION,
+                    "hygiene": hygiene_payload(result),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+    else:
+        print_hygiene_human(result, output, dry_run=dry_run)
+    return HYGIENE_REVIEW_EXIT_CODE if result.review_needed else 0
+
+
+def print_hygiene_human(result: hygiene.HygieneResult, output, dry_run: bool) -> None:
+    if not result.enabled:
+        return
+    prefix = "would " if dry_run else ""
+    for action in result.actions:
+        if action.action == "trash":
+            output.write(f"agent-smart-check: hygiene {prefix}trash exact duplicate {action.duplicate_path}\n")
+        elif action.action == "quarantine":
+            output.write(f"agent-smart-check: hygiene {prefix}quarantine duplicate {action.duplicate_path}\n")
+            if action.original_path:
+                output.write(f"  original: {action.original_path}\n")
+            if action.manifest_path:
+                output.write(f"  review: {action.manifest_path}\n")
+        elif action.action == "report":
+            output.write(f"agent-smart-check: hygiene needs review for {action.duplicate_path}: {action.reason}\n")
+
+
+def hygiene_payload(result: hygiene.HygieneResult) -> dict[str, Any]:
+    return {
+        "enabled": result.enabled,
+        "reviewNeeded": result.review_needed,
+        "actions": [
+            {
+                "action": action.action,
+                "reason": action.reason,
+                "duplicatePath": action.duplicate_path,
+                "originalPath": action.original_path,
+                "destinationPath": action.destination_path,
+                "manifestPath": action.manifest_path,
+                "reviewNeeded": action.review_needed,
+            }
+            for action in result.actions
+        ],
+    }
+
+
 def print_result(
     plan: CheckPlan,
     results: list[CommandResult],
@@ -539,10 +673,20 @@ def print_result(
     exit_code: int,
     output,
     warnings: tuple[str, ...] = (),
+    hygiene_result: hygiene.HygieneResult | None = None,
 ) -> int:
     if as_json:
-        output.write(json.dumps(result_payload(plan, results, executed, exit_code, warnings), indent=2, sort_keys=True) + "\n")
+        output.write(
+            json.dumps(
+                result_payload(plan, results, executed, exit_code, warnings, hygiene_result),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
         return exit_code
+    if hygiene_result is not None:
+        print_hygiene_human(hygiene_result, output, dry_run=not executed)
     for item in plan.items:
         output.write(f"agent-smart-check: selected {item.lane.lane_id}\n")
         output.write(f"  reason: {item.reason}\n")
@@ -560,12 +704,14 @@ def result_payload(
     executed: bool,
     exit_code: int,
     warnings: tuple[str, ...] = (),
+    hygiene_result: hygiene.HygieneResult | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "executed": executed,
         "exitCode": exit_code,
         "warnings": list(warnings),
+        "hygiene": hygiene_payload(hygiene_result or disabled_hygiene_result()),
         "plan": [
             {
                 "id": item.lane.lane_id,

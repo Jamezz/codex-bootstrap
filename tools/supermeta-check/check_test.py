@@ -231,6 +231,12 @@ class GitChangedFilesTest(unittest.TestCase):
         self.assertEqual(9, args.timeout)
         self.assertEqual(("test",), tuple(args.tag))
 
+    def test_hygiene_flags_parse(self) -> None:
+        args = check.parse_args(["--hygiene-only", "--no-hygiene"])
+
+        self.assertTrue(args.hygiene_only)
+        self.assertTrue(args.no_hygiene)
+
     @unittest.skipIf(shutil.which("git") is None, "git is required")
     def test_detects_staged_unstaged_and_untracked_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="smart-check-git-") as temp_dir:
@@ -404,6 +410,94 @@ class CliExecutionTest(unittest.TestCase):
             self.assertEqual(2, exit_code)
             payload = json.loads(output.text())
             self.assertIn("unknown escalatesTo target missing", payload["errors"][0])
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_plan_only_reports_hygiene_without_mutating(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-hygiene-plan-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            write_default_policy(root)
+            (root / "App.java").write_text("class App {}\n", encoding="utf-8")
+            (root / "App 2.java").write_text("class App {}\n", encoding="utf-8")
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--plan-only"], cwd=root, stdout=output)
+
+            self.assertEqual(0, exit_code)
+            self.assertTrue((root / "App 2.java").exists())
+            self.assertIn("hygiene would trash exact duplicate App 2.java", output.text())
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_json_includes_hygiene_actions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-hygiene-json-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            write_default_policy(root)
+            (root / "App.java").write_text("class App {}\n", encoding="utf-8")
+            (root / "App 2.java").write_text("class App {}\n", encoding="utf-8")
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--plan-only", "--json"], cwd=root, stdout=output)
+
+            self.assertEqual(0, exit_code)
+            payload = json.loads(output.text())
+            self.assertTrue(payload["hygiene"]["enabled"])
+            self.assertFalse(payload["hygiene"]["reviewNeeded"])
+            self.assertEqual("trash", payload["hygiene"]["actions"][0]["action"])
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_divergent_duplicate_blocks_verification(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-hygiene-block-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            write_default_policy(root)
+            (root / "App.java").write_text("class App {}\n", encoding="utf-8")
+            (root / "App 2.java").write_text("class App2 {}\n", encoding="utf-8")
+            output = check.CapturedOutput()
+
+            def fail_if_called(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> check.CommandResult:
+                raise AssertionError(f"verification should not run: {command}")
+
+            exit_code = check.run_cli([], cwd=root, stdout=output, command_runner=fail_if_called)
+
+            self.assertEqual(3, exit_code)
+            self.assertFalse((root / "App 2.java").exists())
+            self.assertTrue((root / ".codex-bootstrap" / "cleanup-quarantine").exists())
+            self.assertIn("hygiene needs review; verification skipped", output.text())
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_no_hygiene_preserves_existing_behavior(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-no-hygiene-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            write_default_policy(root)
+            (root / "App.java").write_text("class App {}\n", encoding="utf-8")
+            (root / "App 2.java").write_text("class App2 {}\n", encoding="utf-8")
+            output = check.CapturedOutput()
+
+            exit_code = check.run_cli(["--no-hygiene", "--plan-only"], cwd=root, stdout=output)
+
+            self.assertEqual(0, exit_code)
+            self.assertTrue((root / "App 2.java").exists())
+            self.assertNotIn("hygiene", output.text())
+
+    @unittest.skipIf(shutil.which("git") is None, "git is required")
+    def test_hygiene_only_runs_no_verification_commands(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-hygiene-only-") as temp_dir:
+            root = Path(temp_dir)
+            run_git(root, "init")
+            write_default_policy(root)
+            (root / "App.java").write_text("class App {}\n", encoding="utf-8")
+            (root / "App 2.java").write_text("class App {}\n", encoding="utf-8")
+            output = check.CapturedOutput()
+
+            def fail_if_called(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> check.CommandResult:
+                raise AssertionError(f"verification should not run: {command}")
+
+            exit_code = check.run_cli(["--hygiene-only"], cwd=root, stdout=output, command_runner=fail_if_called)
+
+            self.assertEqual(0, exit_code)
+            self.assertIn("hygiene", output.text())
 
 
 def write_default_policy(root: Path) -> None:
