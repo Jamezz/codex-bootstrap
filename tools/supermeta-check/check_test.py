@@ -463,6 +463,8 @@ class CliExecutionTest(unittest.TestCase):
             self.assertEqual(3, exit_code)
             self.assertFalse((root / "App 2.java").exists())
             self.assertTrue((root / ".codex-bootstrap" / "cleanup-quarantine").exists())
+            self.assertIn("destination: .codex-bootstrap/cleanup-quarantine/", output.text())
+            self.assertIn("review: .codex-bootstrap/cleanup-quarantine/", output.text())
             self.assertIn("hygiene needs review; verification skipped", output.text())
 
     @unittest.skipIf(shutil.which("git") is None, "git is required")

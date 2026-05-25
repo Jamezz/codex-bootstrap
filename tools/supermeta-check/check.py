@@ -640,6 +640,8 @@ def print_hygiene_human(result: hygiene.HygieneResult, output, dry_run: bool) ->
             output.write(f"agent-smart-check: hygiene {prefix}quarantine duplicate {action.duplicate_path}\n")
             if action.original_path:
                 output.write(f"  original: {action.original_path}\n")
+            if action.destination_path:
+                output.write(f"  destination: {action.destination_path}\n")
             if action.manifest_path:
                 output.write(f"  review: {action.manifest_path}\n")
         elif action.action == "report":
