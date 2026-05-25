@@ -251,6 +251,14 @@
             "mode": "whole-file"
           },
           {
+            "path": "tools/supermeta-check/hygiene.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/hygiene_test.py",
+            "mode": "whole-file"
+          },
+          {
             "path": "tools/supermeta-check/README.md",
             "mode": "whole-file"
           },

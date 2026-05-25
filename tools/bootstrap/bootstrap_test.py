@@ -1726,6 +1726,8 @@ def assert_velocity_manifest_contract(test_case: unittest.TestCase, manifest: Te
     test_case.assertIn("scripts/agent-fix-loop", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-check/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-check/check.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-check/hygiene.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-check/hygiene_test.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/fix.py", manifest.sync_contract.managed_files)
     test_case.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
