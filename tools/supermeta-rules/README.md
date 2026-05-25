@@ -16,6 +16,8 @@ python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/superm
 
 Rule `paths` may point at a broad repo area, but keep `include` patterns rooted at the real source or test trees. The matcher streams those include globs first and then applies final include/exclude filtering, so broad adoption configs do not have to scan build outputs, vendored trees, or generated artifacts before finding source files.
 
+The CLI streams rule progress and discovered findings to stderr while keeping the final pass/fail summary on stdout. Set `SUPERMETA_RULES_QUIET=1` to suppress progress output in contexts that need a quiet checker.
+
 ## Supported Rules
 
 ### `line_count`

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import importlib.util
 import os
 import sys
@@ -47,7 +48,7 @@ class FileMatchingRuleTest(unittest.TestCase):
                     )
                 )
 
-            self.assertEqual([matched], matches)
+            self.assertEqual([matched.resolve()], matches)
 
     def test_matching_files_stream_without_materialized_list(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -66,7 +67,7 @@ class FileMatchingRuleTest(unittest.TestCase):
             )
 
             self.assertNotIsInstance(matches, list)
-            self.assertEqual(matched, next(matches))
+            self.assertEqual(matched.resolve(), next(matches))
             with self.assertRaises(StopIteration):
                 next(matches)
 
@@ -87,6 +88,34 @@ class FileMatchingRuleTest(unittest.TestCase):
                     exclude=[],
                 )
             )
+
+    def test_rule_progress_streams_scan_and_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/App.java", "line 1\nline 2\n")
+            stream = io.StringIO()
+
+            findings = check.run_rules(
+                {
+                    "line_count": [
+                        {
+                            "name": "source-line-count",
+                            "max_lines": 1,
+                            "paths": ["src/main/java"],
+                            "include": ["**/*.java"],
+                            "exclude": [],
+                        }
+                    ]
+                },
+                root,
+                progress=check.RuleProgress(stream, file_interval=1, time_interval_seconds=999),
+            )
+
+            self.assertEqual(1, len(findings))
+            progress_output = stream.getvalue()
+            self.assertIn("source-line-count: scanning", progress_output)
+            self.assertIn("source-line-count: scanned 1 files", progress_output)
+            self.assertIn("finding [source-line-count]", progress_output)
 
     def test_include_glob_is_scoped_to_configured_path(self) -> None:
         self.assertEqual(
@@ -383,6 +412,32 @@ mod tests {
     fn allows_test_unwraps() {
         let value = production().unwrap();
         assert_eq!(\"ok\", value);
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(rust_panic_boundary_config(), root)
+
+            self.assertEqual([], findings)
+
+    def test_ignores_cfg_test_modules_with_raw_strings_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/lib.rs",
+                """pub fn production() -> Option<&'static str> {
+    Some("ok")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn allows_raw_fixture_and_test_expect() {
+        let fixture = r#""}}""#;
+        let value = production().expect("test-only assert");
+        assert_eq!(Some(fixture), value);
     }
 }
 """,

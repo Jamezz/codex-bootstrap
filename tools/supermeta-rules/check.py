@@ -11,9 +11,10 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, TextIO
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,50 @@ class JavaMethodBlock:
     annotations: tuple[str, ...]
 
 
+class RuleProgress:
+    def __init__(
+        self,
+        stream: TextIO,
+        file_interval: int = 100,
+        time_interval_seconds: float = 10.0,
+    ) -> None:
+        self.stream = stream
+        self.file_interval = file_interval
+        self.time_interval_seconds = time_interval_seconds
+        self.last_emit = 0.0
+
+    def rule_start(self, rule_name: str, paths: list[str], include: list[str]) -> None:
+        self.emit(
+            f"supermeta-rules: {rule_name}: scanning paths={format_patterns(paths)} "
+            f"include={format_patterns(include)}",
+            force=True,
+        )
+
+    def file(self, rule_name: str, relative_path: Path, count: int) -> None:
+        now = time.monotonic()
+        if count == 1 or count % self.file_interval == 0 or now - self.last_emit >= self.time_interval_seconds:
+            self.emit(
+                f"supermeta-rules: {rule_name}: scanned {count} files; latest={relative_path}",
+                force=True,
+                now=now,
+            )
+
+    def finding(self, finding: Finding) -> None:
+        self.emit(
+            f"supermeta-rules: finding [{finding.rule}] {finding.path}: {finding.message}",
+            force=True,
+        )
+
+    def rule_end(self, rule_name: str, count: int) -> None:
+        self.emit(f"supermeta-rules: {rule_name}: scanned {count} matching files", force=True)
+
+    def emit(self, message: str, force: bool = False, now: float | None = None) -> None:
+        timestamp = time.monotonic() if now is None else now
+        if force or timestamp - self.last_emit >= self.time_interval_seconds:
+            print(message, file=self.stream, flush=True)
+            self.last_emit = timestamp
+
+
 JAVA_IMPORT_RE = re.compile(
     r"^\s*import\s+(?P<static>static\s+)?"
     r"(?P<target>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*(?:\.\*)?)\s*;\s*$"
@@ -101,6 +146,8 @@ RUST_ITEM_RE = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
 )
 RUST_PANIC_RE = re.compile(r"(?P<pattern>\.(?:unwrap|expect)\s*\(|\b(?:todo|unimplemented|dbg)\s*!)")
+RUST_CFG_TEST_RE = re.compile(r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
+RUST_TEST_MODULE_RE = re.compile(r"\bmod\s+tests\b")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,7 +157,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = load_config(config_path)
-        findings = run_rules(config, root, skip_callouts=args.skip_callouts)
+        findings = run_rules(
+            config,
+            root,
+            skip_callouts=args.skip_callouts,
+            progress=RuleProgress(sys.stderr) if progress_is_enabled() else None,
+        )
     except ValueError as error:
         print(f"supermeta-rules: {error}", file=sys.stderr)
         return 2
@@ -161,23 +213,29 @@ def load_config(config_path: Path) -> dict[str, Any]:
     return data
 
 
-def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -> list[Finding]:
+def run_rules(
+    config: dict[str, Any],
+    root: Path,
+    skip_callouts: bool = False,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     root = root.resolve()
     if not root.is_dir():
         raise ValueError(f"root directory does not exist: {root}")
 
     findings: list[Finding] = []
-    findings.extend(run_line_count_rules(config.get("line_count", []), root))
-    findings.extend(run_java_package_class_count_rules(config.get("java_package_class_count", []), root))
-    findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root))
-    findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root))
-    findings.extend(run_rust_module_item_count_rules(config.get("rust_module_item_count", []), root))
-    findings.extend(run_rust_panic_boundary_rules(config.get("rust_panic_boundary", []), root))
+    findings.extend(run_line_count_rules(config.get("line_count", []), root, progress=progress))
+    findings.extend(run_java_package_class_count_rules(config.get("java_package_class_count", []), root, progress=progress))
+    findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root, progress=progress))
+    findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root, progress=progress))
+    findings.extend(run_rust_module_item_count_rules(config.get("rust_module_item_count", []), root, progress=progress))
+    findings.extend(run_rust_panic_boundary_rules(config.get("rust_panic_boundary", []), root, progress=progress))
     findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
             root,
             execute=not project_callouts_are_skipped(skip_callouts),
+            progress=progress,
         )
     )
 
@@ -198,7 +256,11 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
     return findings
 
 
-def run_rust_module_item_count_rules(rules: Any, root: Path) -> list[Finding]:
+def run_rust_module_item_count_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("rust_module_item_count must be an array")
 
@@ -211,12 +273,13 @@ def run_rust_module_item_count_rules(rules: Any, root: Path) -> list[Finding]:
         include = require_string_list(rule, "include", default=["**/*.rs"])
         exclude = require_string_list(rule, "exclude", default=[])
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
             stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
             items = top_level_rust_items(stripped_source)
             item_count = len(items)
             if item_count > max_items:
-                findings.append(
+                add_finding(
+                    findings,
                     Finding(
                         rule=name,
                         path=source_file.relative_to(root),
@@ -224,13 +287,18 @@ def run_rust_module_item_count_rules(rules: Any, root: Path) -> list[Finding]:
                             f"{item_count} Rust top-level items exceeds module limit of {max_items}; "
                             "split this module around cohesive domain boundaries"
                         ),
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
 
 
-def run_rust_panic_boundary_rules(rules: Any, root: Path) -> list[Finding]:
+def run_rust_panic_boundary_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("rust_panic_boundary must be an array")
 
@@ -243,12 +311,14 @@ def run_rust_panic_boundary_rules(rules: Any, root: Path) -> list[Finding]:
         exclude = require_string_list(rule, "exclude", default=[])
         allow_tests = require_boolean(rule, "allow_tests", default=True)
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
-            stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
-            scanned_source = strip_rust_cfg_test_modules(stripped_source) if allow_tests else stripped_source
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+            source = source_file.read_text(encoding="utf-8")
+            test_filtered_source = strip_rust_cfg_test_modules(source) if allow_tests else source
+            scanned_source = strip_rust_comments_and_strings(test_filtered_source)
             for match in RUST_PANIC_RE.finditer(scanned_source):
                 line = scanned_source.count("\n", 0, match.start()) + 1
-                findings.append(
+                add_finding(
+                    findings,
                     Finding(
                         rule=name,
                         path=source_file.relative_to(root),
@@ -256,7 +326,8 @@ def run_rust_panic_boundary_rules(rules: Any, root: Path) -> list[Finding]:
                             f"panic-prone construct `{match.group('pattern').strip()}` at line {line}; "
                             "return a Result, handle the Option, or isolate panic behavior in tests"
                         ),
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
@@ -329,6 +400,11 @@ def strip_rust_comments_and_strings(source: str) -> str:
             result.extend("  ")
             index += 2
             continue
+        raw_string_end = rust_raw_string_end(source, index)
+        if raw_string_end is not None:
+            append_rust_blank(result, source[index:raw_string_end])
+            index = raw_string_end
+            continue
         if current == '"':
             in_string = True
             result.append(" ")
@@ -344,6 +420,33 @@ def strip_rust_comments_and_strings(source: str) -> str:
         index += 1
 
     return "".join(result)
+
+
+def append_rust_blank(result: list[str], text: str) -> None:
+    result.extend("\n" if character == "\n" else " " for character in text)
+
+
+def rust_raw_string_end(source: str, index: int) -> int | None:
+    if source.startswith("br", index):
+        prefix_length = 2
+    elif source[index] == "r":
+        prefix_length = 1
+    else:
+        return None
+
+    delimiter_start = index + prefix_length
+    delimiter_end = delimiter_start
+    while delimiter_end < len(source) and source[delimiter_end] == "#":
+        delimiter_end += 1
+    if delimiter_end >= len(source) or source[delimiter_end] != '"':
+        return None
+
+    closing_delimiter = '"' + ("#" * (delimiter_end - delimiter_start))
+    content_start = delimiter_end + 1
+    closing_start = source.find(closing_delimiter, content_start)
+    if closing_start == -1:
+        return len(source)
+    return closing_start + len(closing_delimiter)
 
 
 def require_boolean(raw_rule: dict[str, Any], key: str, default: bool) -> bool:
@@ -376,18 +479,20 @@ def top_level_rust_items(source: str) -> list[str]:
 
 def strip_rust_cfg_test_modules(source: str) -> str:
     lines = source.splitlines(keepends=True)
+    structural_lines = strip_rust_comments_and_strings(source).splitlines(keepends=True)
     result: list[str] = []
     index = 0
     while index < len(lines):
         line = lines[index]
-        if "#[cfg(test)]" not in line:
+        structural_line = structural_lines[index]
+        if RUST_CFG_TEST_RE.search(structural_line) is None:
             result.append(line)
             index += 1
             continue
 
         result.append("\n" if line.endswith("\n") else "")
         index += 1
-        while index < len(lines) and "mod tests" not in lines[index]:
+        while index < len(lines) and RUST_TEST_MODULE_RE.search(structural_lines[index]) is None:
             result.append("\n" if lines[index].endswith("\n") else "")
             index += 1
         if index >= len(lines):
@@ -397,8 +502,9 @@ def strip_rust_cfg_test_modules(source: str) -> str:
         module_started = False
         while index < len(lines):
             current_line = lines[index]
-            brace_depth += current_line.count("{") - current_line.count("}")
-            module_started = module_started or "{" in current_line
+            structural_line = structural_lines[index]
+            brace_depth += structural_line.count("{") - structural_line.count("}")
+            module_started = module_started or "{" in structural_line
             result.append("\n" if current_line.endswith("\n") else "")
             index += 1
             if module_started and brace_depth <= 0:
@@ -407,7 +513,11 @@ def strip_rust_cfg_test_modules(source: str) -> str:
     return "".join(result)
 
 
-def run_line_count_rules(rules: Any, root: Path) -> list[Finding]:
+def run_line_count_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("line_count must be an array")
 
@@ -420,21 +530,27 @@ def run_line_count_rules(rules: Any, root: Path) -> list[Finding]:
         include = require_string_list(rule, "include", default=["**/*"])
         exclude = require_string_list(rule, "exclude", default=[])
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
             line_count = count_lines(source_file)
             if line_count > max_lines:
-                findings.append(
+                add_finding(
+                    findings,
                     Finding(
                         rule=name,
                         path=source_file.relative_to(root),
                         message=f"{line_count} lines exceeds limit of {max_lines}",
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
 
 
-def run_java_package_class_count_rules(rules: Any, root: Path) -> list[Finding]:
+def run_java_package_class_count_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_package_class_count must be an array")
 
@@ -448,7 +564,7 @@ def run_java_package_class_count_rules(rules: Any, root: Path) -> list[Finding]:
         exclude = require_string_list(rule, "exclude", default=[])
 
         classes_by_package: dict[Path, list[str]] = {}
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             type_names = top_level_java_type_names(stripped_source)
             classes_by_package.setdefault(source_file.parent, []).extend(type_names)
@@ -456,7 +572,8 @@ def run_java_package_class_count_rules(rules: Any, root: Path) -> list[Finding]:
         for package_dir, type_names in sorted(classes_by_package.items()):
             type_count = len(type_names)
             if type_count > max_classes:
-                findings.append(
+                add_finding(
+                    findings,
                     Finding(
                         rule=name,
                         path=package_dir.relative_to(root),
@@ -465,13 +582,18 @@ def run_java_package_class_count_rules(rules: Any, root: Path) -> list[Finding]:
                             f"of {max_classes}; refactor this layer into cohesive subpackages "
                             "based on the system context"
                         ),
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
 
 
-def run_java_import_style_rules(rules: Any, root: Path) -> list[Finding]:
+def run_java_import_style_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_import_style must be an array")
 
@@ -484,13 +606,14 @@ def run_java_import_style_rules(rules: Any, root: Path) -> list[Finding]:
         exclude = require_string_list(rule, "exclude", default=[])
         allow_explicit = set(require_string_list(rule, "allow_explicit", default=[]))
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             for import_line in stripped_source.splitlines():
                 normalized = normalize_java_import(import_line)
                 if normalized is None or normalized in allow_explicit or normalized.endswith(".*"):
                     continue
-                findings.append(
+                add_finding(
+                    findings,
                     Finding(
                         rule=name,
                         path=source_file.relative_to(root),
@@ -498,7 +621,8 @@ def run_java_import_style_rules(rules: Any, root: Path) -> list[Finding]:
                             f"explicit import {normalized}; use "
                             f"{suggest_java_wildcard_import(normalized)} unless allowlisted"
                         ),
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
@@ -540,7 +664,11 @@ def java_imports(source: str) -> tuple[set[str], set[str]]:
     return explicit_imports, wildcard_imports
 
 
-def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
+def run_java_lombok_boilerplate_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_lombok_boilerplate must be an array")
 
@@ -558,14 +686,15 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
         record_types: set[JavaRecordType] = set()
         require_record_builder = require_bool(rule, "require_record_builder", default=False)
 
-        for source_file in iter_matching_files(root, paths, include, exclude):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             class_blocks = iter_java_class_blocks(stripped_source)
             package_name = java_package_name(stripped_source)
             explicit_imports, wildcard_imports = java_imports(stripped_source)
             declared_record_types = java_record_types(package_name, class_blocks, ignore_annotations)
             declared_record_names = {record_type.name for record_type in declared_record_types}
-            findings.extend(
+            extend_findings(
+                findings,
                 find_lombok_method_boilerplate(
                     name,
                     source_file.relative_to(root),
@@ -573,7 +702,8 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
                     class_blocks,
                     ignore_annotations,
                     allow_methods,
-                )
+                ),
+                progress,
             )
             source_contexts.append(
                 JavaSourceContext(
@@ -586,32 +716,38 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
                     declared_record_names=frozenset(declared_record_names),
                 )
             )
-            findings.extend(
+            extend_findings(
+                findings,
                 find_lombok_builder_boilerplate(
                     name,
                     source_file.relative_to(root),
                     stripped_source,
                     class_blocks,
                     ignore_annotations,
-                )
+                ),
+                progress,
             )
             if require_record_builder:
-                findings.extend(
+                extend_findings(
+                    findings,
                     find_lombok_record_builder_requirement(
                         name, source_file.relative_to(root), class_blocks, ignore_annotations
-                    )
+                    ),
+                    progress,
                 )
                 record_types.update(declared_record_types)
 
         if require_record_builder and record_types:
             for source_context in source_contexts:
-                findings.extend(
+                extend_findings(
+                    findings,
                     find_lombok_record_constructor_calls(
                         name,
                         source_context,
                         ignore_annotations,
                         record_types,
-                    )
+                    ),
+                    progress,
                 )
 
     return findings
@@ -1105,7 +1241,12 @@ def lombok_suggestion(ignore_annotations: tuple[str, ...]) -> str:
     return "use Lombok"
 
 
-def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> list[Finding]:
+def run_project_callout_rules(
+    rules: Any,
+    root: Path,
+    execute: bool = True,
+    progress: RuleProgress | None = None,
+) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("project_callouts must be an array")
 
@@ -1119,7 +1260,14 @@ def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> l
         exclude = require_string_list(rule, "exclude", default=[])
         command = require_non_empty_string_list(rule, "command")
 
-        if not execute or not has_matching_file(root, paths, include, exclude):
+        if not execute:
+            continue
+        if progress is not None:
+            progress.rule_start(name, paths, include)
+        has_match = has_matching_file(root, paths, include, exclude)
+        if progress is not None:
+            progress.rule_end(name, 1 if has_match else 0)
+        if not has_match:
             continue
 
         try:
@@ -1132,16 +1280,19 @@ def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> l
                 check=False,
             )
         except OSError as error:
-            findings.append(
+            add_finding(
+                findings,
                 Finding(
                     rule=name,
                     path=Path("."),
                     message=f"{language} callout could not start: {shlex.join(command)}\n{error}",
-                )
+                ),
+                progress,
             )
             continue
         if result.returncode != 0:
-            findings.append(
+            add_finding(
+                findings,
                 Finding(
                     rule=name,
                     path=Path("."),
@@ -1149,7 +1300,8 @@ def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> l
                         f"{language} callout failed with exit {result.returncode}: "
                         f"{shlex.join(command)}\n{trim_output(result.stdout)}"
                     ),
-                )
+                ),
+                progress,
             )
 
     return findings
@@ -1163,12 +1315,58 @@ def project_callouts_are_skipped(skip_callouts: bool) -> bool:
     }
 
 
+def progress_is_enabled() -> bool:
+    return os.environ.get("SUPERMETA_RULES_QUIET") not in {"1", "true", "yes"}
+
+
+def format_patterns(patterns: list[str]) -> str:
+    return "[" + ", ".join(patterns) + "]"
+
+
+def iter_rule_files(
+    rule_name: str,
+    root: Path,
+    paths: list[str],
+    include: list[str],
+    exclude: list[str],
+    progress: RuleProgress | None,
+) -> Iterator[Path]:
+    if progress is not None:
+        progress.rule_start(rule_name, paths, include)
+
+    count = 0
+    for source_file in iter_matching_files(root, paths, include, exclude):
+        count += 1
+        if progress is not None:
+            progress.file(rule_name, source_file.relative_to(root), count)
+        yield source_file
+
+    if progress is not None:
+        progress.rule_end(rule_name, count)
+
+
+def add_finding(findings: list[Finding], finding: Finding, progress: RuleProgress | None) -> None:
+    findings.append(finding)
+    if progress is not None:
+        progress.finding(finding)
+
+
+def extend_findings(
+    findings: list[Finding],
+    new_findings: list[Finding],
+    progress: RuleProgress | None,
+) -> None:
+    for finding in new_findings:
+        add_finding(findings, finding, progress)
+
+
 def iter_matching_files(
     root: Path,
     paths: list[str],
     include: list[str],
     exclude: list[str],
 ) -> Iterator[Path]:
+    root = root.resolve()
     seen: set[Path] = set()
     for configured_path in paths:
         base_path = resolve_under_root(root, configured_path)
