@@ -3,9 +3,7 @@
   "displayName": "TypeScript Bun CLI",
   "description": "A compact TypeScript command-line project with Bun, Biome, type checking, Bun tests, first-class runtime logging, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-cli",
-  "requiredInputs": [
-    "name"
-  ],
+  "requiredInputs": ["name"],
   "supportPaths": [
     {
       "source": "scripts/agent-bootstrap",
@@ -96,10 +94,7 @@
       "destination": "tools/supermeta-nag"
     }
   ],
-  "verificationCommands": [
-    "./scripts/check",
-    "bun run src/main.ts"
-  ],
+  "verificationCommands": ["./scripts/check", "bun run src/main.ts"],
   "generatedDocs": {
     "summary": "This is a compact TypeScript Bun command-line project with tests, type checking, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
     "runtime": "Bun owns package installation, runtime execution, and tests. Runtime logging uses Pino, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
@@ -109,17 +104,9 @@
       "src/logging.ts",
       "package.json scripts"
     ],
-    "sourceRoots": [
-      "src",
-      "tools/supermeta-rules"
-    ],
-    "testRoots": [
-      "tests",
-      "supermeta-rules.json"
-    ],
-    "verificationCommands": [
-      "./scripts/check"
-    ],
+    "sourceRoots": ["src", "tools/supermeta-rules"],
+    "testRoots": ["tests", "supermeta-rules.json"],
+    "verificationCommands": ["./scripts/check"],
     "runCommands": [
       "bun run src/main.ts",
       "bun run src/main.ts \"Ada Lovelace\"",
@@ -359,6 +346,10 @@
           },
           {
             "path": "tools/supermeta-rules/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_adopt.py",
             "mode": "whole-file"
           }
         ],

@@ -6,6 +6,7 @@ The repo currently ships:
 
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
 - `templates/csharp-dotnet-cli/`: a C# .NET command-line starter with xUnit tests, first-class runtime logging, and a deterministic verification path.
+- `templates/existing-repo-control/`: a non-destructive control-plane adoption package for bringing existing repositories under Bootstrap-managed scripts, sync metadata, and Supermeta tooling.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
 - `templates/rust-cargo-cli/`: a Rust Cargo command-line starter with unit tests, Clippy, rustfmt, first-class runtime logging, and a deterministic verification path.
@@ -108,6 +109,34 @@ Use `--dry-run` to inspect the plan first:
 ```
 
 Use `--yes` for non-interactive agent runs.
+
+## Adopt Existing Repositories
+
+Use `agent-bootstrap adopt` from a Codex Bootstrap checkout when the target repository already exists and must not be rewritten by `./bootstrap`.
+
+Preview adoption:
+
+```bash
+./scripts/agent-bootstrap adopt --target /path/to/existing-repo --name existing-repo
+```
+
+Apply the managed control plane:
+
+```bash
+./scripts/agent-bootstrap adopt --target /path/to/existing-repo --name existing-repo --apply
+```
+
+For large mixed repos, record the real verification commands during adoption so `agent-smart-check --full` has a useful default:
+
+```bash
+./scripts/agent-bootstrap adopt \
+  --target /path/to/existing-repo \
+  --name existing-repo \
+  --verification-command './scripts/ci/all-linux.sh' \
+  --apply
+```
+
+The adoption path copies only Bootstrap-managed scripts and `tools/supermeta-*`, writes `.codex-bootstrap/sync.json`, `.codex-bootstrap/checks.json`, and nag policy files, and leaves product source and existing docs alone. Put repository-specific lanes in `.codex-bootstrap/checks.local.json`.
 
 ## Resync Generated Projects
 
@@ -281,6 +310,7 @@ site/
   index.html
 templates/
   csharp-dotnet-cli/
+  existing-repo-control/
   java-gradle-cli/
   python-uv-cli/
   rust-cargo-cli/

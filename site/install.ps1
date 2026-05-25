@@ -184,6 +184,7 @@ function Install-CodexBootstrap {
 
     $knownTemplates = @(
         "csharp-dotnet-cli",
+        "existing-repo-control",
         "java-gradle-cli",
         "python-uv-cli",
         "rust-cargo-cli",

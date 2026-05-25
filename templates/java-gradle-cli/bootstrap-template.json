@@ -393,6 +393,10 @@
           {
             "path": "tools/supermeta-gradle/README.md",
             "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_adopt.py",
+            "mode": "whole-file"
           }
         ],
         "regions": []

@@ -3,6 +3,18 @@
 `bootstrap_sync.py` is copied into generated projects and updates only Codex
 Bootstrap managed files and managed regions.
 
+`bootstrap_adopt.py` seeds the same managed control plane into an existing
+repository without rewriting product source. Run it through the catalog wrapper:
+
+```bash
+./scripts/agent-bootstrap adopt --target /path/to/existing-repo --name existing-repo
+./scripts/agent-bootstrap adopt --target /path/to/existing-repo --name existing-repo --apply
+```
+
+Pass one or more `--verification-command` values for large existing repos so the
+generated full smart-check lane points at the repository's real verification
+entrypoint.
+
 Use dry-run first:
 
 ```bash

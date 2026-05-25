@@ -1,0 +1,4 @@
+.codex-bootstrap/nag-state.json
+.codex-bootstrap/fix-loop/
+.codex-bootstrap/reports/*
+!.codex-bootstrap/reports/.gitignore

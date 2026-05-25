@@ -67,6 +67,20 @@ class ValidationTest(unittest.TestCase):
 
 
 class ManifestTest(unittest.TestCase):
+    def test_loads_existing_repo_control_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "existing-repo-control")
+
+        self.assertEqual("existing-repo-control", manifest.template_id)
+        self.assertEqual("existing-repo-control", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/agent-bootstrap sync --dry-run", manifest.verification_commands)
+        self.assertIn("Existing Repo Control Plane", manifest.display_name)
+        self.assertIn("tools/supermeta-bootstrap/bootstrap_adopt.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/check.py", manifest.sync_contract.managed_files)
+        self.assertEqual({}, manifest.sync_contract.managed_regions)
+        self.assertIn("velocity-tools", manifest.sync_contract.managed_sets)
+        self.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
+
     def test_loads_csharp_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "csharp-dotnet-cli")
 

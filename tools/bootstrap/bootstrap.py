@@ -35,6 +35,7 @@ DEFAULT_TEMPLATE = "java-gradle-cli"
 TEMPLATE_MANIFEST = "bootstrap-template.json"
 SUPPORTED_TEMPLATE_TYPES = {
     "csharp-dotnet-cli",
+    "existing-repo-control",
     "java-gradle-cli",
     "python-uv-cli",
     "rust-cargo-cli",
@@ -560,6 +561,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     copy_template(plan.template_dir, staged_root)
     rewriter = {
         "csharp-dotnet-cli": rewrite_csharp_template,
+        "existing-repo-control": rewrite_existing_repo_template,
         "java-gradle-cli": rewrite_java_template,
         "python-uv-cli": rewrite_python_template,
         "rust-cargo-cli": rewrite_rust_template,
@@ -643,6 +645,15 @@ def rewrite_csharp_template(plan: BootstrapPlan, staged_root: Path) -> None:
 
 
 def rewrite_rust_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    replacements = common_replacements(plan) | {
+        plan.manifest.template_id: plan.config.project_name,
+        f"{plan.manifest.display_name} Template": plan.project_title,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
+def rewrite_existing_repo_template(plan: BootstrapPlan, staged_root: Path) -> None:
     replacements = common_replacements(plan) | {
         plan.manifest.template_id: plan.config.project_name,
         f"{plan.manifest.display_name} Template": plan.project_title,
@@ -912,12 +923,16 @@ Fill unknown fields with `unknown`; do not block a useful upstream report on per
 
 
 def check_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "existing-repo-control":
+        return "./scripts/agent-smart-check --plan-only"
     if plan.manifest.template_type == "java-gradle-cli":
         return "./scripts/agent-gradle . check"
     return "./scripts/check"
 
 
 def windows_check_command(plan: BootstrapPlan) -> str:
+    if plan.manifest.template_type == "existing-repo-control":
+        return ".\\scripts\\agent-smart-check.ps1 --plan-only"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . check"
     return ".\\scripts\\check.ps1"
@@ -927,6 +942,8 @@ def windows_run_command(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "csharp-dotnet-cli":
         project_name = csharp_project_name_from_slug(plan.config.project_name)
         return f".\\scripts\\agent-dotnet.ps1 . run --project src/{project_name}/{project_name}.csproj --"
+    if plan.manifest.template_type == "existing-repo-control":
+        return ".\\scripts\\agent-bootstrap.ps1 sync --dry-run"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run"
     if plan.manifest.template_type == "rust-cargo-cli":
@@ -941,6 +958,8 @@ def windows_run_command(plan: BootstrapPlan) -> str:
 def windows_run_with_args_command(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "csharp-dotnet-cli":
         return f"{windows_run_command(plan)} \"example\""
+    if plan.manifest.template_type == "existing-repo-control":
+        return ".\\scripts\\agent-smart-check.ps1 --plan-only"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run --args=\"example\""
     if plan.manifest.template_type == "rust-cargo-cli":
@@ -961,6 +980,8 @@ def windows_setup_command(plan: BootstrapPlan) -> str | None:
 def windows_process_match(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "csharp-dotnet-cli":
         return "dotnet"
+    if plan.manifest.template_type == "existing-repo-control":
+        return "python"
     if plan.manifest.template_type == "java-gradle-cli":
         return "gradle"
     if plan.manifest.template_type == "python-uv-cli":
@@ -1124,6 +1145,8 @@ def generated_logging_agent_rules() -> str:
 def generated_readme(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "csharp-dotnet-cli":
         return generated_csharp_readme(plan)
+    if plan.manifest.template_type == "existing-repo-control":
+        return generated_existing_repo_readme(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
     if plan.manifest.template_type == "rust-cargo-cli":
@@ -1133,6 +1156,42 @@ def generated_readme(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_readme(plan)
     return generated_java_readme(plan)
+
+
+def generated_existing_repo_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title}
+
+{title} is an existing repository adopted into the Codex Bootstrap control plane.
+
+Bootstrap manages agent scripts, Supermeta tools, sync metadata, nag hooks, and smart-check policy. Product source, build systems, and project-specific verification remain owned by this repository.
+
+## Usage
+
+Preview managed Bootstrap updates:
+
+```bash
+./scripts/agent-bootstrap sync --dry-run
+```
+
+Run focused verification planning:
+
+```bash
+./scripts/agent-smart-check --plan-only
+```
+
+Add repository-specific lanes in `.codex-bootstrap/checks.local.json`.
+
+{generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
+{generated_windows_readme_section(plan)}
+{generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
+## Agent Workflow
+
+Agents should start by reading `AGENTS.md`, then inspect `.codex-bootstrap/checks.local.json` for project-specific verification lanes.
+"""
 
 
 def generated_rust_readme(plan: BootstrapPlan) -> str:
@@ -1323,6 +1382,8 @@ Agents should start by reading `AGENTS.md`, then run:
 def generated_agents(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "csharp-dotnet-cli":
         return generated_csharp_agents(plan)
+    if plan.manifest.template_type == "existing-repo-control":
+        return generated_existing_repo_agents(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_agents(plan)
     if plan.manifest.template_type == "rust-cargo-cli":
@@ -1332,6 +1393,32 @@ def generated_agents(plan: BootstrapPlan) -> str:
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_agents(plan)
     return generated_java_agents(plan)
+
+
+def generated_existing_repo_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title} Agent Notes
+
+This is an existing repository adopted into the Codex Bootstrap control plane. Do not treat it as a generated starter.
+
+## Commands
+
+- Preview Bootstrap sync: `./scripts/agent-bootstrap sync --dry-run`
+- Plan focused checks: `./scripts/agent-smart-check --plan-only`
+- Run full configured check lane: `./scripts/agent-smart-check --full`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Inspect local processes: `./scripts/agent-task ps`
+
+## Rules
+
+- Keep product source and build-system ownership local to this repository.
+- Keep Bootstrap-managed files under `.codex-bootstrap/`, `scripts/agent-*`, and `tools/supermeta-*`.
+- Put project-specific verification lanes in `.codex-bootstrap/checks.local.json`.
+- Use `./scripts/agent-bootstrap sync --dry-run` before applying Bootstrap-managed updates.
+- Prefer local opt-outs or local check-policy overrides over editing managed Bootstrap files directly.
+"""
 
 
 def generated_rust_agents(plan: BootstrapPlan) -> str:
@@ -1360,21 +1447,12 @@ This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and 
 - Inspect Cargo processes: `./scripts/agent-task ps --match cargo`
 - Inspect Rust compiler processes: `./scripts/agent-task ps --match rustc`
 
-## Windows
-
-- Verify: `.\\scripts\\check.ps1`
-- Run: `cargo run --quiet`
-- Beans prime: `.\\scripts\\agent-beans.ps1 prime`
-- Inspect peer agents: `.\\scripts\\agent-coord.ps1 status`
-- Inspect Cargo processes: `.\\scripts\\agent-task.ps1 ps --match cargo`
-
-## Beans
-
-- Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.
-- Use `./scripts/agent-beans list --ready` to inspect ready work.
-- Keep the seeded Beans current as starter behavior is replaced.
-- If `./scripts/agent-beans` reports a missing or wrong Beans CLI version, tell the user instead of bypassing the wrapper.
-
+{generated_windows_agent_section(plan)}
+{generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
+{generated_agent_sync_region(check_command(plan))}
 ## Rules
 
 - Target Rust edition 2024 unless the project intentionally chooses a different baseline.

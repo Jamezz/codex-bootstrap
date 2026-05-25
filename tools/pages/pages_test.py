@@ -94,6 +94,7 @@ class InstallerTest(unittest.TestCase):
 
             self.assertIn("java-gradle-cli: Java Gradle CLI", result.stdout)
             self.assertIn("csharp-dotnet-cli: C# .NET CLI", result.stdout)
+            self.assertIn("existing-repo-control: Existing Repo Control Plane", result.stdout)
             self.assertIn("python-uv-cli: Python uv CLI", result.stdout)
             self.assertIn("rust-cargo-cli: Rust Cargo CLI", result.stdout)
             self.assertIn("typescript-bun-cli: TypeScript Bun CLI", result.stdout)

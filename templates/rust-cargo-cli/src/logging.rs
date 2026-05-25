@@ -32,7 +32,7 @@ pub struct LoggingConfigError {
 impl Logger {
     pub fn from_env() -> Result<Self, LoggingConfigError> {
         let level = match env::var("LOG_LEVEL") {
-            Ok(value) => parse_level(&value).ok_or_else(|| LoggingConfigError {
+            Ok(value) => parse_level(&value).ok_or(LoggingConfigError {
                 variable: "LOG_LEVEL",
                 value,
                 expected: "trace, debug, info, warn, error, or off",
@@ -41,7 +41,7 @@ impl Logger {
         };
 
         let format = match env::var("LOG_FORMAT") {
-            Ok(value) => parse_format(&value).ok_or_else(|| LoggingConfigError {
+            Ok(value) => parse_format(&value).ok_or(LoggingConfigError {
                 variable: "LOG_FORMAT",
                 value,
                 expected: "text or json",
@@ -150,7 +150,10 @@ mod tests {
 
     #[test]
     fn escapes_json_message_text() {
-        assert_eq!("quote\\\" slash\\\\ line\\n", escape_json("quote\" slash\\ line\n"));
+        assert_eq!(
+            "quote\\\" slash\\\\ line\\n",
+            escape_json("quote\" slash\\ line\n")
+        );
     }
 
     #[test]

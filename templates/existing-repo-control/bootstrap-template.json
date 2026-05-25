@@ -1,8 +1,8 @@
 {
-  "id": "python-uv-cli",
-  "displayName": "Python uv CLI",
-  "description": "A compact Python command-line project with uv, pytest, Ruff, mypy, first-class runtime logging, agent notes, and a deterministic verification path.",
-  "type": "python-uv-cli",
+  "id": "existing-repo-control",
+  "displayName": "Existing Repo Control Plane",
+  "description": "A non-destructive Bootstrap control-plane package for adopting existing repositories into managed scripts, Supermeta tools, sync metadata, nag hooks, and smart-check policy.",
+  "type": "existing-repo-control",
   "requiredInputs": [
     "name"
   ],
@@ -97,36 +97,37 @@
     }
   ],
   "verificationCommands": [
-    "./scripts/check",
-    "uv run --no-editable python-uv-cli"
+    "./scripts/agent-bootstrap sync --dry-run",
+    "./scripts/agent-smart-check --plan-only"
   ],
   "generatedDocs": {
-    "summary": "This is a compact Python uv command-line project with tests, type checking, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
-    "runtime": "uv owns dependency resolution and command execution. Runtime logging uses Python's standard `logging` package, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Ruff owns formatting and linting, mypy owns type checking, pytest owns behavior tests, and `scripts/check` ties the full agent verification path together.",
+    "summary": "This repository is adopted into the Codex Bootstrap control plane without being generated from a product starter.",
+    "runtime": "Bootstrap owns only managed agent scripts, Supermeta tools, sync metadata, nag hooks, and smart-check policy. Product source, build systems, and project-specific verification remain owned by the downstream repository.",
     "entrypoints": [
-      "src/python_uv_cli/cli.py",
-      "src/python_uv_cli/__main__.py",
-      "src/python_uv_cli/logging_config.py",
-      "pyproject.toml project.scripts"
+      "scripts/agent-bootstrap",
+      "scripts/agent-smart-check",
+      "scripts/agent-fix-loop",
+      "scripts/agent-nag",
+      "scripts/agent-coord",
+      "scripts/agent-task",
+      "scripts/agent-beans"
     ],
     "sourceRoots": [
-      "src/python_uv_cli",
-      "tools/supermeta-rules"
+      "tools/supermeta-*"
     ],
     "testRoots": [
-      "tests",
-      "supermeta-rules.json"
+      ".codex-bootstrap/checks.json",
+      ".codex-bootstrap/checks.local.json"
     ],
     "verificationCommands": [
-      "./scripts/check"
+      "./scripts/agent-bootstrap sync --dry-run",
+      "./scripts/agent-smart-check --plan-only"
     ],
     "runCommands": [
-      "uv run --no-editable python-uv-cli",
-      "uv run --no-editable python-uv-cli \"Ada Lovelace\"",
-      "uv run --no-editable python -m python_uv_cli \"Ada Lovelace\"",
-      "LOG_LEVEL=info LOG_FORMAT=json uv run --no-editable python-uv-cli"
+      "./scripts/agent-bootstrap sync --dry-run",
+      "./scripts/agent-smart-check --plan-only"
     ],
-    "firstUsefulEdit": "Extend `src/python_uv_cli/cli.py`, update `tests/test_cli.py` first or in the same change, then rerun `./scripts/check`."
+    "firstUsefulEdit": "Add project-specific lanes to `.codex-bootstrap/checks.local.json`, then run `./scripts/agent-smart-check --plan-only`."
   },
   "syncContract": {
     "version": 2,
@@ -203,20 +204,7 @@
             "mode": "whole-file"
           }
         ],
-        "regions": [
-          {
-            "path": "README.md",
-            "id": "generated-docs/agent-nags"
-          },
-          {
-            "path": "AGENTS.md",
-            "id": "generated-docs/agent-nags"
-          },
-          {
-            "path": "docs/OPERATIONS.md",
-            "id": "generated-docs/agent-nags"
-          }
-        ]
+        "regions": []
       },
       {
         "id": "velocity-tools",
@@ -275,20 +263,7 @@
             "mode": "whole-file"
           }
         ],
-        "regions": [
-          {
-            "path": "README.md",
-            "id": "generated-docs/velocity-tools"
-          },
-          {
-            "path": "AGENTS.md",
-            "id": "generated-docs/velocity-tools"
-          },
-          {
-            "path": "docs/OPERATIONS.md",
-            "id": "generated-docs/velocity-tools"
-          }
-        ]
+        "regions": []
       },
       {
         "id": "supermeta-tools",
@@ -368,51 +343,14 @@
           }
         ],
         "regions": []
-      },
-      {
-        "id": "generated-docs",
-        "description": "Generated bootstrap sync instructions in project docs.",
-        "files": [],
-        "regions": [
-          {
-            "path": "README.md",
-            "id": "generated-docs/bootstrap-sync"
-          },
-          {
-            "path": "AGENTS.md",
-            "id": "generated-docs/bootstrap-sync"
-          },
-          {
-            "path": "docs/OPERATIONS.md",
-            "id": "generated-docs/bootstrap-sync"
-          }
-        ]
-      },
-      {
-        "id": "language-checks",
-        "autoEnable": false,
-        "description": "Template verification and reusable rule configuration.",
-        "files": [
-          {
-            "path": "supermeta-rules.json",
-            "mode": "whole-file"
-          },
-          {
-            "path": "scripts/check",
-            "mode": "whole-file"
-          },
-          {
-            "path": "scripts/check.ps1",
-            "mode": "whole-file"
-          }
-        ],
-        "regions": []
       }
     ],
     "verificationCommands": [
       "./scripts/agent-bootstrap sync --dry-run",
-      "./scripts/check"
+      "./scripts/agent-smart-check --plan-only"
     ],
-    "migrationNotes": []
+    "migrationNotes": [
+      "Existing repositories keep product source and project docs local; Bootstrap manages only the control-plane files declared in this contract."
+    ]
   }
 }

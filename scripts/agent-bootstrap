@@ -9,4 +9,9 @@ if [ "${1:-}" = "check-updates" ] && [ -x "$repo_root/scripts/agent-nag" ]; then
   exec "$repo_root/scripts/agent-nag" check-updates "$@"
 fi
 
+if [ "${1:-}" = "adopt" ]; then
+  shift
+  exec python3 "$repo_root/tools/supermeta-bootstrap/bootstrap_adopt.py" "$@"
+fi
+
 exec python3 "$repo_root/tools/supermeta-bootstrap/bootstrap_sync.py" "$@"

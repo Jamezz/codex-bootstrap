@@ -41,6 +41,17 @@ if ($args.Count -gt 0 -and $args[0] -eq "check-updates") {
     }
 }
 
+if ($args.Count -gt 0 -and $args[0] -eq "adopt") {
+    $adoptScript = Join-Path $repoRoot "tools/supermeta-bootstrap/bootstrap_adopt.py"
+    $remainingArgs = @()
+    if ($args.Count -gt 1) {
+        $remainingArgs = $args[1..($args.Count - 1)]
+    }
+    $pythonArgs = @($adoptScript)
+    $pythonArgs += $remainingArgs
+    Invoke-PythonChecked @pythonArgs
+}
+
 $syncScript = Join-Path $repoRoot "tools/supermeta-bootstrap/bootstrap_sync.py"
 $pythonArgs = @($syncScript)
 $pythonArgs += $args

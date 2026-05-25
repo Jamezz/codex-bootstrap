@@ -137,6 +137,15 @@ def default_checks_policy(template_id: str, template_type: str) -> dict[str, obj
 
 
 def default_check_lanes(template_type: str) -> list[dict[str, object]]:
+    if template_type == "existing-repo-control":
+        return [
+            full_lane(
+                "Plan adopted-repository verification. Add real project lanes in .codex-bootstrap/checks.local.json.",
+                [["./scripts/agent-smart-check", "--plan-only"]],
+                [],
+                60,
+            ),
+        ]
     if template_type == "java-gradle-cli":
         return [
             lane(
