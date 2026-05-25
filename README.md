@@ -196,7 +196,7 @@ Generated projects include focused verification and failure-diagnostic helpers:
 ./scripts/agent-fix-loop --timeout 600 -- ./scripts/agent-smart-check
 ```
 
-`agent-smart-check` reads `.codex-bootstrap/checks.json` and optional `.codex-bootstrap/checks.local.json` to pick focused lanes from changed files. Lanes can declare `cost`, `tags`, `requires`, and `timeoutSeconds`; use `--fast-only`, `--tag`, `--timeout`, and `--self-test` to keep the local loop tight. Focused lanes are for inner-loop work; run the template full check before handoff.
+`agent-smart-check` reads `.codex-bootstrap/checks.json` and optional `.codex-bootstrap/checks.local.json` to pick focused lanes from changed files. It runs Finder-copy hygiene first by default: exact duplicate copies are cleaned automatically, divergent or ambiguous copies are quarantined or reported, and verification stops with exit code `3` for review. Lanes can declare `cost`, `tags`, `requires`, and `timeoutSeconds`; use `--fast-only`, `--tag`, `--timeout`, `--hygiene-only`, `--no-hygiene`, and `--self-test` to keep the local loop tight. Focused lanes are for inner-loop work; run the template full check before handoff.
 
 `agent-fix-loop` captures command output to `.codex-bootstrap/fix-loop/last.log`, classifies common failures, records attempt/evidence JSON, and can run read-only diagnostics between retries without mutating source or lockfiles in v1.
 

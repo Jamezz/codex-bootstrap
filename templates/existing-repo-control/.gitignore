@@ -1,4 +1,5 @@
 .codex-bootstrap/nag-state.json
 .codex-bootstrap/fix-loop/
+.codex-bootstrap/cleanup-quarantine/
 .codex-bootstrap/reports/*
 !.codex-bootstrap/reports/.gitignore

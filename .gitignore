@@ -6,4 +6,5 @@ __pycache__/
 .nuget/
 .worktrees/
 .codex-bootstrap/fix-loop/
+.codex-bootstrap/cleanup-quarantine/
 build/

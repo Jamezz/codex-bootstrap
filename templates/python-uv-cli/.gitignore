@@ -11,6 +11,7 @@ dist/
 *.py[cod]
 .codex-bootstrap/nag-state.json
 .codex-bootstrap/fix-loop/
+.codex-bootstrap/cleanup-quarantine/
 
 .idea/
 .vscode/

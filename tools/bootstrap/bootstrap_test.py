@@ -467,6 +467,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertFalse((checkout / ".codex-bootstrap" / "nag-state.json").exists())
             self.assertIn(".codex-bootstrap/nag-state.json", read_text(checkout / ".gitignore"))
             self.assertIn(".codex-bootstrap/fix-loop/", read_text(checkout / ".gitignore"))
+            self.assertIn(".codex-bootstrap/cleanup-quarantine/", read_text(checkout / ".gitignore"))
             sync_metadata = json.loads(
                 (checkout / ".codex-bootstrap" / "sync.json").read_text(encoding="utf-8")
             )
@@ -605,6 +606,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("agent-fix-loop", readme)
             self.assertIn("agent-smart-check", agents)
             self.assertIn("--self-test", agents)
+            self.assertIn("Finder-copy hygiene", readme)
+            self.assertIn("--no-hygiene", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
             assert_generated_operational_baseline(self, checkout)
             self.assertIn(
@@ -615,6 +618,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("## Agent Coordination", operations)
             self.assertIn("CODEX_AGENT_COORD_HOME", operations)
             self.assertIn("checks.local.json", operations)
+            self.assertIn("cleanup-quarantine", operations)
             assert_generated_nag_docs(self, readme, agents, operations)
 
             smart_check = run_checked(

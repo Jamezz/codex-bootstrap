@@ -25,6 +25,8 @@ Run the full gate before handoff:
 ```
 
 Generated lanes live in `.codex-bootstrap/checks.json`. Downstream-only lanes belong in `.codex-bootstrap/checks.local.json`.
+
+Smart-check also runs Finder-copy hygiene before verification. Exact duplicate copies are cleaned automatically; divergent or ambiguous copies stop the run for review under `.codex-bootstrap/cleanup-quarantine/`.
 <!-- codex-bootstrap:end generated-docs/velocity-tools -->
 """
 
@@ -35,6 +37,8 @@ def generated_velocity_agent_region(check_command_text: str) -> str:
 
 - Use `./scripts/agent-smart-check --self-test` after changing `.codex-bootstrap/checks*.json`.
 - Use `./scripts/agent-fix-loop --timeout 600 -- ./scripts/agent-smart-check` for fast inner-loop verification.
+- Let smart-check run Finder-copy hygiene by default; use `--no-hygiene` only for raw verification.
+- Review `.codex-bootstrap/cleanup-quarantine/` when smart-check exits with hygiene review code `3`.
 - Use `{check_command_text}` before handoff; focused lanes are not a release gate.
 - Put downstream-only smart-check lanes in `.codex-bootstrap/checks.local.json`.
 - Keep lane metadata current: `cost`, `tags`, `requires`, and `timeoutSeconds`.
@@ -58,6 +62,14 @@ Validate the lane contract:
 ```bash
 ./scripts/agent-smart-check --self-test
 ```
+
+Run only the hygiene preflight:
+
+```bash
+./scripts/agent-smart-check --hygiene-only
+```
+
+Finder-copy hygiene quarantines divergent or ambiguous copies under `.codex-bootstrap/cleanup-quarantine/` and exits with review code `3` before verification runs.
 
 Capture and classify a failing inner loop:
 
