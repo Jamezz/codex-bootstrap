@@ -14,6 +14,8 @@ When working inside the Codex Bootstrap catalog itself, pass a template config a
 python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/supermeta-rules.json --root templates/java-gradle-cli
 ```
 
+Rule `paths` may point at a broad repo area, but keep `include` patterns rooted at the real source or test trees. The matcher streams those include globs first and then applies final include/exclude filtering, so broad adoption configs do not have to scan build outputs, vendored trees, or generated artifacts before finding source files.
+
 ## Supported Rules
 
 ### `line_count`

@@ -13,7 +13,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 @dataclass(frozen=True)
@@ -554,12 +554,11 @@ def run_java_lombok_boilerplate_rules(rules: Any, root: Path) -> list[Finding]:
         ignore_annotations = tuple(require_string_list(rule, "ignore_annotations", default=[]))
         allow_methods = set(require_string_list(rule, "allow_methods", default=[]))
 
-        source_files = list(iter_matching_files(root, paths, include, exclude))
         source_contexts: list[JavaSourceContext] = []
         record_types: set[JavaRecordType] = set()
         require_record_builder = require_bool(rule, "require_record_builder", default=False)
 
-        for source_file in source_files:
+        for source_file in iter_matching_files(root, paths, include, exclude):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             class_blocks = iter_java_class_blocks(stripped_source)
             package_name = java_package_name(stripped_source)
@@ -1120,7 +1119,7 @@ def run_project_callout_rules(rules: Any, root: Path, execute: bool = True) -> l
         exclude = require_string_list(rule, "exclude", default=[])
         command = require_non_empty_string_list(rule, "command")
 
-        if not execute or not iter_matching_files(root, paths, include, exclude):
+        if not execute or not has_matching_file(root, paths, include, exclude):
             continue
 
         try:
@@ -1169,14 +1168,14 @@ def iter_matching_files(
     paths: list[str],
     include: list[str],
     exclude: list[str],
-) -> list[Path]:
-    matches: set[Path] = set()
+) -> Iterator[Path]:
+    seen: set[Path] = set()
     for configured_path in paths:
         base_path = resolve_under_root(root, configured_path)
         if base_path.is_file():
             candidates = [base_path]
         elif base_path.is_dir():
-            candidates = [path for path in base_path.rglob("*") if path.is_file()]
+            candidates = iter_included_files(base_path, configured_path, include)
         else:
             continue
 
@@ -1185,9 +1184,52 @@ def iter_matching_files(
             if any(fnmatch.fnmatch(relative_path, pattern) for pattern in include) and not any(
                 fnmatch.fnmatch(relative_path, pattern) for pattern in exclude
             ):
-                matches.add(candidate)
+                if candidate not in seen:
+                    seen.add(candidate)
+                    yield candidate
 
-    return sorted(matches)
+
+def iter_included_files(base_path: Path, configured_path: str, include: list[str]) -> Iterator[Path]:
+    seen: set[Path] = set()
+    for include_pattern in include:
+        search_pattern = include_glob_for_base(configured_path, include_pattern)
+        if search_pattern is None:
+            continue
+        for candidate in sorted(base_path.glob(search_pattern)):
+            if candidate.is_file() and candidate not in seen:
+                seen.add(candidate)
+                yield candidate
+
+
+def has_matching_file(root: Path, paths: list[str], include: list[str], exclude: list[str]) -> bool:
+    return next(iter_matching_files(root, paths, include, exclude), None) is not None
+
+
+def include_glob_for_base(configured_path: str, include_pattern: str) -> str | None:
+    normalized_path = normalize_rule_path(configured_path)
+    normalized_pattern = normalize_rule_path(include_pattern)
+    if any(part == ".." for part in normalized_pattern.split("/")):
+        return None
+
+    if normalized_path:
+        path_prefix = f"{normalized_path}/"
+        if normalized_pattern.startswith(path_prefix):
+            normalized_pattern = normalized_pattern[len(path_prefix) :]
+        elif normalized_pattern == normalized_path:
+            normalized_pattern = "**/*"
+
+    if not normalized_pattern:
+        return "**/*"
+    if "/" not in normalized_pattern and any(marker in normalized_pattern for marker in "*?["):
+        return f"**/{normalized_pattern}"
+    return normalized_pattern
+
+
+def normalize_rule_path(path: str) -> str:
+    normalized = path.replace("\\", "/").strip("/")
+    if normalized in {"", "."}:
+        return ""
+    return normalized
 
 
 def resolve_under_root(root: Path, configured_path: str) -> Path:

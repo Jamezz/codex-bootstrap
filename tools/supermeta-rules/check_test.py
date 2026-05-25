@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
 
 
 CHECK_MODULE_PATH = Path(__file__).resolve().parent / "check.py"
@@ -23,6 +24,76 @@ def load_check_module() -> ModuleType:
 
 
 check = load_check_module()
+
+
+class FileMatchingRuleTest(unittest.TestCase):
+    def test_broad_path_uses_rooted_include_glob_before_filtering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            matched = write_source(
+                root,
+                "repo/src/main/java/example/App.java",
+                "package example;\nfinal class App {}\n",
+            )
+            write_source(root, "repo/target/classes/noise.txt", "not relevant\n")
+
+            with patch.object(Path, "rglob", side_effect=AssertionError("broad rglob should not run")):
+                matches = list(
+                    check.iter_matching_files(
+                        root,
+                        paths=["repo"],
+                        include=["repo/src/main/java/example/*.java"],
+                        exclude=[],
+                    )
+                )
+
+            self.assertEqual([matched], matches)
+
+    def test_matching_files_stream_without_materialized_list(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            matched = write_source(
+                root,
+                "repo/src/main/java/example/App.java",
+                "package example;\nfinal class App {}\n",
+            )
+
+            matches = check.iter_matching_files(
+                root,
+                paths=["repo"],
+                include=["repo/src/main/java/example/*.java"],
+                exclude=[],
+            )
+
+            self.assertNotIsInstance(matches, list)
+            self.assertEqual(matched, next(matches))
+            with self.assertRaises(StopIteration):
+                next(matches)
+
+    def test_callout_probe_uses_first_matching_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "repo/src/main/java/example/App.java",
+                "package example;\nfinal class App {}\n",
+            )
+
+            self.assertTrue(
+                check.has_matching_file(
+                    root,
+                    paths=["repo"],
+                    include=["repo/src/main/java/example/*.java"],
+                    exclude=[],
+                )
+            )
+
+    def test_include_glob_is_scoped_to_configured_path(self) -> None:
+        self.assertEqual(
+            "src/main/java/**/*.java",
+            check.include_glob_for_base("repo", "repo/src/main/java/**/*.java"),
+        )
+        self.assertEqual("**/*.java", check.include_glob_for_base("repo/src/main/java", "**/*.java"))
 
 
 def rust_module_item_count_config(max_items: int = 7) -> dict[str, object]:
@@ -1517,4 +1588,3 @@ def java_lombok_boilerplate_config(
 
 if __name__ == "__main__":
     unittest.main()
-
