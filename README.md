@@ -8,6 +8,7 @@ The repo currently ships:
 - `templates/csharp-dotnet-cli/`: a C# .NET command-line starter with xUnit tests, first-class runtime logging, and a deterministic verification path.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
+- `templates/rust-cargo-cli/`: a Rust Cargo command-line starter with unit tests, Clippy, rustfmt, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-cli/`: a TypeScript Bun command-line starter with Biome, `tsc --noEmit`, Bun tests, first-class runtime logging, and a deterministic verification path.
 - `templates/typescript-bun-mcp-server/`: a TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Bun tests, and a deterministic verification path.
 - `bootstrap` and `bootstrap.ps1`: in-place launchers that materialize a template and remove the catalog from the generated project.
@@ -80,6 +81,9 @@ Other starter variants:
 ./bootstrap --template python-uv-cli --name my-service
 ./scripts/check
 
+./bootstrap --template rust-cargo-cli --name my-service
+./scripts/check
+
 ./bootstrap --template typescript-bun-cli --name my-service
 ./scripts/check
 
@@ -97,6 +101,7 @@ Use `--dry-run` to inspect the plan first:
 ```bash
 ./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice --dry-run
 ./bootstrap --template python-uv-cli --name my-service --dry-run
+./bootstrap --template rust-cargo-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-mcp-server --name my-mcp-server --dry-run
 ./bootstrap --template csharp-dotnet-cli --name my-service --dry-run
@@ -278,6 +283,7 @@ templates/
   csharp-dotnet-cli/
   java-gradle-cli/
   python-uv-cli/
+  rust-cargo-cli/
   typescript-bun-cli/
   typescript-bun-mcp-server/
 tools/
@@ -329,6 +335,14 @@ UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache ./scripts/check
 UV_CACHE_DIR=/tmp/codex-bootstrap-uv-cache uv run --no-editable python-uv-cli
 ```
 
+Verify the Rust starter in catalog form with:
+
+```bash
+cd templates/rust-cargo-cli
+./scripts/check
+cargo run --quiet
+```
+
 Verify the TypeScript starter in catalog form with:
 
 ```bash
@@ -354,6 +368,7 @@ cd templates/csharp-dotnet-cli
 ```
 
 The TypeScript starters require `bun` on PATH. The Python commands above use `UV_CACHE_DIR` only to keep local agent runs out of the user home directory; generated projects can use uv's normal cache location when permitted.
+The Rust starter requires Rust 1.85 or newer with rustfmt and Clippy installed.
 The C# starter requires .NET SDK 10 on PATH. `scripts/agent-dotnet` keeps `DOTNET_CLI_HOME` and `NUGET_PACKAGES` under the project by default so sandboxed agent runs do not write to the user home directory.
 
 The harness uses the template wrapper with a project-local Gradle home, file watching disabled, no resident daemon by default, same-checkout serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps downloaded Gradle assets warm inside each checkout without leaving idle Gradle JVMs around; set `SUPERMETA_GRADLE_COLD=1` for conservative low-worker diagnostics.

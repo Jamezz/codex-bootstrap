@@ -251,6 +251,50 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
         assert_velocity_manifest_contract(self, manifest)
 
+    def test_loads_rust_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "rust-cargo-cli")
+
+        self.assertEqual("rust-cargo-cli", manifest.template_id)
+        self.assertEqual("rust-cargo-cli", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("cargo run --quiet", manifest.verification_commands)
+        self.assertIn("Rust Cargo", manifest.generated_docs.summary)
+        self.assertIn("src/main.rs", manifest.generated_docs.entrypoints)
+        self.assertIn("src/logging.rs", manifest.generated_docs.entrypoints)
+        self.assertEqual(
+            [
+                "scripts/agent-bootstrap",
+                "scripts/agent-bootstrap.ps1",
+                "scripts/agent-beans",
+                "scripts/agent-beans.ps1",
+                "scripts/agent-coord",
+                "scripts/agent-coord.ps1",
+                "scripts/agent-nag",
+                "scripts/agent-nag.ps1",
+                "scripts/agent-task",
+                "scripts/agent-task.ps1",
+                "scripts/agent-smart-check",
+                "scripts/agent-smart-check.ps1",
+                "scripts/agent-fix-loop",
+                "scripts/agent-fix-loop.ps1",
+                "tools/supermeta-check",
+                "tools/supermeta-fix",
+                "tools/supermeta-agent",
+                "tools/supermeta-beans",
+                "tools/supermeta-task",
+                "tools/supermeta-rules",
+                "tools/supermeta-bootstrap",
+                "tools/supermeta-nag",
+            ],
+            [path.source for path in manifest.support_paths],
+        )
+        self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
+
     def test_loads_typescript_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
 
@@ -872,6 +916,51 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             self.assertEqual(1, conflict.returncode)
             self.assertIn("conflict: scripts/agent-task", conflict.stdout)
+
+    @unittest.skipIf(shutil.which("cargo") is None, "cargo is required for Rust template smoke test")
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_rust_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-rust-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "rust-cargo-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+
+            self.assertIn('name = "sample-app"', read_text(checkout / "Cargo.toml"))
+            self.assertIn('name = "sample-app"', read_text(checkout / "Cargo.lock"))
+            self.assertTrue((checkout / "src" / "main.rs").is_file())
+            self.assertTrue((checkout / "src" / "cli.rs").is_file())
+            self.assertTrue((checkout / "src" / "logging.rs").is_file())
+            self.assertIn("rust_module_item_count", read_text(checkout / "supermeta-rules.json"))
+            self.assertIn("rust_panic_boundary", read_text(checkout / "supermeta-rules.json"))
+            self.assertIn("Rust uses the dependency-free starter logger", read_text(checkout / "docs" / "ARCHITECTURE.md"))
+            self.assertIn("cargo run --quiet", read_text(checkout / "README.md"))
+            self.assertIn("Do not use `.unwrap()`", read_text(checkout / "AGENTS.md"))
+
+            example_run = run_checked(["cargo", "run", "--quiet", "--", "Ada"], cwd=checkout, timeout=180)
+            self.assertIn("Hello, Ada!", example_run.stdout)
 
     @unittest.skipIf(shutil.which("dotnet") is None, "dotnet is required for C# template smoke test")
     @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")

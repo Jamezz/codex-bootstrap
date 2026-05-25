@@ -1,0 +1,55 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "rust_module_item_count": [
+    {
+      "name": "rust-module-size",
+      "max_items": 7,
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "rust_panic_boundary": [
+    {
+      "name": "rust-panic-boundary",
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"],
+      "allow_tests": true
+    }
+  ],
+  "project_callouts": [
+    {
+      "name": "rust-format",
+      "language": "rust",
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"],
+      "command": ["cargo", "fmt", "--all", "--check"]
+    },
+    {
+      "name": "rust-clippy",
+      "language": "rust",
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"],
+      "command": ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+    },
+    {
+      "name": "rust-tests",
+      "language": "rust",
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"],
+      "command": ["cargo", "test"]
+    }
+  ]
+}

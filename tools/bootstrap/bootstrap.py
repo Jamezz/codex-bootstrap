@@ -37,6 +37,7 @@ SUPPORTED_TEMPLATE_TYPES = {
     "csharp-dotnet-cli",
     "java-gradle-cli",
     "python-uv-cli",
+    "rust-cargo-cli",
     "typescript-bun-cli",
     "typescript-bun-mcp-server",
 }
@@ -113,6 +114,7 @@ TEXT_SUFFIXES = {
     ".properties",
     ".ps1",
     ".py",
+    ".rs",
     ".sh",
     ".slnx",
     ".targets",
@@ -560,6 +562,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
         "csharp-dotnet-cli": rewrite_csharp_template,
         "java-gradle-cli": rewrite_java_template,
         "python-uv-cli": rewrite_python_template,
+        "rust-cargo-cli": rewrite_rust_template,
         "typescript-bun-cli": rewrite_typescript_template,
         "typescript-bun-mcp-server": rewrite_typescript_template,
     }.get(plan.manifest.template_type)
@@ -634,6 +637,15 @@ def rewrite_csharp_template(plan: BootstrapPlan, staged_root: Path) -> None:
         "csharpdotnetcli": project_name.lower(),
         "C# .NET CLI Template": plan.project_title,
         "CsharpDotnetCli": project_name,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
+def rewrite_rust_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    replacements = common_replacements(plan) | {
+        plan.manifest.template_id: plan.config.project_name,
+        f"{plan.manifest.display_name} Template": plan.project_title,
     }
     rewrite_text_files(staged_root, replacements)
     write_generated_docs(plan, staged_root)
@@ -917,6 +929,8 @@ def windows_run_command(plan: BootstrapPlan) -> str:
         return f".\\scripts\\agent-dotnet.ps1 . run --project src/{project_name}/{project_name}.csproj --"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run"
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return "cargo run --quiet"
     if plan.manifest.template_type == "typescript-bun-mcp-server":
         return "bun run src/main.ts --help"
     if plan.manifest.template_type == "typescript-bun-cli":
@@ -929,6 +943,8 @@ def windows_run_with_args_command(plan: BootstrapPlan) -> str:
         return f"{windows_run_command(plan)} \"example\""
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run --args=\"example\""
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return "cargo run --quiet -- \"example\""
     if plan.manifest.template_type == "typescript-bun-mcp-server":
         return "bun run src/main.ts --transport http"
     if plan.manifest.template_type == "typescript-bun-cli":
@@ -949,6 +965,8 @@ def windows_process_match(plan: BootstrapPlan) -> str:
         return "gradle"
     if plan.manifest.template_type == "python-uv-cli":
         return "uv"
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return "cargo"
     return "bun"
 
 
@@ -1108,11 +1126,105 @@ def generated_readme(plan: BootstrapPlan) -> str:
         return generated_csharp_readme(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return generated_rust_readme(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
         return generated_typescript_mcp_readme(plan)
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_readme(plan)
     return generated_java_readme(plan)
+
+
+def generated_rust_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title}
+
+{title} is a compact Rust Cargo command-line project with tests, Clippy, rustfmt, first-class runtime logging, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- Rust toolchain 1.85 or newer on PATH;
+- Cargo, rustfmt, and Clippy installed with the toolchain.
+
+The project targets Rust edition 2024 and keeps the starter dependency-free until product requirements justify a crate.
+
+## Usage
+
+Run the app:
+
+```bash
+cargo run --quiet
+```
+
+Pass application arguments:
+
+```bash
+cargo run --quiet -- "Ada Lovelace"
+```
+
+Run tests:
+
+```bash
+cargo test
+```
+
+Run the full verification lifecycle:
+
+```bash
+./scripts/check
+```
+
+Run Rust quality checks directly:
+
+```bash
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+python3 tools/supermeta-rules/check.py --config supermeta-rules.json --root . --skip-callouts
+```
+
+{generated_logging_readme_section().replace("<run-command>", "cargo run --quiet")}
+
+Inspect stuck task state:
+
+```bash
+./scripts/agent-task ps --match cargo
+./scripts/agent-task ps --match rustc
+```
+
+{generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
+{generated_windows_readme_section(plan)}
+## Customization
+
+- Change the Rust edition and toolchain floor in `Cargo.toml`.
+- Keep CLI behavior in `src/cli.rs` and entrypoint glue in `src/main.rs`.
+- Keep runtime logging in `src/logging.rs`.
+- Keep `Cargo.lock` checked in for CLI applications.
+- Keep the starter dependency-free until product requirements justify a crate.
+- Keep Rust source modules to 7 top-level production items or fewer; split larger modules around cohesive domain boundaries.
+- Supermeta rejects `.unwrap()`, `.expect()`, `todo!()`, `unimplemented!()`, and `dbg!()` in production Rust source; handle errors explicitly or keep panic behavior inside tests.
+- Keep reusable project checks in `tools/supermeta-rules/` and wire them through `supermeta-rules.json`.
+
+## First Useful Edit
+
+Extend the CLI behavior in `src/cli.rs`, update the unit tests first or in the same change, then run:
+
+```bash
+./scripts/check
+cargo run --quiet -- 'example'
+```
+
+{generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
+## Agent Workflow
+
+Agents should start by reading `AGENTS.md`, then run:
+
+```bash
+./scripts/check
+```
+"""
 
 
 def generated_java_readme(plan: BootstrapPlan) -> str:
@@ -1213,11 +1325,73 @@ def generated_agents(plan: BootstrapPlan) -> str:
         return generated_csharp_agents(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_agents(plan)
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return generated_rust_agents(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
         return generated_typescript_mcp_agents(plan)
     if plan.manifest.template_type == "typescript-bun-cli":
         return generated_typescript_agents(plan)
     return generated_java_agents(plan)
+
+
+def generated_rust_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title} Agent Notes
+
+This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Verify: `./scripts/check`
+- Format check: `cargo fmt --all --check`
+- Lint: `cargo clippy --all-targets -- -D warnings`
+- Supermeta checks: `python3 tools/supermeta-rules/check.py --config supermeta-rules.json --root . --skip-callouts`
+- Test: `cargo test`
+- Run: `cargo run --quiet`
+- Run with app args: `cargo run --quiet -- "example"`
+- Run with text logs: `LOG_LEVEL=info cargo run --quiet`
+- Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json cargo run --quiet`
+- Beans prime: `./scripts/agent-beans prime`
+- Beans check: `./scripts/agent-beans check`
+- Ready backlog: `./scripts/agent-beans list --ready`
+- Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
+- Inspect peer agents: `./scripts/agent-coord status`
+- Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
+- Inspect Cargo processes: `./scripts/agent-task ps --match cargo`
+- Inspect Rust compiler processes: `./scripts/agent-task ps --match rustc`
+
+## Windows
+
+- Verify: `.\\scripts\\check.ps1`
+- Run: `cargo run --quiet`
+- Beans prime: `.\\scripts\\agent-beans.ps1 prime`
+- Inspect peer agents: `.\\scripts\\agent-coord.ps1 status`
+- Inspect Cargo processes: `.\\scripts\\agent-task.ps1 ps --match cargo`
+
+## Beans
+
+- Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.
+- Use `./scripts/agent-beans list --ready` to inspect ready work.
+- Keep the seeded Beans current as starter behavior is replaced.
+- If `./scripts/agent-beans` reports a missing or wrong Beans CLI version, tell the user instead of bypassing the wrapper.
+
+## Rules
+
+- Target Rust edition 2024 unless the project intentionally chooses a different baseline.
+- Keep CLI behavior in `src/cli.rs` and entrypoint glue in `src/main.rs`.
+- Keep runtime logging in `src/logging.rs`.
+{generated_logging_agent_rules()}
+- Keep `Cargo.lock` checked in for CLI applications.
+- Keep the starter dependency-free until product requirements justify a crate.
+- Keep product source files under `src/` at 1000 lines or less.
+- Keep Rust source modules at 7 top-level production items or fewer before splitting around cohesive domain boundaries.
+- Do not use `.unwrap()`, `.expect()`, `todo!()`, `unimplemented!()`, or `dbg!()` in production Rust paths; return `Result`, handle `Option`, or keep panic behavior inside tests.
+- Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
+- Route formatting through `cargo fmt`, lint through Clippy with warnings denied, and behavior checks through `cargo test`.
+- Use `./scripts/check` for agent verification unless debugging one tool directly.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
+"""
 
 
 def generated_java_agents(plan: BootstrapPlan) -> str:
@@ -1798,15 +1972,18 @@ def logging_runtime_implementation(plan: BootstrapPlan) -> str:
         return "Java uses SLF4J with Logback configured by `LoggingConfig`."
     if plan.manifest.template_type == "python-uv-cli":
         return "Python uses the standard `logging` package configured by `logging_config.py`."
+    if plan.manifest.template_type == "rust-cargo-cli":
+        return "Rust uses the dependency-free starter logger in `src/logging.rs`."
     return "TypeScript uses Pino configured by `src/logging.ts`."
 
 
 def generated_logging_contract(plan: BootstrapPlan) -> str:
-    event_line = (
-        "- The starter emits transport startup logs when info logging is enabled."
-        if plan.manifest.template_type == "typescript-bun-mcp-server"
-        else "- The starter emits an `info` log after command completion with `exitCode` when info logging is enabled."
-    )
+    if plan.manifest.template_type == "typescript-bun-mcp-server":
+        event_line = "- The starter emits transport startup logs when info logging is enabled."
+    elif plan.manifest.template_type == "rust-cargo-cli":
+        event_line = "- The starter emits an `info` startup log when info logging is enabled."
+    else:
+        event_line = "- The starter emits an `info` log after command completion with `exitCode` when info logging is enabled."
     return f"""{logging_runtime_implementation(plan)}
 
 - `LOG_LEVEL`: `trace`, `debug`, `info`, `warn`, `error`, or `off`; default `warn`.

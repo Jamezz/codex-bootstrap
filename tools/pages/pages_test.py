@@ -95,6 +95,7 @@ class InstallerTest(unittest.TestCase):
             self.assertIn("java-gradle-cli: Java Gradle CLI", result.stdout)
             self.assertIn("csharp-dotnet-cli: C# .NET CLI", result.stdout)
             self.assertIn("python-uv-cli: Python uv CLI", result.stdout)
+            self.assertIn("rust-cargo-cli: Rust Cargo CLI", result.stdout)
             self.assertIn("typescript-bun-cli: TypeScript Bun CLI", result.stdout)
             self.assertIn(
                 "typescript-bun-mcp-server: TypeScript Bun MCP Server",
@@ -130,6 +131,7 @@ class InstallerTest(unittest.TestCase):
             ("csharp-dotnet-cli", "csharp-app"),
             ("java-gradle-cli", "java-app"),
             ("python-uv-cli", "python-app"),
+            ("rust-cargo-cli", "rust-app"),
             ("typescript-bun-cli", "typescript-app"),
             ("typescript-bun-mcp-server", "mcp-app"),
         ]
@@ -185,6 +187,7 @@ class InstallerTest(unittest.TestCase):
             self.assertTrue(
                 (install_root / "python-app" / "src" / "python_app" / "cli.py").is_file()
             )
+            self.assertTrue((install_root / "rust-app" / "src" / "main.rs").is_file())
             self.assertTrue((install_root / "typescript-app" / "src" / "cli.ts").is_file())
             self.assertTrue((install_root / "mcp-app" / "src" / "mcp.ts").is_file())
 

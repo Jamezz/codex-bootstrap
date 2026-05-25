@@ -212,6 +212,34 @@ def default_check_lanes(template_type: str) -> list[dict[str, object]]:
             ),
             full_lane("Complete C# verification.", [["./scripts/check"]], ["dotnet"], 600),
         ]
+    if template_type == "rust-cargo-cli":
+        return [
+            lane(
+                "rust-test",
+                "Rust source changed.",
+                ["src/**/*.rs"],
+                [["cargo", "test"]],
+                cost="fast",
+                tags=["rust", "test"],
+                requires=["cargo"],
+                timeout_seconds=120,
+            ),
+            lane(
+                "rust-quality",
+                "Rust quality config or source changed.",
+                ["src/**/*.rs", "Cargo.toml", "Cargo.lock", "supermeta-rules.json"],
+                [
+                    ["python3", "tools/supermeta-rules/check.py", "--config", "supermeta-rules.json", "--root", ".", "--skip-callouts"],
+                    ["cargo", "fmt", "--all", "--check"],
+                    ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
+                ],
+                cost="standard",
+                tags=["rust", "quality"],
+                requires=["cargo", "python3"],
+                timeout_seconds=240,
+            ),
+            full_lane("Complete Rust verification.", [["./scripts/check"]], ["cargo"], 600),
+        ]
     if template_type == "typescript-bun-mcp-server":
         source_paths = [
             "src/mcp.ts",

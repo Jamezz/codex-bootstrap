@@ -25,6 +25,39 @@ def load_check_module() -> ModuleType:
 check = load_check_module()
 
 
+def rust_module_item_count_config(max_items: int = 7) -> dict[str, object]:
+    return {
+        "rust_module_item_count": [
+            {
+                "name": "rust-module-size",
+                "max_items": max_items,
+                "paths": ["src"],
+                "include": ["**/*.rs"],
+                "exclude": ["**/generated/**"],
+            }
+        ]
+    }
+
+
+def rust_panic_boundary_config(allow_tests: bool = True) -> dict[str, object]:
+    return {
+        "rust_panic_boundary": [
+            {
+                "name": "rust-panic-boundary",
+                "paths": ["src"],
+                "include": ["**/*.rs"],
+                "exclude": ["**/generated/**"],
+                "allow_tests": allow_tests,
+            }
+        ]
+    }
+
+
+def write_rust_functions(root: Path, count: int) -> None:
+    source = "\n".join(f"pub fn item_{index}() -> usize {{ {index} }}" for index in range(count))
+    write_source(root, "src/big.rs", f"{source}\n")
+
+
 class ProjectCalloutRuleTest(unittest.TestCase):
     def test_successful_callout_returns_no_findings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -184,6 +217,131 @@ class ProjectCalloutRuleTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertFalse(marker.exists())
+
+
+class RustModuleItemCountRuleTest(unittest.TestCase):
+    def test_allows_module_at_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_rust_functions(root, count=7)
+
+            findings = check.run_rules(rust_module_item_count_config(max_items=7), root)
+
+            self.assertEqual([], findings)
+
+    def test_fails_module_over_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_rust_functions(root, count=8)
+
+            findings = check.run_rules(rust_module_item_count_config(max_items=7), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("rust-module-size", findings[0].rule)
+            self.assertEqual(Path("src/big.rs"), findings[0].path)
+            self.assertIn("8 Rust top-level items exceeds module limit of 7", findings[0].message)
+            self.assertIn("split this module around cohesive domain boundaries", findings[0].message)
+
+    def test_ignores_test_module_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/lib.rs",
+                """pub fn production() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    fn helper_0() {}
+    fn helper_1() {}
+    fn helper_2() {}
+    fn helper_3() {}
+    fn helper_4() {}
+    fn helper_5() {}
+    fn helper_6() {}
+    fn helper_7() {}
+}
+""",
+            )
+
+            findings = check.run_rules(rust_module_item_count_config(max_items=7), root)
+
+            self.assertEqual([], findings)
+
+
+class RustPanicBoundaryRuleTest(unittest.TestCase):
+    def test_rejects_unwrap_expect_and_debug_macros(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main.rs",
+                """fn main() {
+    let value = Some(\"ok\").unwrap();
+    let _other = Some(value).expect(\"value should exist\");
+    dbg!(_other);
+    todo!(\"replace starter behavior\");
+}
+""",
+            )
+
+            findings = check.run_rules(rust_panic_boundary_config(), root)
+
+            self.assertEqual(4, len(findings))
+            self.assertTrue(all(finding.rule == "rust-panic-boundary" for finding in findings))
+            self.assertIn("panic-prone construct `.unwrap(`", findings[0].message)
+            self.assertIn("panic-prone construct `.expect(`", findings[1].message)
+            self.assertIn("panic-prone construct `dbg!`", findings[2].message)
+            self.assertIn("panic-prone construct `todo!`", findings[3].message)
+
+    def test_ignores_panic_constructs_in_cfg_test_modules_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/lib.rs",
+                """pub fn production() -> Option<&'static str> {
+    Some(\"ok\")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn allows_test_unwraps() {
+        let value = production().unwrap();
+        assert_eq!(\"ok\", value);
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(rust_panic_boundary_config(), root)
+
+            self.assertEqual([], findings)
+
+    def test_can_scan_cfg_test_modules_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/lib.rs",
+                """#[cfg(test)]
+mod tests {
+    #[test]
+    fn rejects_test_unwraps() {
+        let value = Some(\"ok\").unwrap();
+        assert_eq!(\"ok\", value);
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(rust_panic_boundary_config(allow_tests=False), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertIn("panic-prone construct `.unwrap(`", findings[0].message)
 
 
 class JavaPackageClassCountRuleTest(unittest.TestCase):
@@ -1359,3 +1517,4 @@ def java_lombok_boilerplate_config(
 
 if __name__ == "__main__":
     unittest.main()
+

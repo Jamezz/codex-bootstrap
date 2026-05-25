@@ -94,6 +94,13 @@ JAVA_MODIFIERS = {
 JAVA_CONSTRUCTOR_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>)?"
 JAVA_NEW_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
 JAVA_REFERENCE_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
+RUST_ITEM_RE = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?"
+    r"(?:async\s+)?(?:unsafe\s+)?"
+    r"(?P<kind>fn|struct|enum|trait|type|const|static|mod)\s+"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b",
+)
+RUST_PANIC_RE = re.compile(r"(?P<pattern>\.(?:unwrap|expect)\s*\(|\b(?:todo|unimplemented|dbg)\s*!)")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -164,6 +171,8 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
     findings.extend(run_java_package_class_count_rules(config.get("java_package_class_count", []), root))
     findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root))
     findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root))
+    findings.extend(run_rust_module_item_count_rules(config.get("rust_module_item_count", []), root))
+    findings.extend(run_rust_panic_boundary_rules(config.get("rust_panic_boundary", []), root))
     findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
@@ -180,11 +189,222 @@ def run_rules(config: dict[str, Any], root: Path, skip_callouts: bool = False) -
             "java_package_class_count",
             "line_count",
             "project_callouts",
+            "rust_module_item_count",
+            "rust_panic_boundary",
         }
     )
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
     return findings
+
+
+def run_rust_module_item_count_rules(rules: Any, root: Path) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("rust_module_item_count must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"rust_module_item_count[{index}]")
+        name = require_string(rule, "name", default=f"rust_module_item_count[{index}]")
+        max_items = require_positive_int(rule, "max_items")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.rs"])
+        exclude = require_string_list(rule, "exclude", default=[])
+
+        for source_file in iter_matching_files(root, paths, include, exclude):
+            stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            items = top_level_rust_items(stripped_source)
+            item_count = len(items)
+            if item_count > max_items:
+                findings.append(
+                    Finding(
+                        rule=name,
+                        path=source_file.relative_to(root),
+                        message=(
+                            f"{item_count} Rust top-level items exceeds module limit of {max_items}; "
+                            "split this module around cohesive domain boundaries"
+                        ),
+                    )
+                )
+
+    return findings
+
+
+def run_rust_panic_boundary_rules(rules: Any, root: Path) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("rust_panic_boundary must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"rust_panic_boundary[{index}]")
+        name = require_string(rule, "name", default=f"rust_panic_boundary[{index}]")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.rs"])
+        exclude = require_string_list(rule, "exclude", default=[])
+        allow_tests = require_boolean(rule, "allow_tests", default=True)
+
+        for source_file in iter_matching_files(root, paths, include, exclude):
+            stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            scanned_source = strip_rust_cfg_test_modules(stripped_source) if allow_tests else stripped_source
+            for match in RUST_PANIC_RE.finditer(scanned_source):
+                line = scanned_source.count("\n", 0, match.start()) + 1
+                findings.append(
+                    Finding(
+                        rule=name,
+                        path=source_file.relative_to(root),
+                        message=(
+                            f"panic-prone construct `{match.group('pattern').strip()}` at line {line}; "
+                            "return a Result, handle the Option, or isolate panic behavior in tests"
+                        ),
+                    )
+                )
+
+    return findings
+
+
+def strip_rust_comments_and_strings(source: str) -> str:
+    result: list[str] = []
+    index = 0
+    block_depth = 0
+    in_line_comment = False
+    in_string = False
+    in_char = False
+    while index < len(source):
+        current = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+
+        if in_line_comment:
+            if current == "\n":
+                in_line_comment = False
+                result.append(current)
+            else:
+                result.append(" ")
+            index += 1
+            continue
+
+        if block_depth > 0:
+            if current == "/" and following == "*":
+                block_depth += 1
+                result.extend("  ")
+                index += 2
+                continue
+            if current == "*" and following == "/":
+                block_depth -= 1
+                result.extend("  ")
+                index += 2
+                continue
+            result.append("\n" if current == "\n" else " ")
+            index += 1
+            continue
+
+        if in_string:
+            if current == "\\":
+                result.extend("  ")
+                index += 2
+                continue
+            if current == '"':
+                in_string = False
+            result.append("\n" if current == "\n" else " ")
+            index += 1
+            continue
+
+        if in_char:
+            if current == "\\":
+                result.extend("  ")
+                index += 2
+                continue
+            if current == "'":
+                in_char = False
+            result.append("\n" if current == "\n" else " ")
+            index += 1
+            continue
+
+        if current == "/" and following == "/":
+            in_line_comment = True
+            result.extend("  ")
+            index += 2
+            continue
+        if current == "/" and following == "*":
+            block_depth = 1
+            result.extend("  ")
+            index += 2
+            continue
+        if current == '"':
+            in_string = True
+            result.append(" ")
+            index += 1
+            continue
+        if current == "'" and looks_like_rust_char_literal(source, index):
+            in_char = True
+            result.append(" ")
+            index += 1
+            continue
+
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
+def require_boolean(raw_rule: dict[str, Any], key: str, default: bool) -> bool:
+    value = raw_rule.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
+
+
+def looks_like_rust_char_literal(source: str, index: int) -> bool:
+    if index + 2 >= len(source):
+        return False
+    if source[index + 1] == "\\":
+        return index + 3 < len(source) and source[index + 3] == "'"
+    return source[index + 2] == "'"
+
+
+def top_level_rust_items(source: str) -> list[str]:
+    items: list[str] = []
+    brace_depth = 0
+    for line in source.splitlines():
+        if brace_depth == 0:
+            match = RUST_ITEM_RE.match(line)
+            if match is not None and match.group("name") != "tests":
+                items.append(f"{match.group('kind')} {match.group('name')}")
+        brace_depth += line.count("{") - line.count("}")
+        brace_depth = max(brace_depth, 0)
+    return items
+
+
+def strip_rust_cfg_test_modules(source: str) -> str:
+    lines = source.splitlines(keepends=True)
+    result: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if "#[cfg(test)]" not in line:
+            result.append(line)
+            index += 1
+            continue
+
+        result.append("\n" if line.endswith("\n") else "")
+        index += 1
+        while index < len(lines) and "mod tests" not in lines[index]:
+            result.append("\n" if lines[index].endswith("\n") else "")
+            index += 1
+        if index >= len(lines):
+            continue
+
+        brace_depth = 0
+        module_started = False
+        while index < len(lines):
+            current_line = lines[index]
+            brace_depth += current_line.count("{") - current_line.count("}")
+            module_started = module_started or "{" in current_line
+            result.append("\n" if current_line.endswith("\n") else "")
+            index += 1
+            if module_started and brace_depth <= 0:
+                break
+
+    return "".join(result)
 
 
 def run_line_count_rules(rules: Any, root: Path) -> list[Finding]:

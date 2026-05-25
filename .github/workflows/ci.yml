@@ -51,6 +51,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy rustfmt
+          rustup default stable
+
       - name: Run tool unit tests
         run: python3 -m unittest discover -s tools -p '*_test.py'
 
@@ -71,6 +76,14 @@ jobs:
         env:
           UV_CACHE_DIR: ${{ runner.temp }}/codex-bootstrap-uv-cache
         run: uv run --no-editable python-uv-cli
+
+      - name: Check Rust Cargo template
+        working-directory: templates/rust-cargo-cli
+        run: ./scripts/check
+
+      - name: Run Rust Cargo template
+        working-directory: templates/rust-cargo-cli
+        run: cargo run --quiet
 
       - name: Check TypeScript Bun template
         working-directory: templates/typescript-bun-cli

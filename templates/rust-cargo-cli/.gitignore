@@ -1,0 +1,7 @@
+target/
+*.log
+.codex-bootstrap/nag-state.json
+.codex-bootstrap/fix-loop/
+
+.idea/
+.vscode/

@@ -40,6 +40,7 @@ Options:
 Examples:
   .\install.ps1 my-app -Template python-uv-cli
   .\install.ps1 my-app -Template csharp-dotnet-cli
+  .\install.ps1 my-app -Template rust-cargo-cli
   .\install.ps1 my-app -Template java-gradle-cli -Package com.acme.myapp
 
 Remote function form:
@@ -185,6 +186,7 @@ function Install-CodexBootstrap {
         "csharp-dotnet-cli",
         "java-gradle-cli",
         "python-uv-cli",
+        "rust-cargo-cli",
         "typescript-bun-cli",
         "typescript-bun-mcp-server"
     )

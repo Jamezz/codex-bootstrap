@@ -29,6 +29,8 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Velocity helper tests: `python3 -m unittest discover -s tools/supermeta-check -p '*_test.py'` and `python3 -m unittest discover -s tools/supermeta-fix -p '*_test.py'`
 - Java template check: `./scripts/agent-gradle templates/java-gradle-cli check`
 - Java template run: `./scripts/agent-gradle templates/java-gradle-cli run`
+- Rust template check: `cd templates/rust-cargo-cli && ./scripts/check`
+- Rust template run: `cd templates/rust-cargo-cli && cargo run --quiet`
 
 ## Naming
 

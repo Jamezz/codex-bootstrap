@@ -1,0 +1,9 @@
+[package]
+name = "rust-cargo-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A compact Rust Cargo command-line starter."
+publish = false
+
+[dependencies]

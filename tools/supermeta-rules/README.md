@@ -52,6 +52,42 @@ Checks that each Java package layer contains no more than a configured number of
 }
 ```
 
+### `rust_module_item_count`
+
+Checks that each Rust source module stays below a configured number of top-level items before it should be split around a clearer domain boundary. Test modules named `tests` are ignored.
+
+```json
+{
+  "rust_module_item_count": [
+    {
+      "name": "rust-module-size",
+      "max_items": 7,
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"]
+    }
+  ]
+}
+```
+
+### `rust_panic_boundary`
+
+Rejects panic-prone constructs in production Rust source: `.unwrap(`, `.expect(`, `todo!`, `unimplemented!`, and `dbg!`. By default, `#[cfg(test)] mod tests` blocks are ignored so tests can stay direct.
+
+```json
+{
+  "rust_panic_boundary": [
+    {
+      "name": "rust-panic-boundary",
+      "paths": ["src"],
+      "include": ["**/*.rs"],
+      "exclude": ["**/generated/**"],
+      "allow_tests": true
+    }
+  ]
+}
+```
+
 ### `project_callouts`
 
 Runs project-specific language tooling when matching files exist. Commands run from the configured project root and report a Supermeta finding when they exit non-zero.
