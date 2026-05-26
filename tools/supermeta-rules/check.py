@@ -17,6 +17,13 @@ from pathlib import Path
 from typing import Any, Iterator, TextIO
 
 
+DOMAIN_SPLIT_WARNING = (
+    "Do not satisfy this by creating numbered split files. "
+    "Refactor with real, concrete domain separation: split around coherent "
+    "responsibilities with appropriately named files/modules."
+)
+
+
 @dataclass(frozen=True)
 class Finding:
     rule: str
@@ -285,7 +292,7 @@ def run_rust_module_item_count_rules(
                         path=source_file.relative_to(root),
                         message=(
                             f"{item_count} Rust top-level items exceeds module limit of {max_items}; "
-                            "split this module around cohesive domain boundaries"
+                            f"{DOMAIN_SPLIT_WARNING}"
                         ),
                     ),
                     progress,
@@ -538,7 +545,10 @@ def run_line_count_rules(
                     Finding(
                         rule=name,
                         path=source_file.relative_to(root),
-                        message=f"{line_count} lines exceeds limit of {max_lines}",
+                        message=(
+                            f"{line_count} lines exceeds limit of {max_lines}; "
+                            f"{DOMAIN_SPLIT_WARNING}"
+                        ),
                     ),
                     progress,
                 )

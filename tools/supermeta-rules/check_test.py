@@ -112,6 +112,10 @@ class FileMatchingRuleTest(unittest.TestCase):
             )
 
             self.assertEqual(1, len(findings))
+            self.assertIn(
+                "Do not satisfy this by creating numbered split files",
+                findings[0].message,
+            )
             progress_output = stream.getvalue()
             self.assertIn("source-line-count: scanning", progress_output)
             self.assertIn("source-line-count: scanned 1 files", progress_output)
@@ -340,7 +344,8 @@ class RustModuleItemCountRuleTest(unittest.TestCase):
             self.assertEqual("rust-module-size", findings[0].rule)
             self.assertEqual(Path("src/big.rs"), findings[0].path)
             self.assertIn("8 Rust top-level items exceeds module limit of 7", findings[0].message)
-            self.assertIn("split this module around cohesive domain boundaries", findings[0].message)
+            self.assertIn("Do not satisfy this by creating numbered split files", findings[0].message)
+            self.assertIn("real, concrete domain separation", findings[0].message)
 
     def test_ignores_test_module_items(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
