@@ -19,8 +19,8 @@ from typing import Any, Iterator, TextIO
 
 DOMAIN_SPLIT_WARNING = (
     "Do not satisfy this by creating numbered split files. "
-    "Refactor with real, concrete domain separation: split around coherent "
-    "responsibilities with appropriately named files/modules."
+    "Refactor with real, concrete, appropriate domain separation: split around "
+    "coherent responsibilities and use names that describe the domain boundary."
 )
 
 
