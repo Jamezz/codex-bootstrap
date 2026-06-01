@@ -274,6 +274,8 @@ def run_rust_module_item_count_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"rust_module_item_count[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"rust_module_item_count[{index}]")
         max_items = require_positive_int(rule, "max_items")
         paths = require_string_list(rule, "paths")
@@ -312,6 +314,8 @@ def run_rust_panic_boundary_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"rust_panic_boundary[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"rust_panic_boundary[{index}]")
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*.rs"])
@@ -531,6 +535,8 @@ def run_line_count_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"line_count[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"line_count[{index}]")
         max_lines = require_positive_int(rule, "max_lines")
         paths = require_string_list(rule, "paths")
@@ -567,6 +573,8 @@ def run_java_package_class_count_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"java_package_class_count[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"java_package_class_count[{index}]")
         max_classes = require_positive_int(rule, "max_classes")
         paths = require_string_list(rule, "paths")
@@ -610,6 +618,8 @@ def run_java_import_style_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"java_import_style[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"java_import_style[{index}]")
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*.java"])
@@ -685,6 +695,8 @@ def run_java_lombok_boilerplate_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"java_lombok_boilerplate[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"java_lombok_boilerplate[{index}]")
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*.java"])
@@ -1263,6 +1275,8 @@ def run_project_callout_rules(
     findings: list[Finding] = []
     for index, raw_rule in enumerate(rules):
         rule = require_object(raw_rule, f"project_callouts[{index}]")
+        if not rule_is_enabled(rule):
+            continue
         name = require_string(rule, "name", default=f"project_callouts[{index}]")
         language = require_string(rule, "language")
         paths = require_string_list(rule, "paths")
@@ -1590,6 +1604,10 @@ def require_bool(rule: dict[str, Any], key: str, default: bool = False) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a boolean")
     return value
+
+
+def rule_is_enabled(rule: dict[str, Any]) -> bool:
+    return require_bool(rule, "enabled", default=True)
 
 
 def require_non_empty_string_list(rule: dict[str, Any], key: str) -> list[str]:

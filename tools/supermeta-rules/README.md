@@ -20,6 +20,8 @@ The CLI streams rule progress and discovered findings to stderr while keeping th
 
 ## Supported Rules
 
+Every rule object supports an optional `enabled` boolean. Omitted means enabled. Set `"enabled": false` to leave a disabled rule in config as a visible placeholder; disabled rules are skipped before rule-specific required fields are validated.
+
 ### `line_count`
 
 Checks that matching files stay under a configured maximum line count.

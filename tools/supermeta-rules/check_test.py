@@ -126,6 +126,27 @@ class FileMatchingRuleTest(unittest.TestCase):
         self.assertEqual("**/*.java", check.include_glob_for_base("repo/src/main/java", "**/*.java"))
 
 
+class RuleEnablementTest(unittest.TestCase):
+    def test_disabled_rules_skip_required_field_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            findings = check.run_rules(
+                {
+                    "line_count": [{"enabled": False}],
+                    "java_package_class_count": [{"enabled": False}],
+                    "java_import_style": [{"enabled": False}],
+                    "java_lombok_boilerplate": [{"enabled": False}],
+                    "rust_module_item_count": [{"enabled": False}],
+                    "rust_panic_boundary": [{"enabled": False}],
+                    "project_callouts": [{"enabled": False}],
+                },
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+
 def rust_module_item_count_config(max_items: int = 7) -> dict[str, object]:
     return {
         "rust_module_item_count": [
