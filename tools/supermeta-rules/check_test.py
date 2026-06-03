@@ -190,6 +190,15 @@ class RepeatedHelperMethodRuleConfigTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "near_match_threshold must be greater than 0 and at most 1"):
                 check.run_rules(config, root)
 
+    def test_rejects_nan_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = repeated_helper_config()
+            config["repeated_helper_methods"][0]["near_match_threshold"] = float("nan")
+
+            with self.assertRaisesRegex(ValueError, "near_match_threshold must be greater than 0 and at most 1"):
+                check.run_rules(config, root)
+
 
 class FindingSeverityTest(unittest.TestCase):
     def test_main_prints_advisories_without_failing(self) -> None:

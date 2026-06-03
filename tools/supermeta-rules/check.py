@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import math
 import os
 import re
 import shlex
@@ -1904,9 +1905,12 @@ def require_positive_int(rule: dict[str, Any], key: str) -> int:
 
 def require_probability(rule: dict[str, Any], key: str) -> float:
     value = rule.get(key)
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0 or value > 1:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise ValueError(f"{key} must be greater than 0 and at most 1")
-    return float(value)
+    numeric_value = float(value)
+    if not math.isfinite(numeric_value) or numeric_value <= 0 or numeric_value > 1:
+        raise ValueError(f"{key} must be greater than 0 and at most 1")
+    return numeric_value
 
 
 def require_string_list(
