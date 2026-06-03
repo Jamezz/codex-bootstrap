@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import io
 import importlib.util
 import os
@@ -149,6 +150,65 @@ class RuleEnablementTest(unittest.TestCase):
             )
 
             self.assertEqual([], findings)
+
+
+class FindingSeverityTest(unittest.TestCase):
+    def test_main_prints_advisories_without_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text("{}", encoding="utf-8")
+            with patch.object(
+                check,
+                "run_rules",
+                return_value=[
+                    check.Finding(
+                        rule="repeated-helper-methods",
+                        path=Path("src/test/java/example/AppTest.java"),
+                        message="similar helper; review for shared extraction",
+                        severity="advisory",
+                    )
+                ],
+            ):
+                output = io.StringIO()
+                error = io.StringIO()
+                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                    exit_code = check.main(["--config", str(config_path), "--root", str(root), "--full"])
+
+            self.assertEqual(0, exit_code)
+            self.assertIn("Supermeta rule advisories:", output.getvalue())
+            self.assertIn("[repeated-helper-methods]", output.getvalue())
+            self.assertNotIn("Supermeta rule violations:", output.getvalue())
+
+    def test_main_fails_when_errors_and_advisories_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text("{}", encoding="utf-8")
+            with patch.object(
+                check,
+                "run_rules",
+                return_value=[
+                    check.Finding(
+                        rule="repeated-helper-methods",
+                        path=Path("src/main/java/example/Foo.java"),
+                        message="duplicates helper body",
+                    ),
+                    check.Finding(
+                        rule="repeated-helper-methods",
+                        path=Path("src/test/java/example/FooTest.java"),
+                        message="similar helper",
+                        severity="advisory",
+                    ),
+                ],
+            ):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check.main(["--config", str(config_path), "--root", str(root), "--full"])
+
+            self.assertEqual(1, exit_code)
+            self.assertIn("Supermeta rule violations:", output.getvalue())
+            self.assertIn("Supermeta rule advisories:", output.getvalue())
 
 
 @unittest.skipIf(shutil.which("git") is None, "git is required")

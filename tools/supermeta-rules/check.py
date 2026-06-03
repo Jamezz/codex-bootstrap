@@ -31,6 +31,7 @@ class Finding:
     rule: str
     path: Path
     message: str
+    severity: str = "error"
 
 
 @dataclass(frozen=True)
@@ -216,14 +217,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"supermeta-rules: {error}", file=sys.stderr)
         return 2
 
-    if findings:
-        print("Supermeta rule violations:")
-        for finding in findings:
-            print(f"- [{finding.rule}] {finding.path}: {finding.message}")
+    errors = [finding for finding in findings if finding.severity == "error"]
+    advisories = [finding for finding in findings if finding.severity == "advisory"]
+    unknown_severities = sorted({finding.severity for finding in findings} - {"error", "advisory"})
+    if unknown_severities:
+        print(f"supermeta-rules: unknown finding severities: {', '.join(unknown_severities)}", file=sys.stderr)
+        return 2
+
+    if errors:
+        print_findings("Supermeta rule violations:", errors)
+        if advisories:
+            print_findings("Supermeta rule advisories:", advisories)
         return 1
+
+    if advisories:
+        print_findings("Supermeta rule advisories:", advisories)
 
     print("Supermeta rules passed.")
     return 0
+
+
+def print_findings(title: str, findings: list[Finding]) -> None:
+    print(title)
+    for finding in findings:
+        print(f"- [{finding.rule}] {finding.path}: {finding.message}")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
