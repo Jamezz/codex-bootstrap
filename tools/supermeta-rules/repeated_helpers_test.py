@@ -250,6 +250,135 @@ final class App {
         self.assertEqual([], candidates)
 
 
+class RepeatedHelperExactDuplicateTest(unittest.TestCase):
+    def test_exact_normalized_duplicate_between_main_helpers_fails_once(self) -> None:
+        source_a = """package example;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        source_b = """package example;
+
+final class Beta {
+    private int otherChecksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Alpha.java"), source_a),
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Beta.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertEqual("error", findings[0].severity)
+        self.assertEqual(Path("src/main/java/example/Alpha.java"), findings[0].path)
+        self.assertIn("duplicates helper body", findings[0].message)
+        self.assertIn("src/main/java/example/Beta.java", findings[0].message)
+        self.assertIn("factor this helper into common code", findings[0].message)
+
+    def test_renamed_locals_and_parameters_normalize_to_same_duplicate(self) -> None:
+        source_a = """package example;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        source_b = """package example;
+
+final class Beta {
+    private int checksum(String label) {
+        int result = label.length();
+        return result + 7;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Alpha.java"), source_a),
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Beta.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertIn("duplicates helper body", findings[0].message)
+
+    def test_finding_path_is_first_sorted_duplicate_path(self) -> None:
+        source_a = """package example;
+
+final class Zeta {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        source_b = """package example;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Zeta.java"), source_a),
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Alpha.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertEqual(Path("src/main/java/example/Alpha.java"), findings[0].path)
+
+    def test_identical_helper_body_in_main_and_test_groups_does_not_compare(self) -> None:
+        source_a = """package example;
+
+final class App {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        source_b = """package example;
+
+final class AppTest {
+    int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/App.java"), source_a),
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/AppTest.java"), source_b),
+            ],
+        )
+
+        self.assertEqual([], findings)
+
+
 def helper_config(
     min_statements: int = 2,
     ignore_annotations: tuple[str, ...] = (),

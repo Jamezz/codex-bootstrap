@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -102,7 +103,68 @@ def find_repeated_helpers(
     config: RepeatedHelperConfig,
     source_files: list[GroupSourceFile],
 ) -> list[HelperFinding]:
-    _ = (config, source_files)
+    candidates = extract_helpers(config, source_files)
+    exact_keys = exact_duplicate_keys(candidates)
+    return [
+        *exact_duplicate_findings(candidates, exact_keys),
+        *near_duplicate_findings(config, candidates, exact_keys),
+    ]
+
+
+def extract_helpers(config: RepeatedHelperConfig, source_files: list[GroupSourceFile]) -> list[HelperCandidate]:
+    if config.language != "java":
+        raise ValueError(f"unsupported repeated helper language: {config.language}")
+    candidates: list[HelperCandidate] = []
+    for source_file in source_files:
+        candidates.extend(extract_java_helpers(config, source_file))
+    return candidates
+
+
+def exact_duplicate_keys(candidates: list[HelperCandidate]) -> frozenset[tuple[str, tuple[str, ...]]]:
+    counts = Counter((candidate.group, candidate.normalized_tokens) for candidate in candidates)
+    return frozenset(key for key, count in counts.items() if count > 1)
+
+
+def exact_duplicate_findings(
+    candidates: list[HelperCandidate],
+    exact_keys: frozenset[tuple[str, tuple[str, ...]]],
+) -> list[HelperFinding]:
+    duplicate_groups: dict[tuple[str, tuple[str, ...]], list[HelperCandidate]] = {}
+    for candidate in candidates:
+        key = (candidate.group, candidate.normalized_tokens)
+        if key in exact_keys:
+            duplicate_groups.setdefault(key, []).append(candidate)
+
+    findings: list[HelperFinding] = []
+    for duplicates in duplicate_groups.values():
+        sorted_duplicates = sorted(
+            duplicates,
+            key=lambda candidate: (candidate.path.as_posix(), candidate.line, candidate.name),
+        )
+        first = sorted_duplicates[0]
+        others = ", ".join(
+            f"{candidate.path.as_posix()}:{candidate.line} {candidate.name}()"
+            for candidate in sorted_duplicates[1:]
+        )
+        findings.append(
+            HelperFinding(
+                path=first.path,
+                message=(
+                    f"{first.name}() duplicates helper body also found at {others}; "
+                    "factor this helper into common code in the nearest appropriate package, "
+                    "support class, test fixture helper, or shared module"
+                ),
+            )
+        )
+    return findings
+
+
+def near_duplicate_findings(
+    config: RepeatedHelperConfig,
+    candidates: list[HelperCandidate],
+    exact_keys: frozenset[tuple[str, tuple[str, ...]]],
+) -> list[HelperFinding]:
+    _ = (config, candidates, exact_keys)
     return []
 
 

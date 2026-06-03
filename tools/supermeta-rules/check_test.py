@@ -199,6 +199,81 @@ class RepeatedHelperMethodRuleConfigTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "near_match_threshold must be greater than 0 and at most 1"):
                 check.run_rules(config, root)
 
+    def test_rule_dispatch_reports_exact_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/Alpha.java",
+                """package example;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/Beta.java",
+                """package example;
+
+final class Beta {
+    private int otherChecksum(String label) {
+        int result = label.length();
+        result = result + 7;
+        return result;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(repeated_helper_config(), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("repeated-helper-methods", findings[0].rule)
+            self.assertEqual("error", findings[0].severity)
+            self.assertIn("duplicates helper body", findings[0].message)
+
+    def test_generated_excludes_are_honored(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/generated/Alpha.java",
+                """package generated;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/generated/Beta.java",
+                """package generated;
+
+final class Beta {
+    private int otherChecksum(String label) {
+        int result = label.length();
+        result = result + 7;
+        return result;
+    }
+}
+""",
+            )
+
+            findings = check.run_rules(repeated_helper_config(), root)
+
+            self.assertEqual([], findings)
+
 
 class FindingSeverityTest(unittest.TestCase):
     def test_main_prints_advisories_without_failing(self) -> None:
