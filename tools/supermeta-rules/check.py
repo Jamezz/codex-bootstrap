@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, TextIO
 
+import workspace
+
 
 DOMAIN_SPLIT_WARNING = (
     "Do not satisfy this by creating numbered split files. "
@@ -106,11 +108,46 @@ class RuleProgress:
     def rule_end(self, rule_name: str, count: int) -> None:
         self.emit(f"supermeta-rules: {rule_name}: scanned {count} matching files", force=True)
 
+    def scan_mode(self, working_set: workspace.WorkingSet) -> None:
+        self.emit(f"supermeta-rules: {working_set.mode} scan: {working_set.reason}", force=True)
+
     def emit(self, message: str, force: bool = False, now: float | None = None) -> None:
         timestamp = time.monotonic() if now is None else now
         if force or timestamp - self.last_emit >= self.time_interval_seconds:
             print(message, file=self.stream, flush=True)
             self.last_emit = timestamp
+
+
+class RuleScanContext:
+    def __init__(self, root: Path, working_set: workspace.WorkingSet) -> None:
+        self.root = root
+        self.working_set = working_set
+        self.cache: dict[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], bool], list[Path]] = {}
+
+    def iter_matching_files(
+        self,
+        paths: list[str],
+        include: list[str],
+        exclude: list[str],
+        narrow_to_working_set: bool,
+    ) -> Iterator[Path]:
+        use_working_set = narrow_to_working_set and self.working_set.narrows_scan()
+        key = (tuple(paths), tuple(include), tuple(exclude), use_working_set)
+        cached = self.cache.get(key)
+        if cached is not None:
+            yield from cached
+            return
+
+        matches: list[Path] = []
+        self.cache[key] = matches
+        source = (
+            iter_matching_changed_files(self.root, self.working_set.files, paths, include, exclude)
+            if use_working_set
+            else iter_matching_files(self.root, paths, include, exclude)
+        )
+        for source_file in source:
+            matches.append(source_file)
+            yield source_file
 
 
 JAVA_IMPORT_RE = re.compile(
@@ -168,6 +205,11 @@ def main(argv: list[str] | None = None) -> int:
             config,
             root,
             skip_callouts=args.skip_callouts,
+            force_full=args.full,
+            scan_invalidator_paths=relative_paths_under_root(
+                root,
+                [config_path, Path(__file__), Path(__file__).with_name("workspace.py")],
+            ),
             progress=RuleProgress(sys.stderr) if progress_is_enabled() else None,
         )
     except ValueError as error:
@@ -202,6 +244,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip project callouts that invoke language-specific tooling.",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Disable automatic Git working-set narrowing and scan all matching files.",
+    )
     return parser.parse_args(argv)
 
 
@@ -224,6 +271,8 @@ def run_rules(
     config: dict[str, Any],
     root: Path,
     skip_callouts: bool = False,
+    force_full: bool = False,
+    scan_invalidator_paths: tuple[Path, ...] = (),
     progress: RuleProgress | None = None,
 ) -> list[Finding]:
     root = root.resolve()
@@ -231,18 +280,60 @@ def run_rules(
         raise ValueError(f"root directory does not exist: {root}")
 
     findings: list[Finding] = []
-    findings.extend(run_line_count_rules(config.get("line_count", []), root, progress=progress))
-    findings.extend(run_java_package_class_count_rules(config.get("java_package_class_count", []), root, progress=progress))
-    findings.extend(run_java_import_style_rules(config.get("java_import_style", []), root, progress=progress))
-    findings.extend(run_java_lombok_boilerplate_rules(config.get("java_lombok_boilerplate", []), root, progress=progress))
-    findings.extend(run_rust_module_item_count_rules(config.get("rust_module_item_count", []), root, progress=progress))
-    findings.extend(run_rust_panic_boundary_rules(config.get("rust_panic_boundary", []), root, progress=progress))
+    working_set = workspace.detect_working_set(root, force_full=force_full)
+    if working_set.narrows_scan() and scan_invalidators_changed(working_set, scan_invalidator_paths):
+        working_set = workspace.full_working_set("scan-control file changed")
+    if progress is not None:
+        progress.scan_mode(working_set)
+    scan_context = RuleScanContext(root, working_set)
+    findings.extend(run_line_count_rules(config.get("line_count", []), root, progress=progress, scan_context=scan_context))
+    findings.extend(
+        run_java_package_class_count_rules(
+            config.get("java_package_class_count", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
+        run_java_import_style_rules(
+            config.get("java_import_style", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
+        run_java_lombok_boilerplate_rules(
+            config.get("java_lombok_boilerplate", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
+        run_rust_module_item_count_rules(
+            config.get("rust_module_item_count", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
+        run_rust_panic_boundary_rules(
+            config.get("rust_panic_boundary", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
     findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
             root,
             execute=not project_callouts_are_skipped(skip_callouts),
             progress=progress,
+            scan_context=scan_context,
         )
     )
 
@@ -267,6 +358,7 @@ def run_rust_module_item_count_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("rust_module_item_count must be an array")
@@ -282,7 +374,7 @@ def run_rust_module_item_count_rules(
         include = require_string_list(rule, "include", default=["**/*.rs"])
         exclude = require_string_list(rule, "exclude", default=[])
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
             stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
             items = top_level_rust_items(stripped_source)
             item_count = len(items)
@@ -307,6 +399,7 @@ def run_rust_panic_boundary_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("rust_panic_boundary must be an array")
@@ -322,7 +415,7 @@ def run_rust_panic_boundary_rules(
         exclude = require_string_list(rule, "exclude", default=[])
         allow_tests = require_boolean(rule, "allow_tests", default=True)
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
             source = source_file.read_text(encoding="utf-8")
             test_filtered_source = strip_rust_cfg_test_modules(source) if allow_tests else source
             scanned_source = strip_rust_comments_and_strings(test_filtered_source)
@@ -528,6 +621,7 @@ def run_line_count_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("line_count must be an array")
@@ -543,7 +637,7 @@ def run_line_count_rules(
         include = require_string_list(rule, "include", default=["**/*"])
         exclude = require_string_list(rule, "exclude", default=[])
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
             line_count = count_lines(source_file)
             if line_count > max_lines:
                 add_finding(
@@ -566,6 +660,7 @@ def run_java_package_class_count_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_package_class_count must be an array")
@@ -582,7 +677,16 @@ def run_java_package_class_count_rules(
         exclude = require_string_list(rule, "exclude", default=[])
 
         classes_by_package: dict[Path, list[str]] = {}
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(
+            name,
+            root,
+            paths,
+            include,
+            exclude,
+            progress,
+            scan_context=scan_context,
+            narrow_to_working_set=False,
+        ):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             type_names = top_level_java_type_names(stripped_source)
             classes_by_package.setdefault(source_file.parent, []).extend(type_names)
@@ -611,6 +715,7 @@ def run_java_import_style_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_import_style must be an array")
@@ -626,7 +731,7 @@ def run_java_import_style_rules(
         exclude = require_string_list(rule, "exclude", default=[])
         allow_explicit = set(require_string_list(rule, "allow_explicit", default=[]))
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             for import_line in stripped_source.splitlines():
                 normalized = normalize_java_import(import_line)
@@ -688,6 +793,7 @@ def run_java_lombok_boilerplate_rules(
     rules: Any,
     root: Path,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("java_lombok_boilerplate must be an array")
@@ -708,7 +814,16 @@ def run_java_lombok_boilerplate_rules(
         record_types: set[JavaRecordType] = set()
         require_record_builder = require_bool(rule, "require_record_builder", default=False)
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress):
+        for source_file in iter_rule_files(
+            name,
+            root,
+            paths,
+            include,
+            exclude,
+            progress,
+            scan_context=scan_context,
+            narrow_to_working_set=False,
+        ):
             stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
             class_blocks = iter_java_class_blocks(stripped_source)
             package_name = java_package_name(stripped_source)
@@ -1268,6 +1383,7 @@ def run_project_callout_rules(
     root: Path,
     execute: bool = True,
     progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
 ) -> list[Finding]:
     if not isinstance(rules, list):
         raise ValueError("project_callouts must be an array")
@@ -1288,7 +1404,7 @@ def run_project_callout_rules(
             continue
         if progress is not None:
             progress.rule_start(name, paths, include)
-        has_match = has_matching_file(root, paths, include, exclude)
+        has_match = has_matching_file(root, paths, include, exclude, scan_context=scan_context)
         if progress is not None:
             progress.rule_end(name, 1 if has_match else 0)
         if not has_match:
@@ -1343,6 +1459,26 @@ def progress_is_enabled() -> bool:
     return os.environ.get("SUPERMETA_RULES_QUIET") not in {"1", "true", "yes"}
 
 
+def relative_paths_under_root(root: Path, paths: list[Path]) -> tuple[Path, ...]:
+    root = root.resolve()
+    relatives: list[Path] = []
+    for path in paths:
+        try:
+            relatives.append(path.resolve().relative_to(root))
+        except ValueError:
+            continue
+    return tuple(relatives)
+
+
+def scan_invalidators_changed(working_set: workspace.WorkingSet, scan_invalidator_paths: tuple[Path, ...]) -> bool:
+    changed = {normalize_relative_path(path) for path in working_set.files}
+    return any(normalize_relative_path(path) in changed for path in scan_invalidator_paths)
+
+
+def normalize_relative_path(path: Path) -> str:
+    return path.as_posix().strip("/")
+
+
 def format_patterns(patterns: list[str]) -> str:
     return "[" + ", ".join(patterns) + "]"
 
@@ -1354,12 +1490,19 @@ def iter_rule_files(
     include: list[str],
     exclude: list[str],
     progress: RuleProgress | None,
+    scan_context: RuleScanContext | None = None,
+    narrow_to_working_set: bool = True,
 ) -> Iterator[Path]:
     if progress is not None:
         progress.rule_start(rule_name, paths, include)
 
     count = 0
-    for source_file in iter_matching_files(root, paths, include, exclude):
+    source_files = (
+        scan_context.iter_matching_files(paths, include, exclude, narrow_to_working_set)
+        if scan_context is not None
+        else iter_matching_files(root, paths, include, exclude)
+    )
+    for source_file in source_files:
         count += 1
         if progress is not None:
             progress.file(rule_name, source_file.relative_to(root), count)
@@ -1411,6 +1554,29 @@ def iter_matching_files(
                     yield candidate
 
 
+def iter_matching_changed_files(
+    root: Path,
+    changed_files: frozenset[Path],
+    paths: list[str],
+    include: list[str],
+    exclude: list[str],
+) -> Iterator[Path]:
+    root = root.resolve()
+    seen: set[Path] = set()
+    for relative_candidate in sorted(changed_files):
+        candidate = resolve_under_root(root, relative_candidate.as_posix())
+        if not candidate.is_file() or candidate in seen:
+            continue
+        relative_path = candidate.relative_to(root).as_posix()
+        if not matches_configured_paths(root, candidate, paths):
+            continue
+        if any(fnmatch.fnmatch(relative_path, pattern) for pattern in include) and not any(
+            fnmatch.fnmatch(relative_path, pattern) for pattern in exclude
+        ):
+            seen.add(candidate)
+            yield candidate
+
+
 def iter_included_files(base_path: Path, configured_path: str, include: list[str]) -> Iterator[Path]:
     seen: set[Path] = set()
     for include_pattern in include:
@@ -1423,8 +1589,35 @@ def iter_included_files(base_path: Path, configured_path: str, include: list[str
                 yield candidate
 
 
-def has_matching_file(root: Path, paths: list[str], include: list[str], exclude: list[str]) -> bool:
-    return next(iter_matching_files(root, paths, include, exclude), None) is not None
+def has_matching_file(
+    root: Path,
+    paths: list[str],
+    include: list[str],
+    exclude: list[str],
+    scan_context: RuleScanContext | None = None,
+    narrow_to_working_set: bool = True,
+) -> bool:
+    source_files = (
+        scan_context.iter_matching_files(paths, include, exclude, narrow_to_working_set)
+        if scan_context is not None
+        else iter_matching_files(root, paths, include, exclude)
+    )
+    return next(source_files, None) is not None
+
+
+def matches_configured_paths(root: Path, candidate: Path, paths: list[str]) -> bool:
+    return any(matches_configured_path(root, candidate, configured_path) for configured_path in paths)
+
+
+def matches_configured_path(root: Path, candidate: Path, configured_path: str) -> bool:
+    base_path = resolve_under_root(root, configured_path)
+    if candidate == base_path:
+        return True
+    try:
+        candidate.relative_to(base_path)
+    except ValueError:
+        return False
+    return True
 
 
 def include_glob_for_base(configured_path: str, include_pattern: str) -> str | None:

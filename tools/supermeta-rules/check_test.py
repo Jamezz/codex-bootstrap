@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 import importlib.util
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,9 +14,11 @@ from unittest.mock import patch
 
 
 CHECK_MODULE_PATH = Path(__file__).resolve().parent / "check.py"
+CHECK_MODULE_DIR = CHECK_MODULE_PATH.parent
 
 
 def load_check_module() -> ModuleType:
+    sys.path.insert(0, str(CHECK_MODULE_DIR))
     spec = importlib.util.spec_from_file_location("supermeta_rules_check", CHECK_MODULE_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load module from {CHECK_MODULE_PATH}")
@@ -145,6 +149,153 @@ class RuleEnablementTest(unittest.TestCase):
             )
 
             self.assertEqual([], findings)
+
+
+@unittest.skipIf(shutil.which("git") is None, "git is required")
+class AutomaticWorkingSetTest(unittest.TestCase):
+    def test_file_local_rules_scan_only_dirty_files_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/main/java/example/TooLarge.java", "line 1\nline 2\n")
+            write_source(root, "src/main/java/example/Changed.java", "line 1\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/example/Changed.java", "changed\n")
+
+            findings = check.run_rules(
+                {
+                    "line_count": [
+                        {
+                            "name": "source-line-count",
+                            "max_lines": 1,
+                            "paths": ["src/main/java"],
+                            "include": ["**/*.java"],
+                            "exclude": [],
+                        }
+                    ]
+                },
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_force_full_keeps_file_local_rules_authoritative(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/main/java/example/TooLarge.java", "line 1\nline 2\n")
+            write_source(root, "src/main/java/example/Changed.java", "line 1\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/example/Changed.java", "changed\n")
+
+            findings = check.run_rules(
+                {
+                    "line_count": [
+                        {
+                            "name": "source-line-count",
+                            "max_lines": 1,
+                            "paths": ["src/main/java"],
+                            "include": ["**/*.java"],
+                            "exclude": [],
+                        }
+                    ]
+                },
+                root,
+                force_full=True,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("src/main/java/example/TooLarge.java"), findings[0].path)
+
+    def test_cross_file_java_package_rules_still_scan_full_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_java_files(root, "src/main/java/example", count=8)
+            write_source(root, "src/main/java/other/Changed.java", "package other;\nfinal class Changed {}\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/other/Changed.java", "package other;\nfinal class Changed { }\n")
+
+            findings = check.run_rules(java_package_count_config(max_classes=7), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("src/main/java/example"), findings[0].path)
+
+    def test_cli_full_flag_scans_all_matching_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/main/java/example/TooLarge.java", "line 1\nline 2\n")
+            write_source(root, "src/main/java/example/Changed.java", "line 1\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/example/Changed.java", "changed\n")
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text(
+                """{
+  "line_count": [
+    {
+      "name": "source-line-count",
+      "max_lines": 1,
+      "paths": ["src/main/java"],
+      "include": ["**/*.java"],
+      "exclude": []
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = check.main(["--config", str(config_path), "--root", str(root), "--full"])
+
+            self.assertEqual(1, exit_code)
+
+    def test_dirty_config_file_forces_full_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/main/java/example/TooLarge.java", "line 1\nline 2\n")
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text(
+                """{
+  "line_count": [
+    {
+      "name": "source-line-count",
+      "max_lines": 100,
+      "paths": ["src/main/java"],
+      "include": ["**/*.java"],
+      "exclude": []
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            config_path.write_text(
+                """{
+  "line_count": [
+    {
+      "name": "source-line-count",
+      "max_lines": 1,
+      "paths": ["src/main/java"],
+      "include": ["**/*.java"],
+      "exclude": []
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = check.main(["--config", str(config_path), "--root", str(root)])
+
+            self.assertEqual(1, exit_code)
 
 
 def rust_module_item_count_config(max_items: int = 7) -> dict[str, object]:
@@ -1565,6 +1716,25 @@ def write_source(root: Path, relative_path: str, source: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(source, encoding="utf-8")
     return path
+
+
+def init_git_repo(root: Path) -> None:
+    git(root, "init")
+    git(root, "config", "user.email", "agent@example.invalid")
+    git(root, "config", "user.name", "Agent")
+
+
+def git(root: Path, *args: str) -> None:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)} failed:\n{result.stdout}")
 
 
 def assert_domain_split_warning(test_case: unittest.TestCase, message: str) -> None:

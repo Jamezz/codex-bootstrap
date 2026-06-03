@@ -16,6 +16,10 @@ python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/superm
 
 Rule `paths` may point at a broad repo area, but keep `include` patterns rooted at the real source or test trees. The matcher streams those include globs first and then applies final include/exclude filtering, so broad adoption configs do not have to scan build outputs, vendored trees, or generated artifacts before finding source files.
 
+By default, the checker detects the Git working set for the configured root. When staged, unstaged, untracked, or branch-local files are found, file-local rules scan only those matching files. Cross-file aggregate rules, such as Java package sizing and Lombok record-constructor enforcement, still scan the full configured tree to avoid false negatives. If Git cannot provide a reliable non-empty working set, the checker falls back to a full scan.
+
+Use `--full` or `SUPERMETA_RULES_FULL=1` when a run must scan every matching file regardless of Git state.
+
 The CLI streams rule progress and discovered findings to stderr while keeping the final pass/fail summary on stdout. Set `SUPERMETA_RULES_QUIET=1` to suppress progress output in contexts that need a quiet checker.
 
 ## Supported Rules

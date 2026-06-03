@@ -378,6 +378,10 @@
             "mode": "whole-file"
           },
           {
+            "path": "tools/supermeta-rules/workspace.py",
+            "mode": "whole-file"
+          },
+          {
             "path": "tools/supermeta-rules/check_test.py",
             "mode": "whole-file"
           },
