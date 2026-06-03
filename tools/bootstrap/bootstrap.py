@@ -70,6 +70,7 @@ IGNORED_TOP_LEVEL_PATHS = {
     ".ruff_cache",
     ".tsbuildinfo",
     ".venv",
+    ".worktrees",
     ".nuget",
     "__pycache__",
     "build",

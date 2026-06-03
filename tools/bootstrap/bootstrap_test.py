@@ -25,6 +25,7 @@ from tools.bootstrap.bootstrap import (  # noqa: E402
     python_module_from_slug,
     stage_template,
     title_from_slug,
+    unexpected_top_level_paths,
     validate_java_package,
     validate_project_name,
 )
@@ -406,6 +407,19 @@ class SafetyTest(unittest.TestCase):
     def test_refuses_to_clear_filesystem_root(self) -> None:
         with self.assertRaises(UsageError):
             assert_safe_clear_path(Path("/"))
+
+    def test_worktrees_directory_is_allowed_local_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-worktrees-") as temp_dir:
+            root = Path(temp_dir)
+            for name in ("templates", "tools", "AGENTS.md"):
+                path = root / name
+                if name.endswith(".md"):
+                    path.write_text("agent notes\n", encoding="utf-8")
+                else:
+                    path.mkdir()
+            (root / ".worktrees" / "feature").mkdir(parents=True)
+
+            self.assertEqual([], unexpected_top_level_paths(root))
 
 
 class BootstrapSmokeTest(unittest.TestCase):

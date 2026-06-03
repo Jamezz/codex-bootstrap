@@ -551,6 +551,37 @@ class AutomaticWorkingSetTest(unittest.TestCase):
 
             self.assertEqual(1, exit_code)
 
+    def test_periodic_full_scan_runs_after_configured_fast_scans(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/main/java/example/TooLarge.java", "line 1\nline 2\n")
+            write_source(root, "src/main/java/example/Changed.java", "line 1\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/example/Changed.java", "changed\n")
+            config = {
+                "line_count": [
+                    {
+                        "name": "source-line-count",
+                        "max_lines": 1,
+                        "paths": ["src/main/java"],
+                        "include": ["**/*.java"],
+                        "exclude": [],
+                    }
+                ]
+            }
+
+            with patch.dict(os.environ, {"SUPERMETA_RULES_FAST_SCAN_INTERVAL": "2"}):
+                first = check.run_rules(config, root)
+                second = check.run_rules(config, root)
+                third = check.run_rules(config, root)
+
+            self.assertEqual([], first)
+            self.assertEqual([], second)
+            self.assertEqual(1, len(third))
+            self.assertEqual(Path("src/main/java/example/TooLarge.java"), third[0].path)
+
 
 def rust_module_item_count_config(max_items: int = 7) -> dict[str, object]:
     return {

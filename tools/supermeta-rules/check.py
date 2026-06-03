@@ -308,6 +308,7 @@ def run_rules(
     working_set = workspace.detect_working_set(root, force_full=force_full)
     if working_set.narrows_scan() and scan_invalidators_changed(working_set, scan_invalidator_paths):
         working_set = workspace.full_working_set("scan-control file changed")
+    working_set = workspace.apply_periodic_full_scan(root, working_set)
     if progress is not None:
         progress.scan_mode(working_set)
     scan_context = RuleScanContext(root, working_set)
