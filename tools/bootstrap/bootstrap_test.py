@@ -25,6 +25,7 @@ from tools.bootstrap.bootstrap import (  # noqa: E402
     python_module_from_slug,
     stage_template,
     title_from_slug,
+    unexpected_top_level_paths,
     validate_java_package,
     validate_project_name,
 )
@@ -404,6 +405,19 @@ class SafetyTest(unittest.TestCase):
         with self.assertRaises(UsageError):
             assert_safe_clear_path(Path("/"))
 
+    def test_worktrees_directory_is_allowed_local_state(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-worktrees-") as temp_dir:
+            root = Path(temp_dir)
+            for name in ("templates", "tools", "AGENTS.md"):
+                path = root / name
+                if name.endswith(".md"):
+                    path.write_text("agent notes\n", encoding="utf-8")
+                else:
+                    path.mkdir()
+            (root / ".worktrees" / "feature").mkdir(parents=True)
+
+            self.assertEqual([], unexpected_top_level_paths(root))
+
 
 class BootstrapSmokeTest(unittest.TestCase):
     @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
@@ -584,6 +598,9 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("update `application.mainClass` in `build.gradle.kts`", readme)
             self.assertIn("Supermeta enforces wildcard imports", readme)
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", readme)
+            self.assertIn("Supermeta flags repeated Java helper methods", readme)
+            self.assertIn("exact repeated helpers fail", readme)
+            self.assertIn("near matches are advisory", readme)
             self.assertIn("Checkstyle reports unused imports as warnings", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
@@ -601,6 +618,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Treat nags as advisory", agents)
             self.assertIn("Supermeta enforces wildcard imports", agents)
             self.assertIn("Supermeta rejects handwritten getter, setter, and builder boilerplate", agents)
+            self.assertIn("Supermeta flags repeated Java helper methods", agents)
+            self.assertIn("factor repeated helpers into common code", agents)
             self.assertIn("Treat unused-import Checkstyle findings as warnings", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
