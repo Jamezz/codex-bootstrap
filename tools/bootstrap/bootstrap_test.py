@@ -80,6 +80,9 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual({}, manifest.sync_contract.managed_regions)
         self.assertIn("velocity-tools", manifest.sync_contract.managed_sets)
         self.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/repeated_helpers.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/repeated_helpers_test.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/requirements.txt", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-rules/workspace.py", manifest.sync_contract.managed_files)
 
     def test_loads_csharp_template_manifest(self) -> None:
@@ -1743,6 +1746,9 @@ def assert_velocity_manifest_contract(test_case: unittest.TestCase, manifest: Te
     test_case.assertIn("tools/supermeta-check/hygiene_test.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/fix.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-rules/repeated_helpers.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-rules/repeated_helpers_test.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-rules/requirements.txt", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-rules/workspace.py", manifest.sync_contract.managed_files)
     test_case.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
     test_case.assertIn("README.md:generated-docs/velocity-tools", manifest.sync_contract.managed_regions)

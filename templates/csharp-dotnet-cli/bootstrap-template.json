@@ -378,6 +378,18 @@
             "mode": "whole-file"
           },
           {
+            "path": "tools/supermeta-rules/repeated_helpers.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/repeated_helpers_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/requirements.txt",
+            "mode": "whole-file"
+          },
+          {
             "path": "tools/supermeta-rules/workspace.py",
             "mode": "whole-file"
           },
