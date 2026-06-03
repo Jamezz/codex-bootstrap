@@ -152,6 +152,45 @@ class RuleEnablementTest(unittest.TestCase):
             self.assertEqual([], findings)
 
 
+class RepeatedHelperMethodRuleConfigTest(unittest.TestCase):
+    def test_disabled_rule_skips_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            findings = check.run_rules({"repeated_helper_methods": [{"enabled": False}]}, root)
+
+            self.assertEqual([], findings)
+
+    def test_rejects_non_array_rule_group(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "repeated_helper_methods must be an array"):
+                check.run_rules({"repeated_helper_methods": {}}, Path(temp_dir))
+
+    def test_rejects_unknown_language(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self.assertRaisesRegex(ValueError, "language must be one of: java"):
+                check.run_rules(repeated_helper_config(language="ruby"), root)
+
+    def test_rejects_empty_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = repeated_helper_config()
+            config["repeated_helper_methods"][0]["groups"] = []
+
+            with self.assertRaisesRegex(ValueError, "groups must contain at least one group"):
+                check.run_rules(config, root)
+
+    def test_rejects_invalid_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = repeated_helper_config()
+            config["repeated_helper_methods"][0]["near_match_threshold"] = 2
+
+            with self.assertRaisesRegex(ValueError, "near_match_threshold must be greater than 0 and at most 1"):
+                check.run_rules(config, root)
+
+
 class FindingSeverityTest(unittest.TestCase):
     def test_main_prints_advisories_without_failing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1845,6 +1884,36 @@ def java_package_count_config(max_classes: int) -> dict[str, object]:
                 "paths": ["src/main/java"],
                 "include": ["**/*.java"],
                 "exclude": ["**/generated/**"],
+            }
+        ]
+    }
+
+
+def repeated_helper_config(language: str = "java") -> dict[str, object]:
+    return {
+        "repeated_helper_methods": [
+            {
+                "name": "repeated-helper-methods",
+                "language": language,
+                "groups": [
+                    {
+                        "name": "main",
+                        "paths": ["src/main/java"],
+                        "include": ["**/*.java"],
+                        "exclude": ["**/generated/**"],
+                    },
+                    {
+                        "name": "test",
+                        "paths": ["src/test/java"],
+                        "include": ["**/*.java"],
+                        "exclude": ["**/generated/**"],
+                    },
+                ],
+                "min_statements": 3,
+                "near_match_threshold": 0.86,
+                "advisory_near_matches": True,
+                "ignore_annotations": ["Generated", "ManualDuplication"],
+                "allow_methods": [],
             }
         ]
     }

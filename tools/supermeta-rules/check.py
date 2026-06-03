@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, TextIO
 
+import repeated_helpers
 import workspace
 
 
@@ -209,7 +210,13 @@ def main(argv: list[str] | None = None) -> int:
             force_full=args.full,
             scan_invalidator_paths=relative_paths_under_root(
                 root,
-                [config_path, Path(__file__), Path(__file__).with_name("workspace.py")],
+                [
+                    config_path,
+                    Path(__file__),
+                    Path(__file__).with_name("workspace.py"),
+                    Path(__file__).with_name("repeated_helpers.py"),
+                    Path(__file__).with_name("requirements.txt"),
+                ],
             ),
             progress=RuleProgress(sys.stderr) if progress_is_enabled() else None,
         )
@@ -345,6 +352,14 @@ def run_rules(
         )
     )
     findings.extend(
+        run_repeated_helper_method_rules(
+            config.get("repeated_helper_methods", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
             root,
@@ -362,6 +377,7 @@ def run_rules(
             "java_package_class_count",
             "line_count",
             "project_callouts",
+            "repeated_helper_methods",
             "rust_module_item_count",
             "rust_panic_boundary",
         }
@@ -726,6 +742,94 @@ def run_java_package_class_count_rules(
                 )
 
     return findings
+
+
+def run_repeated_helper_method_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
+) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("repeated_helper_methods must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"repeated_helper_methods[{index}]")
+        if not rule_is_enabled(rule):
+            continue
+        repeated_helper_config = parse_repeated_helper_config(rule, index)
+        source_files: list[repeated_helpers.GroupSourceFile] = []
+        for group in repeated_helper_config.groups:
+            for source_file in iter_rule_files(
+                repeated_helper_config.name,
+                root,
+                list(group.paths),
+                list(group.include),
+                list(group.exclude),
+                progress,
+                scan_context=scan_context,
+                narrow_to_working_set=False,
+            ):
+                source_files.append(
+                    repeated_helpers.GroupSourceFile(
+                        group=group.name,
+                        path=source_file.relative_to(root),
+                        source=source_file.read_text(encoding="utf-8"),
+                    )
+                )
+
+        for finding in repeated_helpers.find_repeated_helpers(repeated_helper_config, source_files):
+            add_finding(
+                findings,
+                Finding(
+                    rule=repeated_helper_config.name,
+                    path=finding.path,
+                    message=finding.message,
+                    severity=finding.severity,
+                ),
+                progress,
+            )
+
+    return findings
+
+
+def parse_repeated_helper_config(rule: dict[str, Any], index: int) -> repeated_helpers.RepeatedHelperConfig:
+    name = require_string(rule, "name", default=f"repeated_helper_methods[{index}]")
+    language = require_string(rule, "language")
+    if language not in repeated_helpers.SUPPORTED_LANGUAGES:
+        raise ValueError(f"language must be one of: {', '.join(repeated_helpers.SUPPORTED_LANGUAGES)}")
+    return repeated_helpers.RepeatedHelperConfig(
+        name=name,
+        language=language,
+        groups=parse_repeated_helper_groups(rule),
+        min_statements=require_positive_int(rule, "min_statements"),
+        near_match_threshold=require_probability(rule, "near_match_threshold"),
+        advisory_near_matches=require_bool(rule, "advisory_near_matches", default=True),
+        ignore_annotations=tuple(require_string_list(rule, "ignore_annotations", default=[])),
+        allow_methods=frozenset(require_string_list(rule, "allow_methods", default=[])),
+    )
+
+
+def parse_repeated_helper_groups(rule: dict[str, Any]) -> tuple[repeated_helpers.SourceGroup, ...]:
+    raw_groups = rule.get("groups")
+    if not isinstance(raw_groups, list):
+        raise ValueError("groups must be an array")
+    if not raw_groups:
+        raise ValueError("groups must contain at least one group")
+
+    groups: list[repeated_helpers.SourceGroup] = []
+    for index, raw_group in enumerate(raw_groups):
+        group = require_object(raw_group, f"groups[{index}]")
+        groups.append(
+            repeated_helpers.SourceGroup(
+                name=require_string(group, "name"),
+                paths=tuple(require_non_empty_string_list(group, "paths")),
+                include=tuple(require_string_list(group, "include", default=["**/*.java"])),
+                exclude=tuple(require_string_list(group, "exclude", default=[])),
+            )
+        )
+    return tuple(groups)
 
 
 def run_java_import_style_rules(
@@ -1796,6 +1900,13 @@ def require_positive_int(rule: dict[str, Any], key: str) -> int:
     if not isinstance(value, int) or value < 1:
         raise ValueError(f"{key} must be a positive integer")
     return value
+
+
+def require_probability(rule: dict[str, Any], key: str) -> float:
+    value = rule.get(key)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0 or value > 1:
+        raise ValueError(f"{key} must be greater than 0 and at most 1")
+    return float(value)
 
 
 def require_string_list(
