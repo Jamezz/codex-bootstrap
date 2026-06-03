@@ -407,7 +407,7 @@ class SafetyTest(unittest.TestCase):
 
 class BootstrapSmokeTest(unittest.TestCase):
     @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
-    def test_bootstrap_rewrites_checkout_into_standalone_project(self) -> None:
+    def test_bootstrap_rewrites_java_template_checkout_into_standalone_project(self) -> None:
         with tempfile.TemporaryDirectory(prefix="codex-bootstrap-smoke-") as temp_dir:
             temp_root = Path(temp_dir)
             checkout = temp_root / "sample-app"
@@ -538,14 +538,22 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn('<module name="UnusedImports">', checkstyle_config)
             self.assertIn('<property name="severity" value="warning"/>', checkstyle_config)
             rules_config = read_text(checkout / "supermeta-rules.json")
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "requirements.txt").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "repeated_helpers.py").is_file())
             self.assertIn('"java_package_class_count"', rules_config)
             self.assertIn('"max_classes": 7', rules_config)
             self.assertIn('"java_import_style"', rules_config)
             self.assertIn('"java_lombok_boilerplate"', rules_config)
+            self.assertIn('"repeated_helper_methods"', rules_config)
+            self.assertIn('"name": "repeated-helper-methods"', rules_config)
+            self.assertIn('"near_match_threshold": 0.86', rules_config)
+            self.assertIn('"advisory_near_matches": true', rules_config)
             self.assertIn('"allow_explicit": []', rules_config)
             self.assertIn('"ignore_annotations": []', rules_config)
             self.assertIn('"project_callouts"', rules_config)
             self.assertIn('"command": ["./scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]', rules_config)
+            self.assertIn("installSupermetaRuleDependencies", read_text(checkout / "build.gradle.kts"))
+            self.assertIn("tools/supermeta-rules/requirements.txt", read_text(checkout / "build.gradle.kts"))
 
             app_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "App.java"
             logging_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "LoggingConfig.java"

@@ -37,6 +37,31 @@
       "require_record_builder": true
     }
   ],
+  "repeated_helper_methods": [
+    {
+      "name": "repeated-helper-methods",
+      "language": "java",
+      "groups": [
+        {
+          "name": "main",
+          "paths": ["src/main/java"],
+          "include": ["**/*.java"],
+          "exclude": ["**/generated/**"]
+        },
+        {
+          "name": "test",
+          "paths": ["src/test/java"],
+          "include": ["**/*.java"],
+          "exclude": ["**/generated/**"]
+        }
+      ],
+      "min_statements": 3,
+      "near_match_threshold": 0.86,
+      "advisory_near_matches": true,
+      "ignore_annotations": ["Generated", "ManualDuplication"],
+      "allow_methods": []
+    }
+  ],
   "project_callouts": [
     {
       "name": "java-checkstyle",

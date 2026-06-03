@@ -26,6 +26,21 @@ val useExactJavaToolchain = providers.gradleProperty("useExactJavaToolchain")
     .orElse(false)
 
 val supermetaRulesScript = layout.projectDirectory.file("../../tools/supermeta-rules/check.py")
+val generatedSupermetaRulesRequirements = layout.projectDirectory.file("tools/supermeta-rules/requirements.txt")
+val supermetaRulesRequirements = if (generatedSupermetaRulesRequirements.asFile.isFile) {
+    generatedSupermetaRulesRequirements
+} else {
+    layout.projectDirectory.file("../../tools/supermeta-rules/requirements.txt")
+}
+val supermetaRulesVenv = layout.projectDirectory.dir(".gradle/supermeta-rules-venv")
+val supermetaRulesPython = providers.provider {
+    val executable = if (System.getProperty("os.name").lowercase().contains("windows")) {
+        "Scripts/python.exe"
+    } else {
+        "bin/python"
+    }
+    supermetaRulesVenv.file(executable).asFile.absolutePath
+}
 
 java {
     if (useExactJavaToolchain.get()) {
@@ -76,16 +91,45 @@ tasks.withType<Checkstyle>().configureEach {
     }
 }
 
+tasks.register<Exec>("installSupermetaRuleDependencies") {
+    description = "Installs parser dependencies for shared Supermeta rules."
+    group = "verification"
+
+    inputs.file(supermetaRulesRequirements)
+    outputs.dir(supermetaRulesVenv)
+
+    commandLine("python3", "-m", "venv", supermetaRulesVenv.asFile.absolutePath)
+
+    doLast {
+        providers.exec {
+            commandLine(
+                supermetaRulesPython.get(),
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "-r",
+                supermetaRulesRequirements.asFile.absolutePath,
+            )
+        }.result.get().assertNormalExitValue()
+    }
+}
+
 tasks.register<Exec>("verifySupermetaRules") {
     description = "Runs shared Supermeta rules for this template."
     group = "verification"
 
+    dependsOn("installSupermetaRuleDependencies")
+
     inputs.file("supermeta-rules.json")
+    inputs.file(supermetaRulesScript)
+    inputs.file(supermetaRulesRequirements)
+    inputs.files(fileTree("tools/supermeta-rules"))
     inputs.files(fileTree("src/main"))
     inputs.files(fileTree("src/test"))
 
     commandLine(
-        "python3",
+        supermetaRulesPython.get(),
         supermetaRulesScript.asFile.absolutePath,
         "--config",
         layout.projectDirectory.file("supermeta-rules.json").asFile.absolutePath,
