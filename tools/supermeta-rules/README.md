@@ -1,6 +1,6 @@
 # Supermeta Rules
 
-`check.py` is a small, dependency-free rule checker for generated projects. Templates can use it from their own build systems instead of reimplementing shared rules.
+`check.py` is a small rule checker for generated projects. Core rules that do not need parsers stay standard-library-only; parser-backed rules such as `repeated_helper_methods` use the optional pinned dependencies in `tools/supermeta-rules/requirements.txt`. Templates can call the checker from their own build systems instead of reimplementing shared rules.
 
 Run it from a generated project root:
 
