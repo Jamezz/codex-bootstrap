@@ -370,7 +370,6 @@ def normalize_java_tokens(source: bytes, node, local_names: dict[str, str]) -> l
             continue
         if child.type in JAVA_LITERAL_NODE_TYPES:
             tokens.append(JAVA_LITERAL_NODE_TYPES[child.type])
-            tokens.append(f"literal-value:{node_text(source, child)}")
             continue
         if child.type == "identifier":
             text = node_text(source, child)

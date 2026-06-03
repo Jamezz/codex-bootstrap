@@ -313,7 +313,7 @@ final class Beta {
 final class AlphaTest {
     int checksum(String name) {
         int total = name.length();
-        total = total + 7;
+        total = total + adjustment();
         return total;
     }
 }
@@ -327,7 +327,7 @@ final class AlphaTest {
 final class BetaTest {
     int otherChecksum(String name) {
         int total = name.length();
-        total = total + 8;
+        total = total + offset();
         return total;
     }
 }

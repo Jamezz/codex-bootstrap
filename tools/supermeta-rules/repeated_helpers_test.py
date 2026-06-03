@@ -331,6 +331,38 @@ final class Beta {
         self.assertEqual(1, len(findings))
         self.assertIn("duplicates helper body", findings[0].message)
 
+    def test_literal_values_normalize_to_same_duplicate(self) -> None:
+        source_a = """package example;
+
+final class Alpha {
+    private int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        source_b = """package example;
+
+final class Beta {
+    private int checksum(String label) {
+        int result = label.length();
+        return result + 8;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Alpha.java"), source_a),
+                repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/Beta.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertEqual("error", findings[0].severity)
+        self.assertIn("duplicates helper body", findings[0].message)
+
     def test_finding_path_is_first_sorted_duplicate_path(self) -> None:
         source_a = """package example;
 
@@ -400,7 +432,7 @@ class RepeatedHelperNearMatchTest(unittest.TestCase):
 final class AlphaTest {
     int checksum(String name) {
         int total = name.length();
-        total = total + 7;
+        total = total + adjustment();
         return total;
     }
 }
@@ -410,7 +442,7 @@ final class AlphaTest {
 final class BetaTest {
     int otherChecksum(String name) {
         int total = name.length();
-        total = total + 8;
+        total = total + offset();
         return total;
     }
 }
