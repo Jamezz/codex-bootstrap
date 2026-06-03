@@ -25,13 +25,14 @@ val useExactJavaToolchain = providers.gradleProperty("useExactJavaToolchain")
     .map(String::toBoolean)
     .orElse(false)
 
-val supermetaRulesScript = layout.projectDirectory.file("../../tools/supermeta-rules/check.py")
-val generatedSupermetaRulesRequirements = layout.projectDirectory.file("tools/supermeta-rules/requirements.txt")
-val supermetaRulesRequirements = if (generatedSupermetaRulesRequirements.asFile.isFile) {
-    generatedSupermetaRulesRequirements
+val generatedSupermetaRulesToolDir = layout.projectDirectory.dir("tools/supermeta-rules")
+val supermetaRulesToolDir = if (generatedSupermetaRulesToolDir.asFile.isDirectory) {
+    generatedSupermetaRulesToolDir
 } else {
-    layout.projectDirectory.file("../../tools/supermeta-rules/requirements.txt")
+    layout.projectDirectory.dir("../../tools/supermeta-rules")
 }
+val supermetaRulesScript = supermetaRulesToolDir.file("check.py")
+val supermetaRulesRequirements = supermetaRulesToolDir.file("requirements.txt")
 val supermetaRulesVenv = layout.projectDirectory.dir(".gradle/supermeta-rules-venv")
 val supermetaRulesPython = providers.provider {
     val executable = if (System.getProperty("os.name").lowercase().contains("windows")) {
@@ -124,7 +125,7 @@ tasks.register<Exec>("verifySupermetaRules") {
     inputs.file("supermeta-rules.json")
     inputs.file(supermetaRulesScript)
     inputs.file(supermetaRulesRequirements)
-    inputs.files(fileTree("tools/supermeta-rules"))
+    inputs.files(fileTree(supermetaRulesToolDir))
     inputs.files(fileTree("src/main"))
     inputs.files(fileTree("src/test"))
 

@@ -520,7 +520,7 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             self.assertIn('rootProject.name = "sample-app"', read_text(checkout / "settings.gradle.kts"))
             self.assertIn(
-                'layout.projectDirectory.file("tools/supermeta-rules/check.py")',
+                'supermetaRulesToolDir.file("check.py")',
                 read_text(checkout / "build.gradle.kts"),
             )
             self.assertIn("org.projectlombok:lombok", read_text(checkout / "build.gradle.kts"))
@@ -552,8 +552,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn('"ignore_annotations": []', rules_config)
             self.assertIn('"project_callouts"', rules_config)
             self.assertIn('"command": ["./scripts/agent-gradle", ".", "checkstyleMain", "checkstyleTest"]', rules_config)
-            self.assertIn("installSupermetaRuleDependencies", read_text(checkout / "build.gradle.kts"))
-            self.assertIn("tools/supermeta-rules/requirements.txt", read_text(checkout / "build.gradle.kts"))
+            generated_build = read_text(checkout / "build.gradle.kts")
+            self.assertIn("installSupermetaRuleDependencies", generated_build)
+            self.assertIn("supermetaRulesToolDir", generated_build)
+            self.assertIn('layout.projectDirectory.dir("tools/supermeta-rules")', generated_build)
+            self.assertIn('supermetaRulesToolDir.file("requirements.txt")', generated_build)
+            self.assertIn("inputs.files(fileTree(supermetaRulesToolDir))", generated_build)
 
             app_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "App.java"
             logging_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "LoggingConfig.java"
