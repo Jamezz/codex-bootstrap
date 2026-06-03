@@ -31,6 +31,7 @@ def load_check_module() -> ModuleType:
 
 
 check = load_check_module()
+repeated_helpers = check.repeated_helpers
 
 
 class FileMatchingRuleTest(unittest.TestCase):
@@ -199,6 +200,32 @@ class RepeatedHelperMethodRuleConfigTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "near_match_threshold must be greater than 0 and at most 1"):
                 check.run_rules(config, root)
+
+    def test_missing_parser_dependency_reports_install_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/main/java/example/Foo.java",
+                """package example;
+final class Foo {
+    private int value() {
+        int total = 1;
+        return total;
+    }
+}
+""",
+            )
+            with patch.object(
+                repeated_helpers,
+                "java_parser",
+                side_effect=ValueError(
+                    "repeated_helper_methods requires parser dependencies; install "
+                    "tools/supermeta-rules/requirements.txt"
+                ),
+            ):
+                with self.assertRaisesRegex(ValueError, "requires parser dependencies"):
+                    check.run_rules(repeated_helper_config(), root, force_full=True)
 
     def test_rule_dispatch_reports_exact_duplicate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

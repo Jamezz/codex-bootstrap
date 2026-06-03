@@ -249,6 +249,20 @@ final class App {
 
         self.assertEqual([], candidates)
 
+    def test_syntax_error_names_file(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "src/main/java/example/Broken.java: Java parser reported syntax errors",
+        ):
+            repeated_helpers.extract_java_helpers(
+                helper_config(),
+                repeated_helpers.GroupSourceFile(
+                    "main",
+                    Path("src/main/java/example/Broken.java"),
+                    "package example; final class Broken { private int value( { return 1; } }",
+                ),
+            )
+
 
 class RepeatedHelperExactDuplicateTest(unittest.TestCase):
     def test_exact_normalized_duplicate_between_main_helpers_fails_once(self) -> None:
