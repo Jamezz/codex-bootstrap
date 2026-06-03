@@ -18,6 +18,8 @@ Rule `paths` may point at a broad repo area, but keep `include` patterns rooted 
 
 By default, the checker detects the Git working set for the configured root. When staged, unstaged, untracked, or branch-local files are found, file-local rules scan only those matching files. Cross-file aggregate rules, such as Java package sizing and Lombok record-constructor enforcement, still scan the full configured tree to avoid false negatives. If Git cannot provide a reliable non-empty working set, the checker falls back to a full scan.
 
+The checker keeps a Git-metadata counter and promotes the next automatic working-set run to a full scan after 10 fast scans for the same root. Set `SUPERMETA_RULES_FAST_SCAN_INTERVAL=<positive integer>` to tune that cadence for local diagnostics.
+
 Use `--full` or `SUPERMETA_RULES_FULL=1` when a run must scan every matching file regardless of Git state.
 
 The CLI streams rule progress and discovered findings to stderr while keeping the final pass/fail summary on stdout. Set `SUPERMETA_RULES_QUIET=1` to suppress progress output in contexts that need a quiet checker.

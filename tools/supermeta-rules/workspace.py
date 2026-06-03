@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import subprocess
@@ -10,6 +11,8 @@ from pathlib import Path
 
 
 TRUTHY = {"1", "true", "yes"}
+DEFAULT_FAST_SCAN_INTERVAL = 10
+STATE_FILE_NAME = "supermeta-rules-state.json"
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,93 @@ def detect_working_set(root: Path, force_full: bool = False) -> WorkingSet:
             reason=f"{len(branch_files)} branch Git file(s)",
         )
     return full_working_set("clean tree with no branch changes")
+
+
+def apply_periodic_full_scan(root: Path, working_set: WorkingSet) -> WorkingSet:
+    location = scan_state_location(root)
+    if location is None:
+        return working_set
+    state_path, root_key = location
+    state = read_scan_state(state_path)
+    roots = state.setdefault("roots", {})
+    if not isinstance(roots, dict):
+        roots = {}
+        state["roots"] = roots
+    root_state = roots.setdefault(root_key, {})
+    if not isinstance(root_state, dict):
+        root_state = {}
+        roots[root_key] = root_state
+
+    fast_scan_count = non_negative_int(root_state.get("fastScansSinceFull", 0))
+    if working_set.narrows_scan():
+        interval = fast_scan_interval()
+        if fast_scan_count >= interval:
+            root_state["fastScansSinceFull"] = 0
+            write_scan_state(state_path, state)
+            return full_working_set(f"periodic full scan after {fast_scan_count} fast scans")
+        root_state["fastScansSinceFull"] = fast_scan_count + 1
+        write_scan_state(state_path, state)
+        return working_set
+
+    root_state["fastScansSinceFull"] = 0
+    write_scan_state(state_path, state)
+    return working_set
+
+
+def scan_state_location(root: Path) -> tuple[Path, str] | None:
+    root = root.resolve()
+    git_root_raw = git_output(root, "rev-parse", "--show-toplevel")
+    if git_root_raw is None:
+        return None
+    git_root = Path(git_root_raw).resolve()
+    try:
+        root_key = root.relative_to(git_root).as_posix()
+    except ValueError:
+        return None
+    if root_key == ".":
+        root_key = ""
+    state_path_raw = git_output(git_root, "rev-parse", "--git-path", STATE_FILE_NAME)
+    if state_path_raw is None:
+        return None
+    state_path = Path(state_path_raw)
+    if not state_path.is_absolute():
+        state_path = git_root / state_path
+    return state_path.resolve(), root_key
+
+
+def read_scan_state(state_path: Path) -> dict[str, object]:
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_scan_state(state_path: Path, state: dict[str, object]) -> None:
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError:
+        return
+
+
+def fast_scan_interval() -> int:
+    raw_interval = os.environ.get("SUPERMETA_RULES_FAST_SCAN_INTERVAL", "")
+    if not raw_interval:
+        return DEFAULT_FAST_SCAN_INTERVAL
+    try:
+        interval = int(raw_interval)
+    except ValueError:
+        return DEFAULT_FAST_SCAN_INTERVAL
+    return interval if interval > 0 else DEFAULT_FAST_SCAN_INTERVAL
+
+
+def non_negative_int(value: object) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int) and value >= 0:
+        return value
+    return 0
 
 
 def changed_files_from_status(git_root: Path, root_prefix: str) -> set[Path] | None:
