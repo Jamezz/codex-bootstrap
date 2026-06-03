@@ -75,6 +75,76 @@ final class AppTest {
 
         self.assertEqual(["checksum"], [candidate.name for candidate in candidates])
 
+    def test_ignores_annotated_test_method_but_allows_unannotated_test_helper(self) -> None:
+        source = """package example;
+
+final class AppTest {
+    @Test
+    void calculates() {
+        int total = 1;
+        assertEquals(1, total);
+    }
+
+    int checksum(String name) {
+        int total = name.length();
+        return total + 7;
+    }
+}
+"""
+        candidates = repeated_helpers.extract_java_helpers(
+            helper_config(),
+            repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/AppTest.java"), source),
+        )
+
+        self.assertEqual(["checksum"], [candidate.name for candidate in candidates])
+
+    def test_counts_nested_control_flow_statements(self) -> None:
+        source = """package example;
+
+final class App {
+    private void nested(boolean ready) {
+        if (ready) {
+            first();
+            second();
+        }
+    }
+}
+"""
+        candidates = repeated_helpers.extract_java_helpers(
+            helper_config(min_statements=2),
+            repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/App.java"), source),
+        )
+
+        self.assertEqual(["nested"], [candidate.name for candidate in candidates])
+        self.assertGreaterEqual(candidates[0].statement_count, 2)
+
+    def test_normalizes_lambda_and_catch_parameter_names(self) -> None:
+        source = """package example;
+
+final class App {
+    private void consume(List<String> items) {
+        items.forEach(item -> {
+            sink(item);
+        });
+        try {
+            risky();
+        } catch (IllegalStateException problem) {
+            sink(problem.getMessage());
+        }
+    }
+}
+"""
+        candidates = repeated_helpers.extract_java_helpers(
+            helper_config(),
+            repeated_helpers.GroupSourceFile("main", Path("src/main/java/example/App.java"), source),
+        )
+
+        self.assertEqual(1, len(candidates))
+        self.assertIn("local:1", candidates[0].normalized_tokens)
+        self.assertIn("local:2", candidates[0].normalized_tokens)
+        self.assertNotIn("id:item", candidates[0].normalized_tokens)
+        self.assertNotIn("id:problem", candidates[0].normalized_tokens)
+
     def test_ignores_override_and_configured_annotations(self) -> None:
         source = """package example;
 

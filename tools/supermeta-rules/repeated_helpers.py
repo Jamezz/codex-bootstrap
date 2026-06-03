@@ -37,6 +37,20 @@ JAVA_LITERAL_NODE_TYPES = {
     "text_block": "literal:string",
     "true": "literal:boolean",
 }
+JAVA_TEST_METHOD_ANNOTATIONS = {
+    "After",
+    "AfterAll",
+    "AfterEach",
+    "Before",
+    "BeforeAll",
+    "BeforeEach",
+    "Disabled",
+    "ParameterizedTest",
+    "RepeatedTest",
+    "Test",
+    "TestFactory",
+    "TestTemplate",
+}
 
 
 @dataclass(frozen=True)
@@ -132,6 +146,8 @@ def extract_java_helpers(config: RepeatedHelperConfig, source_file: GroupSourceF
         annotations = annotation_names(source_bytes, method)
         if annotations_match_any(annotations, ("Override", *config.ignore_annotations)):
             continue
+        if source_file.group == "test" and annotations_match_any(annotations, tuple(JAVA_TEST_METHOD_ANNOTATIONS)):
+            continue
         modifiers = modifier_tokens(method)
         if not is_java_helper_eligible(source_file.group, modifiers):
             continue
@@ -222,26 +238,32 @@ def is_java_helper_eligible(group: str, modifiers: set[str]) -> bool:
 
 
 def count_java_statements(body) -> int:
-    return sum(1 for node in body.children if node.is_named and node.type in JAVA_DECLARATION_STATEMENTS)
+    return len(structural_tokens(body))
 
 
 def java_local_names(source: bytes, method) -> dict[str, str]:
     names: list[str] = []
-    parameters = method.child_by_field_name("parameters")
-    if parameters is not None:
-        for parameter in iter_named_nodes(parameters):
-            if parameter.type not in {"formal_parameter", "spread_parameter"}:
-                continue
-            name = parameter.child_by_field_name("name")
+    for node in iter_named_nodes(method):
+        if node.type in {"formal_parameter", "spread_parameter", "catch_formal_parameter", "variable_declarator"}:
+            name = node.child_by_field_name("name")
             if name is not None:
                 names.append(node_text(source, name))
-    for node in iter_named_nodes(method):
-        if node.type != "variable_declarator":
-            continue
-        name = node.child_by_field_name("name")
-        if name is not None:
-            names.append(node_text(source, name))
+        if node.type == "lambda_expression":
+            names.extend(lambda_parameter_names(source, node))
     return {name: f"local:{index}" for index, name in enumerate(dict.fromkeys(names))}
+
+
+def lambda_parameter_names(source: bytes, lambda_node) -> list[str]:
+    parameters = lambda_node.child_by_field_name("parameters")
+    if parameters is None:
+        return []
+    if parameters.type == "identifier":
+        return [node_text(source, parameters)]
+    names: list[str] = []
+    for node in iter_named_nodes(parameters):
+        if node.type == "identifier":
+            names.append(node_text(source, node))
+    return names
 
 
 def normalize_java_tokens(source: bytes, node, local_names: dict[str, str]) -> list[str]:
