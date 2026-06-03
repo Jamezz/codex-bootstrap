@@ -42,6 +42,7 @@ Meta source rules:
 - Java package layers should contain at most 7 top-level types before nesting into context-shaped subpackages;
 - language-specific lint and reusable heuristic gates should be routed through `tools/supermeta-rules/` project callouts;
 - Java source should enforce wildcard imports and Lombok-backed data boilerplate through shared Supermeta rules.
+- `repeated_helper_methods` is the Java V1 parser-backed rule for copied helper methods. Exact normalized duplicates fail; fuzzy near matches are advisory guidance for common-code extraction.
 - Java lint should report unused imports as warnings instead of build-breaking errors.
 
 ## Agent Workflow

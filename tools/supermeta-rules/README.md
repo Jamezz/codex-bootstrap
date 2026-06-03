@@ -62,6 +62,44 @@ Checks that each Java package layer contains no more than a configured number of
 }
 ```
 
+### `repeated_helper_methods`
+
+Checks for helper methods that have been copied instead of factored into common code. Java is the first supported language. The rule uses Tree-sitter, so enabled Java projects must install `tools/supermeta-rules/requirements.txt`.
+
+Exact normalized duplicates are blocking findings. Near matches are advisory by default and do not fail the run.
+
+```json
+{
+  "repeated_helper_methods": [
+    {
+      "name": "repeated-helper-methods",
+      "language": "java",
+      "groups": [
+        {
+          "name": "main",
+          "paths": ["src/main/java"],
+          "include": ["**/*.java"],
+          "exclude": ["**/generated/**"]
+        },
+        {
+          "name": "test",
+          "paths": ["src/test/java"],
+          "include": ["**/*.java"],
+          "exclude": ["**/generated/**"]
+        }
+      ],
+      "min_statements": 3,
+      "near_match_threshold": 0.86,
+      "advisory_near_matches": true,
+      "ignore_annotations": ["Generated", "ManualDuplication"],
+      "allow_methods": []
+    }
+  ]
+}
+```
+
+Groups compare independently, so production helpers do not compare with test helpers. Future Python, TypeScript, Rust, and C# adapters should reuse the same config shape and shared fuzzy-comparison pipeline.
+
 ### `rust_module_item_count`
 
 Checks that each Rust source module stays below a configured number of top-level items before it should be split around a clearer domain boundary. Test modules named `tests` are ignored.

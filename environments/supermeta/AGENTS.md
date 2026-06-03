@@ -12,6 +12,7 @@ When editing this environment:
 - carry the 1000-line product source limit into new starters;
 - carry the Java 7-top-level-types-per-package-layer limit into Java starters;
 - enforce Java wildcard imports and Lombok-backed getter, setter, and builder boilerplate through `tools/supermeta-rules/`;
+- enforce Java repeated-helper detection through `tools/supermeta-rules/`; exact duplicates should be factored into common code and near matches should be reviewed before extraction;
 - report unused Java imports as lint warnings, not hard verification failures;
 - route reusable checks through `tools/supermeta-rules/`;
 - route language-specific lint through `project_callouts`;

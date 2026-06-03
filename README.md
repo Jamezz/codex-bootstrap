@@ -27,7 +27,7 @@ The repo currently ships:
 - `tools/supermeta-nag/`: the generated-project nag helper copied into generated projects.
 - `tools/supermeta-check/`: the generated-project smart-check helper copied into generated projects.
 - `tools/supermeta-fix/`: the generated-project fix-loop helper copied into generated projects.
-- `tools/supermeta-rules/`: a small reusable rule checker that templates can call from their own build systems.
+- `tools/supermeta-rules/`: a reusable rule checker for generated projects, including source-size rules, Java policy checks, Rust safety checks, and Java repeated-helper detection.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
 - `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
 - `tools/supermeta-task/`: a language-agnostic stuck-task diagnostic helper copied into generated projects.

@@ -45,6 +45,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep Java package layers to 7 top-level types or fewer before nesting into context-shaped subpackages.
 - Supermeta enforces wildcard imports for Java source; use `allow_explicit` only for deliberate exceptions.
 - Supermeta rejects handwritten getter, setter, and builder boilerplate; for records, use and instantiate through Lombok `@Builder` patterns for maximum readability, and use Lombok annotations or a configured `ignore_annotations` escape hatch for rare intentional exceptions.
+- Supermeta flags repeated Java helper methods; factor repeated helpers into common code instead of copying local utilities.
 - Treat unused-import Checkstyle findings as warnings; clean them up, but do not make them a build-breaking gate.
 - Preserve Lombok compile-only and annotation-processor wiring.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
