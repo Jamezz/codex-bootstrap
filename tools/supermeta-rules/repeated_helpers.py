@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Iterable
 
@@ -164,8 +165,42 @@ def near_duplicate_findings(
     candidates: list[HelperCandidate],
     exact_keys: frozenset[tuple[str, tuple[str, ...]]],
 ) -> list[HelperFinding]:
-    _ = (config, candidates, exact_keys)
-    return []
+    sorted_candidates = sorted(
+        (
+            candidate
+            for candidate in candidates
+            if (candidate.group, candidate.normalized_tokens) not in exact_keys
+        ),
+        key=lambda candidate: (candidate.group, candidate.path.as_posix(), candidate.line, candidate.name),
+    )
+
+    findings: list[HelperFinding] = []
+    for left_index, left in enumerate(sorted_candidates):
+        for right in sorted_candidates[left_index + 1 :]:
+            if right.group != left.group:
+                break
+            if right.structure != left.structure:
+                continue
+            similarity = token_similarity(left.normalized_tokens, right.normalized_tokens)
+            if similarity < config.near_match_threshold:
+                continue
+            severity = "advisory" if config.advisory_near_matches else "error"
+            findings.append(
+                HelperFinding(
+                    path=left.path,
+                    message=(
+                        f"{left.name}() at {left.path.as_posix()}:{left.line} is similar to "
+                        f"{right.name}() at {right.path.as_posix()}:{right.line} "
+                        f"({similarity:.2f} similarity); review these helpers for shared extraction"
+                    ),
+                    severity=severity,
+                )
+            )
+    return findings
+
+
+def token_similarity(left: tuple[str, ...], right: tuple[str, ...]) -> float:
+    return SequenceMatcher(a=left, b=right, autojunk=False).ratio()
 
 
 def java_parser():
@@ -335,6 +370,7 @@ def normalize_java_tokens(source: bytes, node, local_names: dict[str, str]) -> l
             continue
         if child.type in JAVA_LITERAL_NODE_TYPES:
             tokens.append(JAVA_LITERAL_NODE_TYPES[child.type])
+            tokens.append(f"literal-value:{node_text(source, child)}")
             continue
         if child.type == "identifier":
             text = node_text(source, child)

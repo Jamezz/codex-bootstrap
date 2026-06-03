@@ -379,6 +379,111 @@ final class AppTest {
         self.assertEqual([], findings)
 
 
+class RepeatedHelperNearMatchTest(unittest.TestCase):
+    def test_near_duplicate_in_test_group_reports_one_advisory_by_default(self) -> None:
+        source_a = """package example;
+
+final class AlphaTest {
+    int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+"""
+        source_b = """package example;
+
+final class BetaTest {
+    int otherChecksum(String name) {
+        int total = name.length();
+        total = total + 8;
+        return total;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/AlphaTest.java"), source_a),
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/BetaTest.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertEqual("advisory", findings[0].severity)
+        self.assertIn("is similar to", findings[0].message)
+        self.assertIn("review these helpers for shared", findings[0].message)
+
+    def test_structurally_different_helpers_do_not_report_near_match(self) -> None:
+        source_a = """package example;
+
+final class AlphaTest {
+    int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+"""
+        source_b = """package example;
+
+final class BetaTest {
+    int guardedChecksum(String name) {
+        int total = name.length();
+        if (total > 0) {
+            total = total + 8;
+        }
+        return total;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/AlphaTest.java"), source_a),
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/BetaTest.java"), source_b),
+            ],
+        )
+
+        self.assertEqual([], findings)
+
+    def test_exact_duplicates_do_not_also_report_near_match_advisory(self) -> None:
+        source_a = """package example;
+
+final class AlphaTest {
+    int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+"""
+        source_b = """package example;
+
+final class BetaTest {
+    int otherChecksum(String label) {
+        int result = label.length();
+        result = result + 7;
+        return result;
+    }
+}
+"""
+
+        findings = repeated_helpers.find_repeated_helpers(
+            helper_config(),
+            [
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/AlphaTest.java"), source_a),
+                repeated_helpers.GroupSourceFile("test", Path("src/test/java/example/BetaTest.java"), source_b),
+            ],
+        )
+
+        self.assertEqual(1, len(findings))
+        self.assertEqual("error", findings[0].severity)
+        self.assertIn("duplicates helper body", findings[0].message)
+
+
 def helper_config(
     min_statements: int = 2,
     ignore_annotations: tuple[str, ...] = (),

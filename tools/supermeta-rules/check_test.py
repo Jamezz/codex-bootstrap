@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -273,6 +274,49 @@ final class Beta {
             findings = check.run_rules(repeated_helper_config(), root)
 
             self.assertEqual([], findings)
+
+    def test_near_duplicate_does_not_fail_main(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(
+                root,
+                "src/test/java/example/AlphaTest.java",
+                """package example;
+
+final class AlphaTest {
+    int checksum(String name) {
+        int total = name.length();
+        total = total + 7;
+        return total;
+    }
+}
+""",
+            )
+            write_source(
+                root,
+                "src/test/java/example/BetaTest.java",
+                """package example;
+
+final class BetaTest {
+    int otherChecksum(String name) {
+        int total = name.length();
+        total = total + 8;
+        return total;
+    }
+}
+""",
+            )
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text(json.dumps(repeated_helper_config()), encoding="utf-8")
+
+            output = io.StringIO()
+            error = io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                exit_code = check.main(["--config", str(config_path), "--root", str(root), "--full"])
+
+            self.assertEqual(0, exit_code)
+            self.assertIn("Supermeta rule advisories:", output.getvalue())
+            self.assertIn("Supermeta rules passed.", output.getvalue())
 
 
 class FindingSeverityTest(unittest.TestCase):
