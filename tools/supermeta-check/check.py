@@ -10,9 +10,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import hygiene
 
@@ -86,6 +87,55 @@ class CapturedOutput:
 
     def text(self) -> str:
         return "".join(self.parts)
+
+
+class CommandProgress:
+    def __init__(
+        self,
+        lane_id: str,
+        command_index: int,
+        command_count: int,
+        command: tuple[str, ...],
+        stream,
+        clock: Callable[[], float] = time.monotonic,
+        heartbeat_interval_seconds: float = 30.0,
+    ) -> None:
+        self.lane_id = lane_id
+        self.command_index = command_index
+        self.command_count = command_count
+        self.command = command
+        self.stream = stream
+        self.clock = clock
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds if heartbeat_interval_seconds > 0 else 30.0
+        self.started_at = 0.0
+        self.next_heartbeat_at = 0.0
+        self.started = False
+
+    def start(self) -> None:
+        self.started_at = self.clock()
+        self.next_heartbeat_at = self.started_at + self.heartbeat_interval_seconds
+        self.started = True
+        self.stream.write(f"agent-smart-check: running {self.command_label()}: {format_command(self.command)}\n")
+
+    def maybe_emit_heartbeat(self) -> None:
+        if not self.started:
+            self.start()
+        now = self.clock()
+        if now < self.next_heartbeat_at:
+            return
+        elapsed = format_duration(now - self.started_at)
+        self.stream.write(f"agent-smart-check: still running after {elapsed}: {self.command_label()}: {format_command(self.command)}\n")
+        while self.next_heartbeat_at <= now:
+            self.next_heartbeat_at += self.heartbeat_interval_seconds
+
+    def finish(self, exit_code: int) -> None:
+        if not self.started:
+            self.start()
+        elapsed = format_duration(self.clock() - self.started_at)
+        self.stream.write(f"agent-smart-check: finished {self.command_label()} after {elapsed} with exit code {exit_code}\n")
+
+    def command_label(self) -> str:
+        return f"{self.lane_id} command {self.command_index}/{self.command_count}"
 
 
 def load_effective_policy(root: Path) -> tuple[CheckPolicy, tuple[str, ...]]:
@@ -368,7 +418,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runner=None) -> int:
+def run_cli(
+    argv: list[str],
+    cwd: Path | None = None,
+    stdout=None,
+    command_runner=None,
+    progress_clock: Callable[[], float] = time.monotonic,
+    heartbeat_interval_seconds: float = 30.0,
+) -> int:
     args = parse_args(argv)
     root = (cwd or Path.cwd()).resolve()
     output = stdout or sys.stdout
@@ -431,6 +488,8 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
         results: list[CommandResult] = []
         exit_code = 0
         if not args.plan_only:
+            progress_output = sys.stderr if args.json else output
+            print_execution_progress(plan, progress_output)
             for item in plan.items:
                 missing = missing_requirements(item.lane)
                 if missing:
@@ -442,9 +501,20 @@ def run_cli(argv: list[str], cwd: Path | None = None, stdout=None, command_runne
                     results.append(result)
                     output.write(result.output)
                     return print_result(plan, results, args.json, True, result.exit_code, output, warnings, hygiene_result)
-                for command in item.lane.commands:
+                for command_index, command in enumerate(item.lane.commands, start=1):
                     timeout_seconds = args.timeout or command.timeout_seconds or item.lane.timeout_seconds
-                    result = run_command_runner(runner, list(command.argv), root, timeout_seconds)
+                    progress = CommandProgress(
+                        lane_id=item.lane.lane_id,
+                        command_index=command_index,
+                        command_count=len(item.lane.commands),
+                        command=command.argv,
+                        stream=progress_output,
+                        clock=progress_clock,
+                        heartbeat_interval_seconds=heartbeat_interval_seconds,
+                    )
+                    progress.start()
+                    result = run_command_runner(runner, list(command.argv), root, timeout_seconds, progress)
+                    progress.finish(result.exit_code)
                     results.append(result)
                     if result.output:
                         output.write(result.output)
@@ -520,40 +590,92 @@ def normalize_git_status_path(path: str) -> str:
     return path
 
 
-def run_command(command: list[str], cwd: Path, timeout_seconds: float | None = None) -> CommandResult:
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-            timeout=timeout_seconds,
-        )
-        return CommandResult(command=tuple(command), exit_code=completed.returncode, output=completed.stdout)
-    except subprocess.TimeoutExpired as error:
-        output = timeout_output(error)
-        output += f"agent-smart-check: command timed out after {timeout_seconds:g}s: {' '.join(command)}\n"
-        return CommandResult(command=tuple(command), exit_code=124, output=output)
+def run_command(
+    command: list[str],
+    cwd: Path,
+    timeout_seconds: float | None = None,
+    progress: CommandProgress | None = None,
+) -> CommandResult:
+    started_at = time.monotonic()
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    while True:
+        remaining = remaining_timeout_seconds(started_at, timeout_seconds)
+        if remaining is not None and remaining <= 0:
+            process.kill()
+            output, _ = process.communicate()
+            output = output or ""
+            output += f"agent-smart-check: command timed out after {timeout_seconds:g}s: {format_command(tuple(command))}\n"
+            return CommandResult(command=tuple(command), exit_code=124, output=output)
+        try:
+            output, _ = process.communicate(timeout=poll_interval_seconds(remaining))
+            return CommandResult(command=tuple(command), exit_code=process.returncode, output=output or "")
+        except subprocess.TimeoutExpired:
+            if progress is not None:
+                progress.maybe_emit_heartbeat()
 
 
-def run_command_runner(runner, command: list[str], cwd: Path, timeout_seconds: float | None) -> CommandResult:
+def run_command_runner(
+    runner,
+    command: list[str],
+    cwd: Path,
+    timeout_seconds: float | None,
+    progress: CommandProgress,
+) -> CommandResult:
     try:
-        return runner(command, cwd, timeout_seconds=timeout_seconds)
+        return runner(command, cwd, timeout_seconds=timeout_seconds, progress=progress)
     except TypeError:
-        return runner(command, cwd)
+        try:
+            return runner(command, cwd, timeout_seconds=timeout_seconds)
+        except TypeError:
+            return runner(command, cwd)
 
 
-def timeout_output(error: subprocess.TimeoutExpired) -> str:
-    output = error.output or ""
-    if isinstance(output, bytes):
-        output = output.decode(errors="replace")
-    return output
+def remaining_timeout_seconds(started_at: float, timeout_seconds: float | None) -> float | None:
+    if timeout_seconds is None:
+        return None
+    return timeout_seconds - (time.monotonic() - started_at)
+
+
+def poll_interval_seconds(remaining: float | None) -> float:
+    interval = 0.25
+    if remaining is None:
+        return interval
+    return max(0.01, min(interval, remaining))
 
 
 def missing_requirements(lane: CheckLane) -> tuple[str, ...]:
     return tuple(requirement for requirement in lane.requires if shutil.which(requirement) is None)
+
+
+def print_execution_progress(plan: CheckPlan, output) -> None:
+    command_count = sum(len(item.lane.commands) for item in plan.items)
+    output.write(
+        "agent-smart-check: file scan complete; "
+        f"selected {plural(len(plan.items), 'lane')} and {plural(command_count, 'command')}\n"
+    )
+
+
+def plural(count: int, singular: str) -> str:
+    suffix = "" if count == 1 else "s"
+    return f"{count} {singular}{suffix}"
+
+
+def format_command(command: tuple[str, ...]) -> str:
+    return " ".join(command)
+
+
+def format_duration(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    minutes, seconds = divmod(total_seconds, 60)
+    if minutes:
+        return f"{minutes}m{seconds:02d}s"
+    return f"{seconds}s"
 
 
 def print_self_test(policy: CheckPolicy, as_json: bool, output, warnings: tuple[str, ...]) -> int:

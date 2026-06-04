@@ -336,6 +336,40 @@ class CliExecutionTest(unittest.TestCase):
             self.assertEqual(7, exit_code)
             self.assertIn("python-test", output.text())
 
+    def test_execution_reports_progress_and_heartbeat(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="smart-check-progress-") as temp_dir:
+            root = Path(temp_dir)
+            write_default_policy(root)
+            output = check.CapturedOutput()
+            clock = FakeClock()
+
+            def slow_runner(
+                command: list[str],
+                cwd: Path,
+                timeout_seconds: float | None = None,
+                progress: check.CommandProgress | None = None,
+            ) -> check.CommandResult:
+                self.assertIsNotNone(progress)
+                clock.advance(30)
+                progress.maybe_emit_heartbeat()
+                return check.CommandResult(command=tuple(command), exit_code=0, output="command output\n")
+
+            exit_code = check.run_cli(
+                ["--changed", "unmatched.txt"],
+                cwd=root,
+                stdout=output,
+                command_runner=slow_runner,
+                progress_clock=clock,
+            )
+
+            text = output.text()
+            self.assertEqual(0, exit_code)
+            self.assertIn("agent-smart-check: file scan complete; selected 1 lane and 1 command", text)
+            self.assertIn("agent-smart-check: running full command 1/1: ./scripts/check", text)
+            self.assertIn("agent-smart-check: still running after 30s: full command 1/1: ./scripts/check", text)
+            self.assertIn("agent-smart-check: finished full command 1/1 after 30s with exit code 0", text)
+            self.assertLess(text.index("file scan complete"), text.index("command output"))
+
     def test_missing_required_tool_fails_before_command_execution(self) -> None:
         with tempfile.TemporaryDirectory(prefix="smart-check-requires-") as temp_dir:
             root = Path(temp_dir)
@@ -549,6 +583,17 @@ def run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     if result.returncode != 0:
         raise AssertionError(f"git {' '.join(args)} failed:\n{result.stdout}")
     return result
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.current = 0.0
+
+    def __call__(self) -> float:
+        return self.current
+
+    def advance(self, seconds: float) -> None:
+        self.current += seconds
 
 
 if __name__ == "__main__":

@@ -24,4 +24,6 @@ Use `--plan-only` to see hygiene actions without mutation. Use `--hygiene-only` 
 
 Lanes can declare `cost`, `tags`, `requires`, lane-level `timeoutSeconds`, and per-command `timeoutSeconds`. `--self-test` validates the lane graph before a subprocess is launched, and missing `requires` fail with exit `127`.
 
+During execution, human output reports when the file scan is complete, which lane command is running, and a 30-second still-running heartbeat for long commands.
+
 Focused lanes are an inner-loop accelerator. Run the template full check before handoff.
