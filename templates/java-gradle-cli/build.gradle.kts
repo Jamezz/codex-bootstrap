@@ -32,6 +32,7 @@ val supermetaRulesToolDir = if (generatedSupermetaRulesToolDir.asFile.isDirector
     layout.projectDirectory.dir("../../tools/supermeta-rules")
 }
 val supermetaRulesScript = supermetaRulesToolDir.file("check.py")
+val supermetaRulesCache = layout.projectDirectory.file(".gradle/supermeta-rules/cache-v1.json")
 val supermetaRulesRequirements = supermetaRulesToolDir.file("requirements.txt")
 val supermetaRulesVenv = layout.projectDirectory.dir(".gradle/supermeta-rules-venv")
 val supermetaRulesPython = providers.provider {
@@ -126,6 +127,7 @@ tasks.register<Exec>("verifySupermetaRules") {
     inputs.file(supermetaRulesScript)
     inputs.file(supermetaRulesRequirements)
     inputs.files(fileTree(supermetaRulesToolDir))
+    outputs.file(supermetaRulesCache)
     inputs.files(fileTree("src/main"))
     inputs.files(fileTree("src/test"))
 
@@ -136,6 +138,8 @@ tasks.register<Exec>("verifySupermetaRules") {
         layout.projectDirectory.file("supermeta-rules.json").asFile.absolutePath,
         "--root",
         layout.projectDirectory.asFile.absolutePath,
+        "--cache-file",
+        supermetaRulesCache.asFile.absolutePath,
         "--skip-callouts",
     )
 }

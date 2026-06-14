@@ -78,6 +78,8 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("Existing Repo Control Plane", manifest.display_name)
         self.assertIn("tools/supermeta-bootstrap/bootstrap_adopt.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-rules/check.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/cache.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/cache_test.py", manifest.sync_contract.managed_files)
         self.assertEqual({}, manifest.sync_contract.managed_regions)
         self.assertIn("velocity-tools", manifest.sync_contract.managed_sets)
         self.assertIn(".codex-bootstrap/checks.json", manifest.sync_contract.managed_files)
@@ -580,6 +582,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn('layout.projectDirectory.dir("tools/supermeta-rules")', generated_build)
             self.assertIn('supermetaRulesToolDir.file("requirements.txt")', generated_build)
             self.assertIn("inputs.files(fileTree(supermetaRulesToolDir))", generated_build)
+            self.assertIn("outputs.file(supermetaRulesCache)", generated_build)
+            self.assertIn('"--cache-file"', generated_build)
 
             app_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "App.java"
             logging_source = checkout / "src" / "main" / "java" / "com" / "acme" / "sample" / "LoggingConfig.java"
@@ -1770,6 +1774,8 @@ def assert_velocity_manifest_contract(test_case: unittest.TestCase, manifest: Te
     test_case.assertIn("tools/supermeta-check/hygiene_test.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/__init__.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-fix/fix.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-rules/cache.py", manifest.sync_contract.managed_files)
+    test_case.assertIn("tools/supermeta-rules/cache_test.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-rules/repeated_helpers.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-rules/repeated_helpers_test.py", manifest.sync_contract.managed_files)
     test_case.assertIn("tools/supermeta-rules/requirements.txt", manifest.sync_contract.managed_files)

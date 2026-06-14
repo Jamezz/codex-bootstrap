@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import hashlib
 import json
 import math
 import os
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, TextIO
 
+import cache as rule_cache
 import repeated_helpers
 import workspace
 
@@ -114,6 +116,9 @@ class RuleProgress:
     def scan_mode(self, working_set: workspace.WorkingSet) -> None:
         self.emit(f"supermeta-rules: {working_set.mode} scan: {working_set.reason}", force=True)
 
+    def cache_report(self, stats: rule_cache.CacheStats) -> None:
+        self.emit(f"supermeta-rules: {stats.summary()}", force=True)
+
     def emit(self, message: str, force: bool = False, now: float | None = None) -> None:
         timestamp = time.monotonic() if now is None else now
         if force or timestamp - self.last_emit >= self.time_interval_seconds:
@@ -122,10 +127,26 @@ class RuleProgress:
 
 
 class RuleScanContext:
-    def __init__(self, root: Path, working_set: workspace.WorkingSet) -> None:
+    def __init__(
+        self,
+        root: Path,
+        working_set: workspace.WorkingSet,
+        analysis_cache: rule_cache.RuleAnalysisCache | None = None,
+        cache_file: Path | None = None,
+        cache_enabled: bool = False,
+        config_fingerprint: str = "",
+        tool_fingerprint: str = "",
+    ) -> None:
         self.root = root
         self.working_set = working_set
-        self.cache: dict[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], bool], list[Path]] = {}
+        self.file_match_cache: dict[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], bool], list[Path]] = {}
+        self.analysis_cache = analysis_cache
+        self.cache_file = cache_file
+        self.cache_enabled = cache_enabled and analysis_cache is not None
+        self.config_fingerprint = config_fingerprint
+        self.tool_fingerprint = tool_fingerprint
+        self.file_digests: dict[Path, str] = {}
+        self.seen_files: set[Path] = set()
 
     def iter_matching_files(
         self,
@@ -136,21 +157,78 @@ class RuleScanContext:
     ) -> Iterator[Path]:
         use_working_set = narrow_to_working_set and self.working_set.narrows_scan()
         key = (tuple(paths), tuple(include), tuple(exclude), use_working_set)
-        cached = self.cache.get(key)
+        cached = self.file_match_cache.get(key)
         if cached is not None:
-            yield from cached
+            for source_file in cached:
+                self.seen_files.add(source_file.relative_to(self.root))
+                yield source_file
             return
 
         matches: list[Path] = []
-        self.cache[key] = matches
+        self.file_match_cache[key] = matches
         source = (
             iter_matching_changed_files(self.root, self.working_set.files, paths, include, exclude)
             if use_working_set
-            else iter_matching_files(self.root, paths, include, exclude)
+            else iter_matching_files(self.root, paths, include, exclude, prefer_git_visible=True)
         )
         for source_file in source:
+            self.seen_files.add(source_file.relative_to(self.root))
             matches.append(source_file)
             yield source_file
+
+    def repeated_helper_candidates(
+        self,
+        config: repeated_helpers.RepeatedHelperConfig,
+        source_file: repeated_helpers.GroupSourceFile,
+    ) -> list[repeated_helpers.HelperCandidate]:
+        relative_path = source_file.path
+        digest = self.digest_for(relative_path)
+        rule_key = f"repeated_helper_methods:{config.name}:{source_file.group}"
+        cached = (
+            self.analysis_cache.lookup(
+                relative_path,
+                digest,
+                rule_key,
+                self.config_fingerprint,
+                self.tool_fingerprint,
+            )
+            if self.cache_enabled and self.analysis_cache is not None
+            else None
+        )
+        if cached is not None:
+            try:
+                return [helper_candidate_from_cache(item) for item in cached]
+            except ValueError:
+                if self.analysis_cache is not None:
+                    self.analysis_cache.stats.stale += 1
+
+        candidates = repeated_helpers.extract_java_helpers(config, source_file)
+        if self.cache_enabled and self.analysis_cache is not None:
+            self.analysis_cache.put(
+                relative_path,
+                digest,
+                rule_key,
+                self.config_fingerprint,
+                self.tool_fingerprint,
+                [helper_candidate_to_cache(candidate) for candidate in candidates],
+            )
+        return candidates
+
+    def digest_for(self, relative_path: Path) -> str:
+        cached = self.file_digests.get(relative_path)
+        if cached is not None:
+            return cached
+        digest = hash_file(self.root / relative_path)
+        self.file_digests[relative_path] = digest
+        return digest
+
+    def finish(self, progress: RuleProgress | None = None, cache_report: bool = False) -> None:
+        if not self.cache_enabled or self.analysis_cache is None or self.cache_file is None:
+            return
+        self.analysis_cache.evict_missing(self.seen_files)
+        self.analysis_cache.write_atomic(self.cache_file)
+        if cache_report and progress is not None:
+            progress.cache_report(self.analysis_cache.stats)
 
 
 JAVA_IMPORT_RE = re.compile(
@@ -204,11 +282,15 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = load_config(config_path)
+        progress = RuleProgress(sys.stderr) if progress_is_enabled() else None
         findings = run_rules(
             config,
             root,
             skip_callouts=args.skip_callouts,
             force_full=args.full,
+            cache_file=resolve_cache_file(root, args.cache_file),
+            no_cache=args.no_cache,
+            cache_report=args.cache_report,
             scan_invalidator_paths=relative_paths_under_root(
                 root,
                 [
@@ -219,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
                     Path(__file__).with_name("requirements.txt"),
                 ],
             ),
-            progress=RuleProgress(sys.stderr) if progress_is_enabled() else None,
+            progress=progress,
         )
     except ValueError as error:
         print(f"supermeta-rules: {error}", file=sys.stderr)
@@ -274,6 +356,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Disable automatic Git working-set narrowing and scan all matching files.",
     )
+    parser.add_argument(
+        "--cache-file",
+        type=Path,
+        help="Persistent source-analysis cache file. Defaults to SUPERMETA_RULES_CACHE_FILE or .gradle/supermeta-rules/cache-v1.json.",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable persistent source-analysis cache reads and writes.",
+    )
+    parser.add_argument(
+        "--cache-report",
+        action="store_true",
+        help="Print source-analysis cache hit/miss stats.",
+    )
     return parser.parse_args(argv)
 
 
@@ -299,6 +396,10 @@ def run_rules(
     force_full: bool = False,
     scan_invalidator_paths: tuple[Path, ...] = (),
     progress: RuleProgress | None = None,
+    cache_file: Path | None = None,
+    no_cache: bool = False,
+    cache_report: bool = False,
+    tool_fingerprint: str | None = None,
 ) -> list[Finding]:
     root = root.resolve()
     if not root.is_dir():
@@ -311,7 +412,17 @@ def run_rules(
     working_set = workspace.apply_periodic_full_scan(root, working_set)
     if progress is not None:
         progress.scan_mode(working_set)
-    scan_context = RuleScanContext(root, working_set)
+    resolved_cache_file = cache_file.resolve() if cache_file is not None else None
+    analysis_cache = None if no_cache or resolved_cache_file is None else rule_cache.load_cache(resolved_cache_file)
+    scan_context = RuleScanContext(
+        root,
+        working_set,
+        analysis_cache=analysis_cache,
+        cache_file=resolved_cache_file,
+        cache_enabled=analysis_cache is not None,
+        config_fingerprint=fingerprint_json(config),
+        tool_fingerprint=tool_fingerprint or default_tool_fingerprint(root),
+    )
     findings.extend(run_line_count_rules(config.get("line_count", []), root, progress=progress, scan_context=scan_context))
     findings.extend(
         run_java_package_class_count_rules(
@@ -386,6 +497,7 @@ def run_rules(
     )
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
+    scan_context.finish(progress=progress, cache_report=cache_report)
     return findings
 
 
@@ -761,7 +873,7 @@ def run_repeated_helper_method_rules(
         if not rule_is_enabled(rule):
             continue
         repeated_helper_config = parse_repeated_helper_config(rule, index)
-        source_files: list[repeated_helpers.GroupSourceFile] = []
+        candidates: list[repeated_helpers.HelperCandidate] = []
         for group in repeated_helper_config.groups:
             for source_file in iter_rule_files(
                 repeated_helper_config.name,
@@ -773,15 +885,23 @@ def run_repeated_helper_method_rules(
                 scan_context=scan_context,
                 narrow_to_working_set=False,
             ):
-                source_files.append(
-                    repeated_helpers.GroupSourceFile(
-                        group=group.name,
-                        path=source_file.relative_to(root),
-                        source=source_file.read_text(encoding="utf-8"),
-                    )
+                group_source_file = repeated_helpers.GroupSourceFile(
+                    group=group.name,
+                    path=source_file.relative_to(root),
+                    source=source_file.read_text(encoding="utf-8"),
+                )
+                candidates.extend(
+                    scan_context.repeated_helper_candidates(repeated_helper_config, group_source_file)
+                    if scan_context is not None
+                    else repeated_helpers.extract_java_helpers(repeated_helper_config, group_source_file)
                 )
 
-        for finding in repeated_helpers.find_repeated_helpers(repeated_helper_config, source_files):
+        exact_keys = repeated_helpers.exact_duplicate_keys(candidates)
+        helper_findings = [
+            *repeated_helpers.exact_duplicate_findings(candidates, exact_keys),
+            *repeated_helpers.near_duplicate_findings(repeated_helper_config, candidates, exact_keys),
+        ]
+        for finding in helper_findings:
             add_finding(
                 findings,
                 Finding(
@@ -1582,6 +1702,96 @@ def progress_is_enabled() -> bool:
     return os.environ.get("SUPERMETA_RULES_QUIET") not in {"1", "true", "yes"}
 
 
+def resolve_cache_file(root: Path, explicit_cache_file: Path | None) -> Path:
+    if explicit_cache_file is not None:
+        return explicit_cache_file
+    env_cache_file = os.environ.get("SUPERMETA_RULES_CACHE_FILE")
+    if env_cache_file:
+        return Path(env_cache_file)
+    return root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+
+
+def fingerprint_json(data: Any) -> str:
+    encoded = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def default_tool_fingerprint(root: Path) -> str:
+    paths = [
+        Path(__file__),
+        Path(__file__).with_name("workspace.py"),
+        Path(__file__).with_name("repeated_helpers.py"),
+        Path(__file__).with_name("requirements.txt"),
+    ]
+    digest = hashlib.sha256()
+    for path in paths:
+        try:
+            relative_name = path.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            relative_name = path.name
+        digest.update(relative_name.encode("utf-8"))
+        digest.update(b"\0")
+        if path.is_file():
+            digest.update(hash_file(path).encode("utf-8"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def helper_candidate_to_cache(candidate: repeated_helpers.HelperCandidate) -> dict[str, Any]:
+    return {
+        "group": candidate.group,
+        "path": candidate.path.as_posix(),
+        "line": candidate.line,
+        "name": candidate.name,
+        "normalizedTokens": list(candidate.normalized_tokens),
+        "structure": list(candidate.structure),
+        "statementCount": candidate.statement_count,
+    }
+
+
+def helper_candidate_from_cache(data: Any) -> repeated_helpers.HelperCandidate:
+    if not isinstance(data, dict):
+        raise ValueError("invalid repeated helper cache entry")
+    return repeated_helpers.HelperCandidate(
+        group=require_cached_string(data, "group"),
+        path=Path(require_cached_string(data, "path")),
+        line=require_cached_int(data, "line"),
+        name=require_cached_string(data, "name"),
+        normalized_tokens=tuple(require_cached_string_list(data, "normalizedTokens")),
+        structure=tuple(require_cached_string_list(data, "structure")),
+        statement_count=require_cached_int(data, "statementCount"),
+    )
+
+
+def require_cached_string(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid cached helper field: {key}")
+    return value
+
+
+def require_cached_int(data: dict[str, Any], key: str) -> int:
+    value = data.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"invalid cached helper field: {key}")
+    return value
+
+
+def require_cached_string_list(data: dict[str, Any], key: str) -> list[str]:
+    value = data.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"invalid cached helper field: {key}")
+    return value
+
+
 def relative_paths_under_root(root: Path, paths: list[Path]) -> tuple[Path, ...]:
     root = root.resolve()
     relatives: list[Path] = []
@@ -1655,8 +1865,15 @@ def iter_matching_files(
     paths: list[str],
     include: list[str],
     exclude: list[str],
+    prefer_git_visible: bool = False,
 ) -> Iterator[Path]:
     root = root.resolve()
+    if prefer_git_visible:
+        git_visible_files = workspace.git_visible_files(root, paths)
+        if git_visible_files is not None:
+            yield from iter_matching_candidate_files(root, git_visible_files, paths, include, exclude)
+            return
+
     seen: set[Path] = set()
     for configured_path in paths:
         base_path = resolve_under_root(root, configured_path)
@@ -1675,6 +1892,28 @@ def iter_matching_files(
                 if candidate not in seen:
                     seen.add(candidate)
                     yield candidate
+
+
+def iter_matching_candidate_files(
+    root: Path,
+    relative_candidates: set[Path],
+    paths: list[str],
+    include: list[str],
+    exclude: list[str],
+) -> Iterator[Path]:
+    seen: set[Path] = set()
+    for relative_candidate in sorted(relative_candidates):
+        candidate = resolve_under_root(root, relative_candidate.as_posix())
+        if not candidate.is_file() or candidate in seen:
+            continue
+        relative_path = candidate.relative_to(root).as_posix()
+        if not matches_configured_paths(root, candidate, paths):
+            continue
+        if any(fnmatch.fnmatch(relative_path, pattern) for pattern in include) and not any(
+            fnmatch.fnmatch(relative_path, pattern) for pattern in exclude
+        ):
+            seen.add(candidate)
+            yield candidate
 
 
 def iter_matching_changed_files(

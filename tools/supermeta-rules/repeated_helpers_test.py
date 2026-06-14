@@ -529,6 +529,33 @@ final class BetaTest {
         self.assertEqual("error", findings[0].severity)
         self.assertIn("duplicates helper body", findings[0].message)
 
+    def test_near_match_upper_bound_rejects_impossible_length_ratio(self) -> None:
+        self.assertFalse(
+            repeated_helpers.can_reach_similarity(
+                ("a", "b"),
+                ("a", "b", "c", "d", "e", "f"),
+                0.86,
+            )
+        )
+
+    def test_near_match_upper_bound_rejects_impossible_token_overlap(self) -> None:
+        self.assertFalse(
+            repeated_helpers.can_reach_similarity(
+                ("a", "b", "c", "d"),
+                ("a", "b", "x", "y"),
+                0.86,
+            )
+        )
+
+    def test_near_match_upper_bound_allows_possible_match(self) -> None:
+        self.assertTrue(
+            repeated_helpers.can_reach_similarity(
+                ("a", "b", "c", "d"),
+                ("a", "b", "c", "x"),
+                0.75,
+            )
+        )
+
 
 def helper_config(
     min_statements: int = 2,

@@ -190,6 +190,40 @@ def changed_files_from_diff(git_root: Path, root_prefix: str, merge_base: str) -
     return files
 
 
+def git_visible_files(root: Path, paths: list[str]) -> set[Path] | None:
+    root = root.resolve()
+    git_root_raw = git_output(root, "rev-parse", "--show-toplevel")
+    if git_root_raw is None:
+        return None
+    git_root = Path(git_root_raw).resolve()
+    try:
+        root_prefix = root.relative_to(git_root).as_posix()
+    except ValueError:
+        return None
+    root_prefix = "" if root_prefix == "." else root_prefix
+    pathspecs = [root_pathspec_to_repo_pathspec(root_prefix, path) for path in paths]
+    result = git_run(git_root, "ls-files", "--cached", "--others", "--exclude-standard", "--", *pathspecs)
+    if result.returncode != 0:
+        return None
+    files: set[Path] = set()
+    for line in result.stdout.splitlines():
+        relative_path = repo_path_to_root_path(line, root_prefix)
+        if relative_path is not None:
+            files.add(relative_path)
+    return files
+
+
+def root_pathspec_to_repo_pathspec(root_prefix: str, path: str) -> str:
+    normalized = path.replace("\\", "/").strip("/")
+    if normalized in {"", "."}:
+        normalized = "."
+    if not root_prefix:
+        return normalized
+    if normalized == ".":
+        return root_prefix
+    return f"{root_prefix}/{normalized}"
+
+
 def repo_path_to_root_path(repo_path: str, root_prefix: str) -> Path | None:
     normalized = repo_path.replace("\\", "/").strip("/")
     if not normalized:

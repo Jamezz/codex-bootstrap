@@ -338,6 +338,14 @@
             "mode": "whole-file"
           },
           {
+            "path": "tools/supermeta-rules/cache.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/cache_test.py",
+            "mode": "whole-file"
+          },
+          {
             "path": "tools/supermeta-rules/repeated_helpers.py",
             "mode": "whole-file"
           },

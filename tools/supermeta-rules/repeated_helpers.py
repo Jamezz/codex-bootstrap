@@ -165,42 +165,74 @@ def near_duplicate_findings(
     candidates: list[HelperCandidate],
     exact_keys: frozenset[tuple[str, tuple[str, ...]]],
 ) -> list[HelperFinding]:
-    sorted_candidates = sorted(
-        (
-            candidate
-            for candidate in candidates
-            if (candidate.group, candidate.normalized_tokens) not in exact_keys
-        ),
-        key=lambda candidate: (candidate.group, candidate.path.as_posix(), candidate.line, candidate.name),
-    )
+    candidates_by_shape: dict[tuple[str, tuple[str, ...]], list[HelperCandidate]] = {}
+    for candidate in candidates:
+        if (candidate.group, candidate.normalized_tokens) in exact_keys:
+            continue
+        candidates_by_shape.setdefault((candidate.group, candidate.structure), []).append(candidate)
 
     findings: list[HelperFinding] = []
-    for left_index, left in enumerate(sorted_candidates):
-        for right in sorted_candidates[left_index + 1 :]:
-            if right.group != left.group:
-                break
-            if right.structure != left.structure:
-                continue
-            similarity = token_similarity(left.normalized_tokens, right.normalized_tokens)
-            if similarity < config.near_match_threshold:
-                continue
-            severity = "advisory" if config.advisory_near_matches else "error"
-            findings.append(
-                HelperFinding(
-                    path=left.path,
-                    message=(
-                        f"{left.name}() at {left.path.as_posix()}:{left.line} is similar to "
-                        f"{right.name}() at {right.path.as_posix()}:{right.line} "
-                        f"({similarity:.2f} similarity); review these helpers for shared extraction"
-                    ),
-                    severity=severity,
+    for shape_candidates in candidates_by_shape.values():
+        sorted_candidates = sorted(
+            shape_candidates,
+            key=lambda candidate: (candidate.path.as_posix(), candidate.line, candidate.name),
+        )
+        token_counts = {
+            candidate: Counter(candidate.normalized_tokens)
+            for candidate in sorted_candidates
+        }
+        for left_index, left in enumerate(sorted_candidates):
+            for right in sorted_candidates[left_index + 1 :]:
+                if not can_reach_similarity(
+                    left.normalized_tokens,
+                    right.normalized_tokens,
+                    config.near_match_threshold,
+                    token_counts[left],
+                    token_counts[right],
+                ):
+                    continue
+                similarity = token_similarity(left.normalized_tokens, right.normalized_tokens)
+                if similarity < config.near_match_threshold:
+                    continue
+                severity = "advisory" if config.advisory_near_matches else "error"
+                findings.append(
+                    HelperFinding(
+                        path=left.path,
+                        message=(
+                            f"{left.name}() at {left.path.as_posix()}:{left.line} is similar to "
+                            f"{right.name}() at {right.path.as_posix()}:{right.line} "
+                            f"({similarity:.2f} similarity); review these helpers for shared extraction"
+                        ),
+                        severity=severity,
+                    )
                 )
-            )
     return findings
 
 
 def token_similarity(left: tuple[str, ...], right: tuple[str, ...]) -> float:
     return SequenceMatcher(a=left, b=right, autojunk=False).ratio()
+
+
+def can_reach_similarity(
+    left: tuple[str, ...],
+    right: tuple[str, ...],
+    threshold: float,
+    left_counter: Counter[str] | None = None,
+    right_counter: Counter[str] | None = None,
+) -> bool:
+    total_length = len(left) + len(right)
+    if total_length == 0:
+        return True
+
+    length_upper_bound = (2 * min(len(left), len(right))) / total_length
+    if length_upper_bound < threshold:
+        return False
+
+    left_counts = left_counter if left_counter is not None else Counter(left)
+    right_counts = right_counter if right_counter is not None else Counter(right)
+    overlap = sum((left_counts & right_counts).values())
+    overlap_upper_bound = (2 * overlap) / total_length
+    return overlap_upper_bound >= threshold
 
 
 def java_parser():

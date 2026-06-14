@@ -346,6 +346,114 @@ final class BetaTest {
             self.assertIn("Supermeta rules passed.", output.getvalue())
 
 
+class RepeatedHelperMethodCacheTest(unittest.TestCase):
+    def test_unchanged_files_reuse_cached_helper_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/Alpha.java", helper_source("Alpha", "same"))
+            write_source(root, "src/main/java/example/Beta.java", helper_source("Beta", "same"))
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            calls: list[str] = []
+
+            def fake_extract(config: object, source_file: object) -> list[object]:
+                calls.append(source_file.path.as_posix())
+                return [helper_candidate(source_file.group, source_file.path, tuple(["same"]))]
+
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                first = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual(1, len(first))
+            self.assertEqual(
+                ["src/main/java/example/Alpha.java", "src/main/java/example/Beta.java"],
+                sorted(calls),
+            )
+
+            calls.clear()
+            with patch.object(
+                repeated_helpers,
+                "extract_java_helpers",
+                side_effect=AssertionError("unchanged files should use cached candidates"),
+            ):
+                second = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual(1, len(second))
+            self.assertEqual([], calls)
+
+    def test_changed_file_reanalyzes_only_that_file_and_keeps_cross_file_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            alpha = write_source(root, "src/main/java/example/Alpha.java", helper_source("Alpha", "same"))
+            beta = write_source(root, "src/main/java/example/Beta.java", helper_source("Beta", "different"))
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            calls: list[str] = []
+
+            def fake_extract(config: object, source_file: object) -> list[object]:
+                calls.append(source_file.path.as_posix())
+                token = "same" if "same" in source_file.source else source_file.path.stem
+                return [helper_candidate(source_file.group, source_file.path, tuple([token]))]
+
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                first = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual([], first)
+            self.assertEqual({alpha.relative_to(root).as_posix(), beta.relative_to(root).as_posix()}, set(calls))
+
+            beta.write_text(helper_source("Beta", "same"), encoding="utf-8")
+            calls.clear()
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                second = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual(["src/main/java/example/Beta.java"], calls)
+            self.assertEqual(1, len(second))
+            self.assertIn("duplicates helper body", second[0].message)
+
+    def test_no_cache_forces_reanalysis(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/Alpha.java", helper_source("Alpha", "same"))
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            calls: list[str] = []
+
+            def fake_extract(config: object, source_file: object) -> list[object]:
+                calls.append(source_file.path.as_posix())
+                return [helper_candidate(source_file.group, source_file.path, tuple(["same"]))]
+
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+                check.run_rules(
+                    repeated_helper_config(),
+                    root,
+                    force_full=True,
+                    cache_file=cache_file,
+                    no_cache=True,
+                )
+
+            self.assertEqual(["src/main/java/example/Alpha.java", "src/main/java/example/Alpha.java"], calls)
+
+    def test_cache_report_includes_hit_and_miss_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/Alpha.java", helper_source("Alpha", "same"))
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            stream = io.StringIO()
+
+            def fake_extract(config: object, source_file: object) -> list[object]:
+                return [helper_candidate(source_file.group, source_file.path, tuple(["same"]))]
+
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+                check.run_rules(
+                    repeated_helper_config(),
+                    root,
+                    force_full=True,
+                    cache_file=cache_file,
+                    cache_report=True,
+                    progress=check.RuleProgress(stream, file_interval=1, time_interval_seconds=999),
+                )
+
+            self.assertIn("cache hits=1", stream.getvalue())
+
+
 class FindingSeverityTest(unittest.TestCase):
     def test_main_prints_advisories_without_failing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -422,7 +530,7 @@ class AutomaticWorkingSetTest(unittest.TestCase):
                     "line_count": [
                         {
                             "name": "source-line-count",
-                            "max_lines": 1,
+                            "max_lines": 2,
                             "paths": ["src/main/java"],
                             "include": ["**/*.java"],
                             "exclude": [],
@@ -462,6 +570,35 @@ class AutomaticWorkingSetTest(unittest.TestCase):
 
             self.assertEqual(1, len(findings))
             self.assertEqual(Path("src/main/java/example/TooLarge.java"), findings[0].path)
+
+    def test_full_scan_uses_git_visible_files_and_ignores_build_noise(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, ".gitignore", "build/\n")
+            write_source(root, "src/main/java/example/App.java", "package example;\nfinal class App {}\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/main/java/example/NewFile.java", "package example;\nfinal class NewFile {}\n")
+            write_source(root, "build/generated/TooLarge.java", "line 1\nline 2\n")
+
+            findings = check.run_rules(
+                {
+                    "line_count": [
+                        {
+                            "name": "source-line-count",
+                            "max_lines": 2,
+                            "paths": ["."],
+                            "include": ["**/*.java"],
+                            "exclude": [],
+                        }
+                    ]
+                },
+                root,
+                force_full=True,
+            )
+
+            self.assertEqual([], findings)
 
     def test_cross_file_java_package_rules_still_scan_full_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2044,6 +2181,31 @@ def write_java_files(root: Path, package_path: str, count: int) -> None:
             f"package {package_name};\nfinal class {type_name} {{}}\n",
             encoding="utf-8",
         )
+
+
+def helper_source(class_name: str, marker: str) -> str:
+    return f"""package example;
+
+final class {class_name} {{
+    private int checksum(String name) {{
+        int total = name.length();
+        total = total + "{marker}".length();
+        return total;
+    }}
+}}
+"""
+
+
+def helper_candidate(group: str, path: Path, normalized_tokens: tuple[str, ...]) -> object:
+    return repeated_helpers.HelperCandidate(
+        group=group,
+        path=path,
+        line=4,
+        name="checksum",
+        normalized_tokens=normalized_tokens,
+        structure=("local_variable_declaration", "expression_statement", "return_statement"),
+        statement_count=3,
+    )
 
 
 def callout_config(command: list[str]) -> dict[str, object]:

@@ -22,6 +22,26 @@ The checker keeps a Git-metadata counter and promotes the next automatic working
 
 Use `--full` or `SUPERMETA_RULES_FULL=1` when a run must scan every matching file regardless of Git state.
 
+## Persistent Analysis Cache
+
+Expensive per-file analysis is cached by default under `.gradle/supermeta-rules/cache-v1.json`, or under the path named
+by `SUPERMETA_RULES_CACHE_FILE`. Gradle-backed projects should pass the cache file explicitly and declare it as a task
+output so unchanged rule inputs can be skipped by Gradle and unchanged source files can be reused by the checker.
+
+```bash
+python3 tools/supermeta-rules/check.py \
+  --config supermeta-rules.json \
+  --root . \
+  --cache-file .gradle/supermeta-rules/cache-v1.json
+```
+
+Use `--cache-report` to print hit, miss, stale, write, and eviction counts. Use `--no-cache` only when validating cache
+behavior or bisecting a scanner bug.
+
+Cache keys include the relative file path, file digest, rule id, rule options, and tool fingerprint. Changing
+`supermeta-rules.json`, the scanner implementation, or optional parser dependencies invalidates affected entries instead
+of reusing stale analysis.
+
 The CLI streams rule progress and discovered findings to stderr while keeping the final pass/fail summary on stdout. Set `SUPERMETA_RULES_QUIET=1` to suppress progress output in contexts that need a quiet checker.
 
 ## Supported Rules

@@ -3,7 +3,9 @@
   "displayName": "TypeScript Bun MCP Server",
   "description": "A compact TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-mcp-server",
-  "requiredInputs": ["name"],
+  "requiredInputs": [
+    "name"
+  ],
   "supportPaths": [
     {
       "source": "scripts/agent-bootstrap",
@@ -94,7 +96,10 @@
       "destination": "tools/supermeta-nag"
     }
   ],
-  "verificationCommands": ["./scripts/check", "bun run src/main.ts --help"],
+  "verificationCommands": [
+    "./scripts/check",
+    "bun run src/main.ts --help"
+  ],
   "generatedDocs": {
     "summary": "This is a compact TypeScript Bun MCP server with local stdio, Bun-native Streamable HTTP, typed state stores, tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
     "runtime": "Bun owns package installation, runtime execution, and tests. The MCP server is constructed separately from transport startup so tests can exercise tools through an in-memory MCP client. `stdio` is the default transport for local agent-spawned servers, while `http` exposes `/health` and `/mcp` through Bun's native server. State defaults to memory and can be switched to an atomic JSON file store. Runtime logging uses Pino on stderr, Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
@@ -108,9 +113,17 @@
       "src/logging.ts",
       "package.json scripts"
     ],
-    "sourceRoots": ["src", "tools/supermeta-rules"],
-    "testRoots": ["tests", "supermeta-rules.json"],
-    "verificationCommands": ["./scripts/check"],
+    "sourceRoots": [
+      "src",
+      "tools/supermeta-rules"
+    ],
+    "testRoots": [
+      "tests",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
     "runCommands": [
       "bun run src/main.ts --help",
       "bun run src/main.ts",
@@ -351,6 +364,14 @@
           },
           {
             "path": "tools/supermeta-rules/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/cache.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/cache_test.py",
             "mode": "whole-file"
           },
           {
