@@ -55,6 +55,13 @@ class JavaRecordType:
 
 
 @dataclass(frozen=True)
+class JavaConstructorUsage:
+    target: str
+    kind: str
+    start: int
+
+
+@dataclass(frozen=True)
 class JavaSourceContext:
     relative_path: Path
     source: str
@@ -63,6 +70,7 @@ class JavaSourceContext:
     explicit_imports: frozenset[str]
     wildcard_imports: frozenset[str]
     declared_record_names: frozenset[str]
+    constructor_usages: tuple[JavaConstructorUsage, ...]
 
 
 @dataclass(frozen=True)
@@ -74,6 +82,31 @@ class JavaMethodBlock:
     start: int
     end: int
     annotations: tuple[str, ...]
+
+
+@dataclass
+class FileSnapshot:
+    relative_path: Path
+    source_bytes: bytes
+    digest: str
+    _source_text: str | None = None
+
+    def source_text(self) -> str:
+        if self._source_text is None:
+            self._source_text = self.source_bytes.decode("utf-8")
+        return self._source_text
+
+
+@dataclass(frozen=True)
+class JavaSourceFacts:
+    stripped_source: str
+    class_blocks: list[JavaClassBlock]
+    package_name: str
+    explicit_imports: frozenset[str]
+    wildcard_imports: frozenset[str]
+    normalized_imports: tuple[str, ...]
+    top_level_type_names: tuple[str, ...]
+    constructor_usages: tuple[JavaConstructorUsage, ...]
 
 
 class RuleProgress:
@@ -146,6 +179,7 @@ class RuleScanContext:
         self.config_fingerprint = config_fingerprint
         self.tool_fingerprint = tool_fingerprint
         self.file_digests: dict[Path, str] = {}
+        self.file_snapshots: dict[Path, FileSnapshot] = {}
         self.seen_files: set[Path] = set()
 
     def iter_matching_files(
@@ -179,11 +213,12 @@ class RuleScanContext:
     def repeated_helper_candidates(
         self,
         config: repeated_helpers.RepeatedHelperConfig,
-        source_file: repeated_helpers.GroupSourceFile,
+        group: str,
+        source_file: Path,
     ) -> list[repeated_helpers.HelperCandidate]:
-        relative_path = source_file.path
+        relative_path = self.relative_path_for(source_file)
         digest = self.digest_for(relative_path)
-        rule_key = f"repeated_helper_methods:{config.name}:{source_file.group}"
+        rule_key = f"repeated_helper_methods:{config.name}:{group}"
         cached = (
             self.analysis_cache.lookup(
                 relative_path,
@@ -202,7 +237,14 @@ class RuleScanContext:
                 if self.analysis_cache is not None:
                     self.analysis_cache.stats.stale += 1
 
-        candidates = repeated_helpers.extract_java_helpers(config, source_file)
+        candidates = repeated_helpers.extract_java_helpers(
+            config,
+            repeated_helpers.GroupSourceFile(
+                group=group,
+                path=relative_path,
+                source=self.source_text_for(relative_path),
+            ),
+        )
         if self.cache_enabled and self.analysis_cache is not None:
             self.analysis_cache.put(
                 relative_path,
@@ -214,13 +256,143 @@ class RuleScanContext:
             )
         return candidates
 
+    def repeated_helper_findings(
+        self,
+        config: repeated_helpers.RepeatedHelperConfig,
+        candidates: list[repeated_helpers.HelperCandidate],
+    ) -> list[repeated_helpers.HelperFinding]:
+        aggregate_path = Path(".supermeta-cache") / "repeated-helper-findings" / config.name
+        self.seen_files.add(aggregate_path)
+        candidate_digest = repeated_helper_candidate_digest(candidates)
+        cached = (
+            self.analysis_cache.lookup(
+                aggregate_path,
+                candidate_digest,
+                f"repeated_helper_findings:{config.name}",
+                self.config_fingerprint,
+                self.tool_fingerprint,
+            )
+            if self.cache_enabled and self.analysis_cache is not None
+            else None
+        )
+        if cached is not None:
+            try:
+                return [helper_finding_from_cache(item) for item in cached]
+            except ValueError:
+                if self.analysis_cache is not None:
+                    self.analysis_cache.stats.stale += 1
+
+        exact_keys = repeated_helpers.exact_duplicate_keys(candidates)
+        findings = [
+            *repeated_helpers.exact_duplicate_findings(candidates, exact_keys),
+            *repeated_helpers.near_duplicate_findings(config, candidates, exact_keys),
+        ]
+        if self.cache_enabled and self.analysis_cache is not None:
+            self.analysis_cache.put(
+                aggregate_path,
+                candidate_digest,
+                f"repeated_helper_findings:{config.name}",
+                self.config_fingerprint,
+                self.tool_fingerprint,
+                [helper_finding_to_cache(finding) for finding in findings],
+            )
+        return findings
+
+    def line_count(self, path: Path) -> int:
+        relative_path = self.relative_path_for(path)
+        return self.cached_fact(
+            relative_path,
+            "line_count:v1",
+            lambda: line_count_from_source(self.source_text_for(relative_path)),
+            int_from_cache,
+        )
+
+    def java_facts(self, path: Path) -> JavaSourceFacts:
+        relative_path = self.relative_path_for(path)
+        return self.cached_fact(
+            relative_path,
+            "java_source_facts:v1",
+            lambda: compute_java_source_facts(self.source_text_for(relative_path)),
+            java_source_facts_from_cache,
+            java_source_facts_to_cache,
+        )
+
+    def rust_stripped_source(self, path: Path, allow_tests: bool) -> str:
+        relative_path = self.relative_path_for(path)
+        fact_key = f"rust_stripped_source:v1:allow_tests={allow_tests}"
+
+        def compute() -> str:
+            source = self.source_text_for(relative_path)
+            test_filtered_source = strip_rust_cfg_test_modules(source) if allow_tests else source
+            return strip_rust_comments_and_strings(test_filtered_source)
+
+        return self.cached_fact(relative_path, fact_key, compute, string_from_cache)
+
+    def cached_fact(
+        self,
+        relative_path: Path,
+        fact_key: str,
+        compute: Any,
+        from_cache: Any,
+        to_cache: Any | None = None,
+    ) -> Any:
+        digest = self.digest_for(relative_path)
+        cached = (
+            self.analysis_cache.lookup(
+                relative_path,
+                digest,
+                fact_key,
+                self.config_fingerprint,
+                self.tool_fingerprint,
+            )
+            if self.cache_enabled and self.analysis_cache is not None
+            else None
+        )
+        if cached is not None:
+            try:
+                return from_cache(cached)
+            except ValueError:
+                if self.analysis_cache is not None:
+                    self.analysis_cache.stats.stale += 1
+        value = compute()
+        if self.cache_enabled and self.analysis_cache is not None:
+            self.analysis_cache.put(
+                relative_path,
+                digest,
+                fact_key,
+                self.config_fingerprint,
+                self.tool_fingerprint,
+                to_cache(value) if to_cache is not None else value,
+            )
+        return value
+
     def digest_for(self, relative_path: Path) -> str:
+        relative_path = self.relative_path_for(relative_path)
         cached = self.file_digests.get(relative_path)
         if cached is not None:
             return cached
-        digest = hash_file(self.root / relative_path)
+        digest = self.snapshot_for(relative_path).digest
         self.file_digests[relative_path] = digest
         return digest
+
+    def source_text_for(self, path: Path) -> str:
+        return self.snapshot_for(path).source_text()
+
+    def snapshot_for(self, path: Path) -> FileSnapshot:
+        relative_path = self.relative_path_for(path)
+        cached = self.file_snapshots.get(relative_path)
+        if cached is not None:
+            return cached
+        source_bytes = (self.root / relative_path).read_bytes()
+        digest = hashlib.sha256(source_bytes).hexdigest()
+        snapshot = FileSnapshot(relative_path=relative_path, source_bytes=source_bytes, digest=digest)
+        self.file_snapshots[relative_path] = snapshot
+        return snapshot
+
+    def relative_path_for(self, path: Path) -> Path:
+        if path.is_absolute():
+            return path.resolve().relative_to(self.root)
+        return Path(path.as_posix())
 
     def finish(self, progress: RuleProgress | None = None, cache_report: bool = False) -> None:
         if not self.cache_enabled or self.analysis_cache is None or self.cache_file is None:
@@ -264,6 +436,16 @@ JAVA_MODIFIERS = {
 JAVA_CONSTRUCTOR_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>)?"
 JAVA_NEW_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
 JAVA_REFERENCE_TYPE_ARGS_RE = r"(?:<[^()\n;{}]*>\s*)?"
+JAVA_CONSTRUCTOR_USAGE_RE = re.compile(
+    rf"\bnew\s+{JAVA_NEW_TYPE_ARGS_RE}"
+    r"(?P<target>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)"
+    rf"\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*\("
+)
+JAVA_CONSTRUCTOR_REFERENCE_USAGE_RE = re.compile(
+    r"(?<![.\w$])"
+    r"(?P<target>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)"
+    rf"\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*::\s*{JAVA_REFERENCE_TYPE_ARGS_RE}new\b"
+)
 RUST_ITEM_RE = re.compile(
     r"^\s*(?:pub(?:\([^)]*\))?\s+)?"
     r"(?:async\s+)?(?:unsafe\s+)?"
@@ -522,7 +704,11 @@ def run_rust_module_item_count_rules(
         exclude = require_string_list(rule, "exclude", default=[])
 
         for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
-            stripped_source = strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            stripped_source = (
+                scan_context.rust_stripped_source(source_file, allow_tests=False)
+                if scan_context is not None
+                else strip_rust_comments_and_strings(source_file.read_text(encoding="utf-8"))
+            )
             items = top_level_rust_items(stripped_source)
             item_count = len(items)
             if item_count > max_items:
@@ -563,9 +749,12 @@ def run_rust_panic_boundary_rules(
         allow_tests = require_boolean(rule, "allow_tests", default=True)
 
         for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
-            source = source_file.read_text(encoding="utf-8")
-            test_filtered_source = strip_rust_cfg_test_modules(source) if allow_tests else source
-            scanned_source = strip_rust_comments_and_strings(test_filtered_source)
+            if scan_context is not None:
+                scanned_source = scan_context.rust_stripped_source(source_file, allow_tests=allow_tests)
+            else:
+                source = source_file.read_text(encoding="utf-8")
+                test_filtered_source = strip_rust_cfg_test_modules(source) if allow_tests else source
+                scanned_source = strip_rust_comments_and_strings(test_filtered_source)
             for match in RUST_PANIC_RE.finditer(scanned_source):
                 line = scanned_source.count("\n", 0, match.start()) + 1
                 add_finding(
@@ -785,7 +974,7 @@ def run_line_count_rules(
         exclude = require_string_list(rule, "exclude", default=[])
 
         for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
-            line_count = count_lines(source_file)
+            line_count = scan_context.line_count(source_file) if scan_context is not None else count_lines(source_file)
             if line_count > max_lines:
                 add_finding(
                     findings,
@@ -834,8 +1023,11 @@ def run_java_package_class_count_rules(
             scan_context=scan_context,
             narrow_to_working_set=False,
         ):
-            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
-            type_names = top_level_java_type_names(stripped_source)
+            if scan_context is not None:
+                type_names = list(scan_context.java_facts(source_file).top_level_type_names)
+            else:
+                stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
+                type_names = top_level_java_type_names(stripped_source)
             classes_by_package.setdefault(source_file.parent, []).extend(type_names)
 
         for package_dir, type_names in sorted(classes_by_package.items()):
@@ -885,22 +1077,24 @@ def run_repeated_helper_method_rules(
                 scan_context=scan_context,
                 narrow_to_working_set=False,
             ):
-                group_source_file = repeated_helpers.GroupSourceFile(
-                    group=group.name,
-                    path=source_file.relative_to(root),
-                    source=source_file.read_text(encoding="utf-8"),
-                )
-                candidates.extend(
-                    scan_context.repeated_helper_candidates(repeated_helper_config, group_source_file)
-                    if scan_context is not None
-                    else repeated_helpers.extract_java_helpers(repeated_helper_config, group_source_file)
-                )
+                if scan_context is not None:
+                    candidates.extend(scan_context.repeated_helper_candidates(repeated_helper_config, group.name, source_file))
+                else:
+                    group_source_file = repeated_helpers.GroupSourceFile(
+                        group=group.name,
+                        path=source_file.relative_to(root),
+                        source=source_file.read_text(encoding="utf-8"),
+                    )
+                    candidates.extend(repeated_helpers.extract_java_helpers(repeated_helper_config, group_source_file))
 
-        exact_keys = repeated_helpers.exact_duplicate_keys(candidates)
-        helper_findings = [
-            *repeated_helpers.exact_duplicate_findings(candidates, exact_keys),
-            *repeated_helpers.near_duplicate_findings(repeated_helper_config, candidates, exact_keys),
-        ]
+        if scan_context is not None:
+            helper_findings = scan_context.repeated_helper_findings(repeated_helper_config, candidates)
+        else:
+            exact_keys = repeated_helpers.exact_duplicate_keys(candidates)
+            helper_findings = [
+                *repeated_helpers.exact_duplicate_findings(candidates, exact_keys),
+                *repeated_helpers.near_duplicate_findings(repeated_helper_config, candidates, exact_keys),
+            ]
         for finding in helper_findings:
             add_finding(
                 findings,
@@ -975,10 +1169,13 @@ def run_java_import_style_rules(
         allow_explicit = set(require_string_list(rule, "allow_explicit", default=[]))
 
         for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
-            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
-            for import_line in stripped_source.splitlines():
-                normalized = normalize_java_import(import_line)
-                if normalized is None or normalized in allow_explicit or normalized.endswith(".*"):
+            normalized_imports = (
+                scan_context.java_facts(source_file).normalized_imports
+                if scan_context is not None
+                else normalized_java_imports(strip_java_comments_and_strings(source_file.read_text(encoding="utf-8")))
+            )
+            for normalized in normalized_imports:
+                if normalized in allow_explicit or normalized.endswith(".*"):
                     continue
                 add_finding(
                     findings,
@@ -1002,6 +1199,15 @@ def normalize_java_import(line: str) -> str | None:
         return None
     prefix = "static " if match.group("static") else ""
     return f"{prefix}{match.group('target')}"
+
+
+def normalized_java_imports(source: str) -> tuple[str, ...]:
+    imports: list[str] = []
+    for import_line in source.splitlines():
+        normalized = normalize_java_import(import_line)
+        if normalized is not None:
+            imports.append(normalized)
+    return tuple(imports)
 
 
 def suggest_java_wildcard_import(normalized_import: str) -> str:
@@ -1067,10 +1273,20 @@ def run_java_lombok_boilerplate_rules(
             scan_context=scan_context,
             narrow_to_working_set=False,
         ):
-            stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
-            class_blocks = iter_java_class_blocks(stripped_source)
-            package_name = java_package_name(stripped_source)
-            explicit_imports, wildcard_imports = java_imports(stripped_source)
+            if scan_context is not None:
+                facts = scan_context.java_facts(source_file)
+                stripped_source = facts.stripped_source
+                class_blocks = facts.class_blocks
+                package_name = facts.package_name
+                explicit_imports = set(facts.explicit_imports)
+                wildcard_imports = set(facts.wildcard_imports)
+                constructor_usages = facts.constructor_usages
+            else:
+                stripped_source = strip_java_comments_and_strings(source_file.read_text(encoding="utf-8"))
+                class_blocks = iter_java_class_blocks(stripped_source)
+                package_name = java_package_name(stripped_source)
+                explicit_imports, wildcard_imports = java_imports(stripped_source)
+                constructor_usages = java_constructor_usages(stripped_source)
             declared_record_types = java_record_types(package_name, class_blocks, ignore_annotations)
             declared_record_names = {record_type.name for record_type in declared_record_types}
             extend_findings(
@@ -1094,6 +1310,7 @@ def run_java_lombok_boilerplate_rules(
                     explicit_imports=frozenset(explicit_imports),
                     wildcard_imports=frozenset(wildcard_imports),
                     declared_record_names=frozenset(declared_record_names),
+                    constructor_usages=constructor_usages,
                 )
             )
             extend_findings(
@@ -1237,73 +1454,53 @@ def find_lombok_record_constructor_calls(
         return []
 
     findings: list[Finding] = []
+    target_messages: dict[tuple[str, str], list[str]] = {}
     accessible_names = accessible_record_names(source_context, record_types)
     for name in sorted(accessible_names):
-        findings.extend(
-            find_record_constructor_pattern(
-                rule_name,
-                source_context,
-                ignore_annotations,
-                rf"\bnew\s+{JAVA_NEW_TYPE_ARGS_RE}{re.escape(name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*\(",
-                f"{name} instances should be built with {name}.builder() for readability; "
-                f"{lombok_suggestion(ignore_annotations)}",
-            )
+        target_messages.setdefault(("constructor", name), []).append(
+            f"{name} instances should be built with {name}.builder() for readability; "
+            f"{lombok_suggestion(ignore_annotations)}"
         )
-        findings.extend(
-            find_record_constructor_pattern(
-                rule_name,
-                source_context,
-                ignore_annotations,
-                rf"(?<![.\w$]){re.escape(name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}"
-                rf"\s*::\s*{JAVA_REFERENCE_TYPE_ARGS_RE}new\b",
-                f"{name} constructor references should use {name}.builder() for readability; "
-                f"{lombok_suggestion(ignore_annotations)}",
-            )
+        target_messages.setdefault(("reference", name), []).append(
+            f"{name} constructor references should use {name}.builder() for readability; "
+            f"{lombok_suggestion(ignore_annotations)}"
         )
     for record_name, qualified_name in sorted(qualified_record_constructor_targets(source_context, record_types)):
-        findings.extend(
-            find_record_constructor_pattern(
-                rule_name,
-                source_context,
-                ignore_annotations,
-                rf"\bnew\s+{JAVA_NEW_TYPE_ARGS_RE}{re.escape(qualified_name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}\s*\(",
-                f"{record_name} instances should be built with {record_name}.builder() for readability; "
-                f"{lombok_suggestion(ignore_annotations)}",
-            )
+        target_messages.setdefault(("constructor", qualified_name), []).append(
+            f"{record_name} instances should be built with {record_name}.builder() for readability; "
+            f"{lombok_suggestion(ignore_annotations)}"
         )
-        findings.extend(
-            find_record_constructor_pattern(
-                rule_name,
-                source_context,
-                ignore_annotations,
-                rf"\b{re.escape(qualified_name)}\s*{JAVA_CONSTRUCTOR_TYPE_ARGS_RE}"
-                rf"\s*::\s*{JAVA_REFERENCE_TYPE_ARGS_RE}new\b",
-                f"{record_name} constructor references should use {record_name}.builder() for readability; "
-                f"{lombok_suggestion(ignore_annotations)}",
-            )
+        target_messages.setdefault(("reference", qualified_name), []).append(
+            f"{record_name} constructor references should use {record_name}.builder() for readability; "
+            f"{lombok_suggestion(ignore_annotations)}"
         )
-    return findings
+    if not target_messages:
+        return []
 
-
-def find_record_constructor_pattern(
-    rule_name: str,
-    source_context: JavaSourceContext,
-    ignore_annotations: tuple[str, ...],
-    pattern: str,
-    message: str,
-) -> list[Finding]:
-    findings: list[Finding] = []
-    for match in re.finditer(pattern, source_context.source):
-        if is_position_inside_ignored_class(match.start(), source_context.class_blocks, ignore_annotations):
+    for usage in source_context.constructor_usages:
+        messages = target_messages.get((usage.kind, usage.target))
+        if not messages:
             continue
-        findings.append(
-            Finding(
-                rule=rule_name,
-                path=source_context.relative_path,
-                message=message,
+        if is_position_inside_ignored_class(usage.start, source_context.class_blocks, ignore_annotations):
+            continue
+        for message in messages:
+            findings.append(
+                Finding(
+                    rule=rule_name,
+                    path=source_context.relative_path,
+                    message=message,
+                )
             )
-        )
     return findings
+
+
+def java_constructor_usages(source: str) -> tuple[JavaConstructorUsage, ...]:
+    usages: list[JavaConstructorUsage] = []
+    for match in JAVA_CONSTRUCTOR_USAGE_RE.finditer(source):
+        usages.append(JavaConstructorUsage(target=match.group("target"), kind="constructor", start=match.start()))
+    for match in JAVA_CONSTRUCTOR_REFERENCE_USAGE_RE.finditer(source):
+        usages.append(JavaConstructorUsage(target=match.group("target"), kind="reference", start=match.start()))
+    return tuple(sorted(usages, key=lambda usage: (usage.start, usage.kind, usage.target)))
 
 
 def accessible_record_names(source_context: JavaSourceContext, record_types: set[JavaRecordType]) -> set[str]:
@@ -1745,6 +1942,139 @@ def hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def line_count_from_source(source: str) -> int:
+    return len(source.splitlines())
+
+
+def int_from_cache(data: Any) -> int:
+    if isinstance(data, bool) or not isinstance(data, int):
+        raise ValueError("cached value is not an integer")
+    return data
+
+
+def string_from_cache(data: Any) -> str:
+    if not isinstance(data, str):
+        raise ValueError("cached value is not a string")
+    return data
+
+
+def compute_java_source_facts(source: str) -> JavaSourceFacts:
+    stripped_source = strip_java_comments_and_strings(source)
+    class_blocks = iter_java_class_blocks(stripped_source)
+    explicit_imports, wildcard_imports = java_imports(stripped_source)
+    return JavaSourceFacts(
+        stripped_source=stripped_source,
+        class_blocks=class_blocks,
+        package_name=java_package_name(stripped_source),
+        explicit_imports=frozenset(explicit_imports),
+        wildcard_imports=frozenset(wildcard_imports),
+        normalized_imports=normalized_java_imports(stripped_source),
+        top_level_type_names=tuple(top_level_java_type_names(stripped_source)),
+        constructor_usages=java_constructor_usages(stripped_source),
+    )
+
+
+def java_source_facts_to_cache(facts: JavaSourceFacts) -> dict[str, Any]:
+    return {
+        "strippedSource": facts.stripped_source,
+        "classBlocks": [java_class_block_to_cache(block) for block in facts.class_blocks],
+        "packageName": facts.package_name,
+        "explicitImports": sorted(facts.explicit_imports),
+        "wildcardImports": sorted(facts.wildcard_imports),
+        "normalizedImports": list(facts.normalized_imports),
+        "topLevelTypeNames": list(facts.top_level_type_names),
+        "constructorUsages": [java_constructor_usage_to_cache(usage) for usage in facts.constructor_usages],
+    }
+
+
+def java_source_facts_from_cache(data: Any) -> JavaSourceFacts:
+    if not isinstance(data, dict):
+        raise ValueError("cached Java facts must be an object")
+    return JavaSourceFacts(
+        stripped_source=required_cached_string(data, "strippedSource"),
+        class_blocks=[java_class_block_from_cache(item) for item in required_cached_list(data, "classBlocks")],
+        package_name=required_cached_string(data, "packageName"),
+        explicit_imports=frozenset(required_cached_string_list(data, "explicitImports")),
+        wildcard_imports=frozenset(required_cached_string_list(data, "wildcardImports")),
+        normalized_imports=tuple(required_cached_string_list(data, "normalizedImports")),
+        top_level_type_names=tuple(required_cached_string_list(data, "topLevelTypeNames")),
+        constructor_usages=tuple(
+            java_constructor_usage_from_cache(item) for item in required_cached_list(data, "constructorUsages")
+        ),
+    )
+
+
+def java_constructor_usage_to_cache(usage: JavaConstructorUsage) -> dict[str, Any]:
+    return {
+        "target": usage.target,
+        "kind": usage.kind,
+        "start": usage.start,
+    }
+
+
+def java_constructor_usage_from_cache(data: Any) -> JavaConstructorUsage:
+    if not isinstance(data, dict):
+        raise ValueError("cached Java constructor usage must be an object")
+    kind = required_cached_string(data, "kind")
+    if kind not in {"constructor", "reference"}:
+        raise ValueError("cached Java constructor usage kind is invalid")
+    return JavaConstructorUsage(
+        target=required_cached_string(data, "target"),
+        kind=kind,
+        start=required_cached_int(data, "start"),
+    )
+
+
+def java_class_block_to_cache(block: JavaClassBlock) -> dict[str, Any]:
+    return {
+        "kind": block.kind,
+        "name": block.name,
+        "start": block.start,
+        "end": block.end,
+        "annotations": list(block.annotations),
+    }
+
+
+def java_class_block_from_cache(data: Any) -> JavaClassBlock:
+    if not isinstance(data, dict):
+        raise ValueError("cached Java class block must be an object")
+    return JavaClassBlock(
+        kind=required_cached_string(data, "kind"),
+        name=required_cached_string(data, "name"),
+        start=required_cached_int(data, "start"),
+        end=required_cached_int(data, "end"),
+        annotations=tuple(required_cached_string_list(data, "annotations")),
+    )
+
+
+def required_cached_string(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"cached field {key} must be a string")
+    return value
+
+
+def required_cached_int(data: dict[str, Any], key: str) -> int:
+    value = data.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"cached field {key} must be an integer")
+    return value
+
+
+def required_cached_list(data: dict[str, Any], key: str) -> list[Any]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise ValueError(f"cached field {key} must be a list")
+    return value
+
+
+def required_cached_string_list(data: dict[str, Any], key: str) -> list[str]:
+    values = required_cached_list(data, key)
+    if not all(isinstance(value, str) for value in values):
+        raise ValueError(f"cached field {key} must contain strings")
+    return values
+
+
 def helper_candidate_to_cache(candidate: repeated_helpers.HelperCandidate) -> dict[str, Any]:
     return {
         "group": candidate.group,
@@ -1755,6 +2085,14 @@ def helper_candidate_to_cache(candidate: repeated_helpers.HelperCandidate) -> di
         "structure": list(candidate.structure),
         "statementCount": candidate.statement_count,
     }
+
+
+def repeated_helper_candidate_digest(candidates: list[repeated_helpers.HelperCandidate]) -> str:
+    payload = sorted(
+        (helper_candidate_to_cache(candidate) for candidate in candidates),
+        key=lambda item: (item["group"], item["path"], item["line"], item["name"]),
+    )
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def helper_candidate_from_cache(data: Any) -> repeated_helpers.HelperCandidate:
@@ -1768,6 +2106,24 @@ def helper_candidate_from_cache(data: Any) -> repeated_helpers.HelperCandidate:
         normalized_tokens=tuple(require_cached_string_list(data, "normalizedTokens")),
         structure=tuple(require_cached_string_list(data, "structure")),
         statement_count=require_cached_int(data, "statementCount"),
+    )
+
+
+def helper_finding_to_cache(finding: repeated_helpers.HelperFinding) -> dict[str, Any]:
+    return {
+        "path": finding.path.as_posix(),
+        "message": finding.message,
+        "severity": finding.severity,
+    }
+
+
+def helper_finding_from_cache(data: Any) -> repeated_helpers.HelperFinding:
+    if not isinstance(data, dict):
+        raise ValueError("invalid repeated helper finding cache entry")
+    return repeated_helpers.HelperFinding(
+        path=Path(require_cached_string(data, "path")),
+        message=require_cached_string(data, "message"),
+        severity=require_cached_string(data, "severity"),
     )
 
 

@@ -347,6 +347,199 @@ final class BetaTest {
 
 
 class RepeatedHelperMethodCacheTest(unittest.TestCase):
+    def test_java_rules_share_one_source_snapshot_per_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_file = write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+import java.util.List;
+
+final class App {
+    private String name;
+
+    private int compute() {
+        int total = 1;
+        total += 2;
+        return total;
+    }
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            ).resolve()
+            read_bytes_calls: list[Path] = []
+            original_read_bytes = Path.read_bytes
+            original_read_text = Path.read_text
+
+            def counted_read_bytes(path: Path) -> bytes:
+                if path.resolve() == source_file:
+                    read_bytes_calls.append(path.resolve())
+                return original_read_bytes(path)
+
+            def fail_source_read_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path.resolve() == source_file:
+                    raise AssertionError("rule source reads should go through the shared file snapshot")
+                return original_read_text(path, *args, **kwargs)
+
+            with (
+                patch.object(Path, "read_bytes", counted_read_bytes),
+                patch.object(Path, "read_text", fail_source_read_text),
+            ):
+                check.run_rules(java_file_fact_config(), root, force_full=True)
+
+            self.assertEqual([source_file], read_bytes_calls)
+
+    def test_unchanged_file_reuses_cached_file_facts_across_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_file = write_source(
+                root,
+                "src/main/java/example/App.java",
+                """package example;
+
+import java.util.List;
+
+final class App {
+    private String name;
+
+    private int compute() {
+        int total = 1;
+        total += 2;
+        return total;
+    }
+
+    String getName() {
+        return name;
+    }
+}
+""",
+            ).resolve()
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            check.run_rules(java_file_fact_config(), root, force_full=True, cache_file=cache_file)
+
+            original_read_bytes = Path.read_bytes
+            original_read_text = Path.read_text
+            read_bytes_calls: list[Path] = []
+
+            def counted_read_bytes(path: Path) -> bytes:
+                if path.resolve() == source_file:
+                    read_bytes_calls.append(path.resolve())
+                return original_read_bytes(path)
+
+            def fail_source_read_text(path: Path, *args: object, **kwargs: object) -> str:
+                if path.resolve() == source_file:
+                    raise AssertionError("cached fact lookup should not call Path.read_text for source files")
+                return original_read_text(path, *args, **kwargs)
+
+            with (
+                patch.object(Path, "read_bytes", counted_read_bytes),
+                patch.object(Path, "read_text", fail_source_read_text),
+                patch.object(check, "count_lines", side_effect=AssertionError("line count should be cached")),
+                patch.object(
+                    check,
+                    "strip_java_comments_and_strings",
+                    side_effect=AssertionError("stripped Java source should be cached"),
+                ),
+                patch.object(
+                    repeated_helpers,
+                    "extract_java_helpers",
+                    side_effect=AssertionError("helper candidates should be cached"),
+                ),
+            ):
+                check.run_rules(java_file_fact_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual([source_file], read_bytes_calls)
+
+    def test_record_constructor_usage_index_is_built_once_per_source_and_cached(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            record_count = 24
+            records = "\n\n".join(
+                f"""@Builder
+record Event{i}(int value) {{
+}}"""
+                for i in range(record_count)
+            )
+            factories = "\n".join(
+                f"    IntFactory<Event{i}> factory{i}() {{ return Event{i}::new; }}"
+                for i in range(record_count)
+            )
+            constructors = "\n".join(
+                f"    Event{i} create{i}() {{ return new Event{i}({i}); }}"
+                for i in range(record_count)
+            )
+            write_source(
+                root,
+                "src/main/java/example/Records.java",
+                f"""package example;
+
+{records}
+""",
+            )
+            write_source(
+                root,
+                "src/main/java/example/Caller.java",
+                f"""package example;
+
+interface IntFactory<T> {{
+    T create(int value);
+}}
+
+final class Caller {{
+{constructors}
+
+{factories}
+}}
+""",
+            )
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+            constructor_usage_calls: list[str] = []
+            original_constructor_usages = check.java_constructor_usages
+
+            def counted_constructor_usages(source: str) -> tuple[object, ...]:
+                constructor_usage_calls.append(source)
+                return original_constructor_usages(source)
+
+            with patch.object(check, "java_constructor_usages", side_effect=counted_constructor_usages):
+                first = check.run_rules(
+                    java_lombok_boilerplate_config(require_record_builder=True),
+                    root,
+                    force_full=True,
+                    cache_file=cache_file,
+                )
+
+            constructor_findings = [
+                finding
+                for finding in first
+                if "should be built with" in finding.message or "constructor references should use" in finding.message
+            ]
+            self.assertEqual(record_count * 2, len(constructor_findings))
+            self.assertEqual(2, len(constructor_usage_calls))
+
+            with patch.object(
+                check,
+                "java_constructor_usages",
+                side_effect=AssertionError("unchanged Java constructor usages should be cached"),
+            ):
+                second = check.run_rules(
+                    java_lombok_boilerplate_config(require_record_builder=True),
+                    root,
+                    force_full=True,
+                    cache_file=cache_file,
+                )
+
+            second_constructor_findings = [
+                finding
+                for finding in second
+                if "should be built with" in finding.message or "constructor references should use" in finding.message
+            ]
+            self.assertEqual(record_count * 2, len(second_constructor_findings))
+
     def test_unchanged_files_reuse_cached_helper_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -451,7 +644,38 @@ class RepeatedHelperMethodCacheTest(unittest.TestCase):
                     progress=check.RuleProgress(stream, file_interval=1, time_interval_seconds=999),
                 )
 
-            self.assertIn("cache hits=1", stream.getvalue())
+            self.assertIn("cache hits=2", stream.getvalue())
+
+    def test_unchanged_candidate_set_reuses_cached_repeated_helper_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/Alpha.java", helper_source("Alpha", "same"))
+            write_source(root, "src/main/java/example/Beta.java", helper_source("Beta", "different"))
+            cache_file = root / ".gradle" / "supermeta-rules" / "cache-v1.json"
+
+            def fake_extract(config: object, source_file: object) -> list[object]:
+                token = "same" if "same" in source_file.source else "different"
+                return [helper_candidate(source_file.group, source_file.path, tuple([token]))]
+
+            with patch.object(repeated_helpers, "extract_java_helpers", side_effect=fake_extract):
+                first = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual([], first)
+            with (
+                patch.object(
+                    repeated_helpers,
+                    "extract_java_helpers",
+                    side_effect=AssertionError("helper candidates should be cached"),
+                ),
+                patch.object(
+                    repeated_helpers,
+                    "near_duplicate_findings",
+                    side_effect=AssertionError("near-match comparison findings should be cached"),
+                ),
+            ):
+                second = check.run_rules(repeated_helper_config(), root, force_full=True, cache_file=cache_file)
+
+            self.assertEqual([], second)
 
 
 class FindingSeverityTest(unittest.TestCase):
@@ -2265,6 +2489,50 @@ def repeated_helper_config(language: str = "java") -> dict[str, object]:
             }
         ]
     }
+
+
+def java_file_fact_config() -> dict[str, object]:
+    config: dict[str, object] = {
+        "line_count": [
+            {
+                "name": "source-line-count",
+                "max_lines": 1,
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": [],
+            }
+        ],
+        "java_package_class_count": [
+            {
+                "name": "java-package-class-count",
+                "max_classes": 5,
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": [],
+            }
+        ],
+        "java_import_style": [
+            {
+                "name": "java-wildcard-imports",
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": [],
+                "allow_explicit": [],
+            }
+        ],
+        "java_lombok_boilerplate": [
+            {
+                "name": "java-lombok-boilerplate",
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": [],
+                "ignore_annotations": ["Generated", "ManualDuplication"],
+                "allow_methods": [],
+            }
+        ],
+    }
+    config.update(repeated_helper_config())
+    return config
 
 
 def java_import_style_config(
