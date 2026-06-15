@@ -84,6 +84,24 @@ Checks that each Java package layer contains no more than a configured number of
 }
 ```
 
+### `javascript_package_file_count`
+
+Checks that each JavaScript or TypeScript package layer contains no more than a configured number of directly contained source files. Subdirectories are counted independently, matching the Java package-size rule so frontend and TUI code is forced into cohesive directories instead of broad catch-all folders.
+
+```json
+{
+  "javascript_package_file_count": [
+    {
+      "name": "javascript-package-size",
+      "max_files": 7,
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+      "exclude": ["**/generated/**", "**/node_modules/**"]
+    }
+  ]
+}
+```
+
 ### `repeated_helper_methods`
 
 Checks for helper methods that have been copied instead of factored into common code. Java is the first supported language. The rule uses Tree-sitter, so enabled Java projects must install `tools/supermeta-rules/requirements.txt`.

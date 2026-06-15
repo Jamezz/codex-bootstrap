@@ -37,6 +37,7 @@ This is a copyable starter, not a long-lived framework.
 - Keep runtime logging in `src/logging.ts`; `LOG_LEVEL` and `LOG_FORMAT` are the public knobs.
 - Keep logs on stderr and normal command output on stdout.
 - Keep product source files under `src/` at 1000 lines or less.
+- Keep JavaScript and TypeScript package layers at 7 directly contained source files or fewer before splitting into context-shaped subdirectories.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
 - Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
 - Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.

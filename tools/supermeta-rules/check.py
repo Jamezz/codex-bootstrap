@@ -615,6 +615,14 @@ def run_rules(
         )
     )
     findings.extend(
+        run_javascript_package_file_count_rules(
+            config.get("javascript_package_file_count", []),
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
         run_java_import_style_rules(
             config.get("java_import_style", []),
             root,
@@ -670,6 +678,7 @@ def run_rules(
             "java_import_style",
             "java_lombok_boilerplate",
             "java_package_class_count",
+            "javascript_package_file_count",
             "line_count",
             "project_callouts",
             "repeated_helper_methods",
@@ -1041,6 +1050,59 @@ def run_java_package_class_count_rules(
                         message=(
                             f"{type_count} Java top-level types exceeds package layer limit "
                             f"of {max_classes}; refactor this layer into cohesive subpackages "
+                            "based on the system context"
+                        ),
+                    ),
+                    progress,
+                )
+
+    return findings
+
+
+def run_javascript_package_file_count_rules(
+    rules: Any,
+    root: Path,
+    progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
+) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("javascript_package_file_count must be an array")
+
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"javascript_package_file_count[{index}]")
+        if not rule_is_enabled(rule):
+            continue
+        name = require_string(rule, "name", default=f"javascript_package_file_count[{index}]")
+        max_files = require_positive_int(rule, "max_files")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"])
+        exclude = require_string_list(rule, "exclude", default=[])
+
+        files_by_package: dict[Path, list[Path]] = {}
+        for source_file in iter_rule_files(
+            name,
+            root,
+            paths,
+            include,
+            exclude,
+            progress,
+            scan_context=scan_context,
+            narrow_to_working_set=False,
+        ):
+            files_by_package.setdefault(source_file.parent, []).append(source_file)
+
+        for package_dir, source_files in sorted(files_by_package.items()):
+            file_count = len(source_files)
+            if file_count > max_files:
+                add_finding(
+                    findings,
+                    Finding(
+                        rule=name,
+                        path=package_dir.relative_to(root),
+                        message=(
+                            f"{file_count} JavaScript/TypeScript files exceeds package layer limit "
+                            f"of {max_files}; refactor this layer into cohesive subpackages "
                             "based on the system context"
                         ),
                     ),

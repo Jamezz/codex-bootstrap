@@ -17,6 +17,7 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Keep non-generated product source files at 1000 lines or less.
 - Exception: `tools/bootstrap/bootstrap.py` may exceed 1000 lines because it owns the destructive launcher, template rewrite dispatch, and generated-project docs in one tested control surface. Split it only when the boundary is obvious and keeps the bootstrap flow easier to audit.
 - Keep Java package layers at 7 top-level types or fewer before splitting into context-shaped subpackages.
+- Keep JavaScript and TypeScript package layers at 7 directly contained source files or fewer before splitting into context-shaped subdirectories.
 - Route language-specific lint through `tools/supermeta-rules/` project callouts before duplicating checks in templates.
 - Use wildcard imports where feasible.
 - Put reusable template checks in `tools/supermeta-rules/` before duplicating them in individual starters.

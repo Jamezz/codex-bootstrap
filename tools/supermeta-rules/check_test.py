@@ -1375,6 +1375,57 @@ final class App {
             self.assertEqual([], findings)
 
 
+class JavascriptPackageFileCountRuleTest(unittest.TestCase):
+    def test_allows_package_at_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src/tui/session", count=7)
+
+            findings = check.run_rules(javascript_package_count_config(max_files=7), root)
+
+            self.assertEqual([], findings)
+
+    def test_fails_package_over_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src/tui/session", count=8)
+
+            findings = check.run_rules(javascript_package_count_config(max_files=7), root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("javascript-package-size", findings[0].rule)
+            self.assertEqual(Path("src/tui/session"), findings[0].path)
+            self.assertIn(
+                "8 JavaScript/TypeScript files exceeds package layer limit of 7",
+                findings[0].message,
+            )
+            self.assertIn(
+                "refactor this layer into cohesive subpackages based on the system context",
+                findings[0].message,
+            )
+
+    def test_counts_subpackages_independently(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src/tui/session", count=7)
+            write_javascript_files(root, "src/tui/session/actions", count=7)
+
+            findings = check.run_rules(javascript_package_count_config(max_files=7), root)
+
+            self.assertEqual([], findings)
+
+    def test_ignores_disabled_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src/tui/session", count=8)
+            config = javascript_package_count_config(max_files=7)
+            config["javascript_package_file_count"][0]["enabled"] = False
+
+            findings = check.run_rules(config, root)
+
+            self.assertEqual([], findings)
+
+
 class JavaImportStyleRuleTest(unittest.TestCase):
     def test_allows_wildcard_imports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2407,6 +2458,16 @@ def write_java_files(root: Path, package_path: str, count: int) -> None:
         )
 
 
+def write_javascript_files(root: Path, package_path: str, count: int) -> None:
+    package_dir = root / package_path
+    package_dir.mkdir(parents=True, exist_ok=True)
+    for index in range(count):
+        (package_dir / f"module-{index}.ts").write_text(
+            f"export const value{index} = {index};\n",
+            encoding="utf-8",
+        )
+
+
 def helper_source(class_name: str, marker: str) -> str:
     return f"""package example;
 
@@ -2456,6 +2517,20 @@ def java_package_count_config(max_classes: int) -> dict[str, object]:
                 "paths": ["src/main/java"],
                 "include": ["**/*.java"],
                 "exclude": ["**/generated/**"],
+            }
+        ]
+    }
+
+
+def javascript_package_count_config(max_files: int) -> dict[str, object]:
+    return {
+        "javascript_package_file_count": [
+            {
+                "name": "javascript-package-size",
+                "max_files": max_files,
+                "paths": ["src"],
+                "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+                "exclude": ["**/generated/**", "**/node_modules/**"],
             }
         ]
     }

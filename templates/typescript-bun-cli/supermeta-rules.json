@@ -8,6 +8,15 @@
       "exclude": ["**/generated/**"]
     }
   ],
+  "javascript_package_file_count": [
+    {
+      "name": "javascript-package-size",
+      "max_files": 7,
+      "paths": ["src", "tests"],
+      "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+      "exclude": ["**/generated/**", "**/node_modules/**"]
+    }
+  ],
   "project_callouts": [
     {
       "name": "typescript-typecheck",

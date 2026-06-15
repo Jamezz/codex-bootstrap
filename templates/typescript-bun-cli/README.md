@@ -93,6 +93,7 @@ Generated projects also include a pinned Beans wrapper and seeded starter backlo
 ## Conventions
 
 - production source files under `src/` are checked for a 1000-line maximum;
+- JavaScript and TypeScript package layers are checked for a 7-file direct containment maximum;
 - Biome owns formatting and linting;
 - `tsc --noEmit` owns static type checking;
 - Bun's native test runner owns behavior checks;
