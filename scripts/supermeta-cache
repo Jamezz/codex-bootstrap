@@ -1,0 +1,81 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: scripts/supermeta-cache clean [--project <gradle-project-dir>] [harness-options...]
+       scripts/supermeta-cache clean [gradle-project-dir]
+
+Removes persistent Supermeta rules analysis caches without running Gradle.
+
+Examples:
+  scripts/supermeta-cache clean
+  scripts/supermeta-cache clean --project .
+  scripts/supermeta-cache clean ../sample-service
+  scripts/supermeta-cache clean --project . --capsule-id agent-1
+
+Use scripts/agent-gradle . --clean-supermeta-cache check when you want a clean
+Supermeta scan immediately followed by a Gradle task.
+USAGE
+}
+
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+
+if [ "$#" -eq 0 ]; then
+  set -- clean
+fi
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  clean)
+    shift
+    ;;
+  *)
+    echo "scripts/supermeta-cache: unknown command: ${1}" >&2
+    usage
+    exit 2
+    ;;
+esac
+
+project_dir="."
+project_dir_set=false
+
+while [ "$#" -gt 0 ]; do
+  case "${1}" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -p|--project)
+      if [ "$#" -lt 2 ]; then
+        echo "scripts/supermeta-cache: ${1} requires a value" >&2
+        exit 2
+      fi
+      project_dir="${2}"
+      project_dir_set=true
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      break
+      ;;
+    *)
+      if [ "${project_dir_set}" = "true" ]; then
+        echo "scripts/supermeta-cache: unexpected extra project argument: ${1}" >&2
+        exit 2
+      fi
+      project_dir="${1}"
+      project_dir_set=true
+      shift
+      ;;
+  esac
+done
+
+exec "$repo_root/scripts/agent-gradle" "$project_dir" --clean-supermeta-cache "$@"

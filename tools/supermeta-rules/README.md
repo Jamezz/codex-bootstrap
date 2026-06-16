@@ -16,7 +16,7 @@ python3 tools/supermeta-rules/check.py --config templates/java-gradle-cli/superm
 
 Rule `paths` may point at a broad repo area, but keep `include` patterns rooted at the real source or test trees. The matcher streams those include globs first and then applies final include/exclude filtering, so broad adoption configs do not have to scan build outputs, vendored trees, or generated artifacts before finding source files.
 
-By default, the checker detects the Git working set for the configured root. When staged, unstaged, untracked, or branch-local files are found, file-local rules scan only those matching files. Cross-file aggregate rules, such as Java package sizing and Lombok record-constructor enforcement, still scan the full configured tree to avoid false negatives. If Git cannot provide a reliable non-empty working set, the checker falls back to a full scan.
+By default, the checker detects the Git working set for the configured root. When staged, unstaged, untracked, or branch-local files are found, file-local rules scan only those matching files. Cross-file aggregate rules, such as Java package sizing, JavaScript package sizing, and Lombok record-constructor enforcement, still scan the full configured tree to avoid false negatives. If Git cannot provide a reliable non-empty working set, the checker falls back to a full scan.
 
 The checker keeps a Git-metadata counter and promotes the next automatic working-set run to a full scan after 10 fast scans for the same root. Set `SUPERMETA_RULES_FAST_SCAN_INTERVAL=<positive integer>` to tune that cadence for local diagnostics.
 
@@ -37,6 +37,15 @@ python3 tools/supermeta-rules/check.py \
 
 Use `--cache-report` to print hit, miss, stale, write, and eviction counts. Use `--no-cache` only when validating cache
 behavior or bisecting a scanner bug.
+
+Gradle-backed projects expose a targeted cache clean task:
+
+```bash
+./scripts/supermeta-cache clean
+./scripts/agent-gradle . cleanSupermetaRulesCache
+./scripts/agent-gradle . verifySupermetaRulesClean
+./scripts/agent-gradle . --clean-supermeta-cache verifySupermetaRules
+```
 
 Cache keys include the relative file path, file digest, rule id, rule options, and tool fingerprint. Changing
 `supermeta-rules.json`, the scanner implementation, or optional parser dependencies invalidates affected entries instead
@@ -88,13 +97,16 @@ Checks that each Java package layer contains no more than a configured number of
 
 Checks that each JavaScript or TypeScript package layer contains no more than a configured number of directly contained source files. Subdirectories are counted independently, matching the Java package-size rule so frontend and TUI code is forced into cohesive directories instead of broad catch-all folders.
 
+Set `min_package_depth` when source roots should behave like Java source roots: files must live under at least that many package directories beneath each configured `path`. For example, `"paths": ["src"]` with `"min_package_depth": 1` allows `src/tui/app.tsx` but rejects `src/app.tsx`.
+
 ```json
 {
   "javascript_package_file_count": [
     {
       "name": "javascript-package-size",
       "max_files": 7,
-      "paths": ["src", "tests"],
+      "min_package_depth": 1,
+      "paths": ["src", "test"],
       "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
       "exclude": ["**/generated/**", "**/node_modules/**"]
     }

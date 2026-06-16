@@ -1385,6 +1385,34 @@ class JavascriptPackageFileCountRuleTest(unittest.TestCase):
 
             self.assertEqual([], findings)
 
+    def test_allows_nested_package_when_min_depth_is_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src/tui/session", count=7)
+
+            findings = check.run_rules(
+                javascript_package_count_config(max_files=7, min_package_depth=1),
+                root,
+            )
+
+            self.assertEqual([], findings)
+
+    def test_fails_source_root_files_when_min_depth_is_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_javascript_files(root, "src", count=1)
+
+            findings = check.run_rules(
+                javascript_package_count_config(max_files=7, min_package_depth=1),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("javascript-package-size", findings[0].rule)
+            self.assertEqual(Path("src/module-0.ts"), findings[0].path)
+            self.assertIn("JavaScript/TypeScript file is at the package root", findings[0].message)
+            self.assertIn("at least 1 package directory deep", findings[0].message)
+
     def test_fails_package_over_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1413,6 +1441,24 @@ class JavascriptPackageFileCountRuleTest(unittest.TestCase):
             findings = check.run_rules(javascript_package_count_config(max_files=7), root)
 
             self.assertEqual([], findings)
+
+    def test_cross_file_javascript_package_rules_still_scan_full_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/too-flat.ts", "export const flat = true;\n")
+            write_source(root, "src/other/changed.ts", "export const changed = 1;\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/other/changed.ts", "export const changed = 2;\n")
+
+            findings = check.run_rules(
+                javascript_package_count_config(max_files=7, min_package_depth=1),
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("src/too-flat.ts"), findings[0].path)
 
     def test_ignores_disabled_rules(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2522,17 +2568,18 @@ def java_package_count_config(max_classes: int) -> dict[str, object]:
     }
 
 
-def javascript_package_count_config(max_files: int) -> dict[str, object]:
+def javascript_package_count_config(max_files: int, min_package_depth: int | None = None) -> dict[str, object]:
+    rule: dict[str, object] = {
+        "name": "javascript-package-size",
+        "max_files": max_files,
+        "paths": ["src"],
+        "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+        "exclude": ["**/generated/**"],
+    }
+    if min_package_depth is not None:
+        rule["min_package_depth"] = min_package_depth
     return {
-        "javascript_package_file_count": [
-            {
-                "name": "javascript-package-size",
-                "max_files": max_files,
-                "paths": ["src"],
-                "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
-                "exclude": ["**/generated/**", "**/node_modules/**"],
-            }
-        ]
+        "javascript_package_file_count": [rule]
     }
 
 

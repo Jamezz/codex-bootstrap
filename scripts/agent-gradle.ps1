@@ -4,7 +4,9 @@ $ErrorActionPreference = "Stop"
 $scriptArgs = @($args)
 if ($scriptArgs.Count -lt 2) {
     [Console]::Error.WriteLine("usage: scripts/agent-gradle.ps1 <gradle-project-dir> <gradle-args...>")
-    [Console]::Error.WriteLine("       scripts/agent-gradle.ps1 <gradle-project-dir> --ps|--logs|--stop|--kill")
+    [Console]::Error.WriteLine("       scripts/agent-gradle.ps1 <gradle-project-dir> <harness-options> -- <gradle-args...>")
+    [Console]::Error.WriteLine("       scripts/agent-gradle.ps1 <gradle-project-dir> --ps|--logs|--stop|--kill|--clean-supermeta-cache")
+    [Console]::Error.WriteLine("       scripts/supermeta-cache.ps1 clean [--project <gradle-project-dir>]")
     [Console]::Error.WriteLine("example: scripts/agent-gradle.ps1 . test")
     exit 2
 }
@@ -42,7 +44,28 @@ $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
 $gradleScript = Join-Path $repoRoot "tools/supermeta-gradle/gradle.py"
 $pythonArgs = @($gradleScript, "--project", $ProjectDir)
 
-if (@("--ps", "--logs", "--stop", "--kill") -contains $GradleArgs[0]) {
+$harnessOptions = @(
+    "--ps",
+    "--logs",
+    "--stop",
+    "--kill",
+    "--status",
+    "--repair",
+    "--hygiene-only",
+    "--capsule-id",
+    "--gradle-user-home",
+    "--project-directory-file",
+    "--strict-included-builds",
+    "--included-build-repo",
+    "--limit",
+    "--no-default-flags",
+    "--cold",
+    "--no-lock",
+    "--no-hygiene",
+    "--clean-supermeta-cache"
+)
+
+if ($harnessOptions -contains $GradleArgs[0]) {
     $pythonArgs += $GradleArgs
 } else {
     $pythonArgs += "--"

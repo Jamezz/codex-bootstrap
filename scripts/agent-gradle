@@ -3,7 +3,9 @@ set -eu
 
 if [ "$#" -lt 2 ]; then
   echo "usage: scripts/agent-gradle <gradle-project-dir> <gradle-args...>" >&2
-  echo "       scripts/agent-gradle <gradle-project-dir> --ps|--logs|--stop|--kill" >&2
+  echo "       scripts/agent-gradle <gradle-project-dir> <harness-options> -- <gradle-args...>" >&2
+  echo "       scripts/agent-gradle <gradle-project-dir> --ps|--logs|--stop|--kill|--clean-supermeta-cache" >&2
+  echo "       scripts/supermeta-cache clean [--project <gradle-project-dir>]" >&2
   echo "example: scripts/agent-gradle . test" >&2
   exit 2
 fi
@@ -15,7 +17,10 @@ script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
 
 case "${1:-}" in
-  --ps|--logs|--stop|--kill)
+  --ps|--logs|--stop|--kill|--status|--repair|--hygiene-only|\
+  --capsule-id|--gradle-user-home|--project-directory-file|\
+  --strict-included-builds|--included-build-repo|--limit|\
+  --no-default-flags|--cold|--no-lock|--no-hygiene|--clean-supermeta-cache)
     exec python3 "$repo_root/tools/supermeta-gradle/gradle.py" --project "$project_dir" "$@"
     ;;
   *)

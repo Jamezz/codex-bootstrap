@@ -36,6 +36,9 @@ Use these buckets inside dated entries when they help:
 
 ### Generated Contract
 
+- Java Gradle generated projects now receive the capsule-aware Supermeta Gradle
+  harness, `scripts/supermeta-cache`, expanded harness diagnostics, generated
+  output hygiene, and sync-managed entries for the new Gradle helper modules.
 - Added the bootstrap resync contract for newly generated projects:
   `.codex-bootstrap/sync.json`, `scripts/agent-bootstrap`,
   `scripts/agent-bootstrap.ps1`, `tools/supermeta-bootstrap/`, managed-file
@@ -79,6 +82,12 @@ Use these buckets inside dated entries when they help:
 
 ### Tooling
 
+- Upstreamed Supermeta Gradle build capsules into shared template tooling:
+  capsule-local `GRADLE_USER_HOME`, build cache, logs, locks, `--status`, `--repair`,
+  generated-output hygiene, strict included-build materialization, and Supermeta
+  rules cache cleaning.
+- Added `min_package_depth` to the JavaScript/TypeScript package-size rule so
+  templates can reject files placed directly at configured source roots.
 - Added focused verification lane selection and deterministic failure
   classification helpers for faster agent inner loops while keeping full checks
   as the handoff gate.

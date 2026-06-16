@@ -17,6 +17,14 @@
       "destination": "scripts/agent-gradle.ps1"
     },
     {
+      "source": "scripts/supermeta-cache",
+      "destination": "scripts/supermeta-cache"
+    },
+    {
+      "source": "scripts/supermeta-cache.ps1",
+      "destination": "scripts/supermeta-cache.ps1"
+    },
+    {
       "source": "scripts/agent-bootstrap",
       "destination": "scripts/agent-bootstrap"
     },
@@ -115,7 +123,7 @@
   ],
   "generatedDocs": {
     "summary": "This is a compact Java Gradle command-line project with tests, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
-    "runtime": "Gradle owns compilation, test execution, Checkstyle, and the application run task. Runtime logging uses SLF4J and Logback, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Agent verification goes through `scripts/agent-gradle` so Gradle state, harness logging, and stuck-process recovery are predictable.",
+    "runtime": "Gradle owns compilation, test execution, Checkstyle, and the application run task. Runtime logging uses SLF4J and Logback, defaults to quiet text logs on stderr, and supports JSON logs with `LOG_LEVEL` and `LOG_FORMAT`. Agent verification goes through `scripts/agent-gradle` so build capsule state, harness logging, generated-output hygiene, cache repair, and stuck-process recovery are predictable.",
     "entrypoints": [
       "src/main/java/com/example/App.java",
       "src/main/java/com/example/LoggingConfig.java",
@@ -153,6 +161,14 @@
           },
           {
             "path": "scripts/agent-gradle.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/supermeta-cache",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/supermeta-cache.ps1",
             "mode": "whole-file"
           },
           {
@@ -416,6 +432,30 @@
           },
           {
             "path": "tools/supermeta-gradle/gradle.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/capsule.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/capsule_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/generated_hygiene.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/generated_hygiene_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/project_directory.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-gradle/project_directory_test.py",
             "mode": "whole-file"
           },
           {

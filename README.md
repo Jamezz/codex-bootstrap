@@ -302,6 +302,8 @@ scripts/
   agent-dotnet.ps1
   agent-gradle
   agent-gradle.ps1
+  supermeta-cache
+  supermeta-cache.ps1
   agent-task
   agent-task.ps1
 site/
@@ -401,17 +403,15 @@ The TypeScript starters require `bun` on PATH. The Python commands above use `UV
 The Rust starter requires Rust 1.85 or newer with rustfmt and Clippy installed.
 The C# starter requires .NET SDK 10 on PATH. `scripts/agent-dotnet` keeps `DOTNET_CLI_HOME` and `NUGET_PACKAGES` under the project by default so sandboxed agent runs do not write to the user home directory.
 
-The harness uses the template wrapper with a project-local Gradle home, file watching disabled, no resident daemon by default, same-checkout serialized runs, and a per-run log under `.gradle/supermeta-gradle/logs/`. It keeps downloaded Gradle assets warm inside each checkout without leaving idle Gradle JVMs around; set `SUPERMETA_GRADLE_COLD=1` for conservative low-worker diagnostics.
+The harness uses the template wrapper with capsule-local Gradle state under `.gradle/agent-capsules/<capsule-id>/`. Each capsule owns its Gradle user home, build cache, logs, locks, generated-output hygiene, and optional included-build worktrees. Warm mode keeps daemons scoped to the capsule; set `SUPERMETA_GRADLE_COLD=1` or pass `--cold --` for conservative no-daemon diagnostics.
 
 For parallel Gradle execution inside one build, pass `--parallel --max-workers=<n>` to the Gradle args or set `SUPERMETA_GRADLE_PARALLEL=1` with `SUPERMETA_GRADLE_MAX_WORKERS=<n>`.
-
-Set `SUPERMETA_GRADLE_KEEP_DAEMON=1` only for a short repeated-run session where daemon reuse is worth the memory.
 
 Generated projects can also carry a general stuck-task helper for process and log inspection:
 
 ```bash
 ./scripts/agent-task ps --match gradle
-./scripts/agent-task logs .gradle/supermeta-gradle/logs
+./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'
 ```
 
 On Windows PowerShell, use the `.ps1` entrypoints:
@@ -427,4 +427,7 @@ The Gradle harness exposes shorter Gradle-specific recovery commands on top of t
 ./scripts/agent-gradle templates/java-gradle-cli --ps
 ./scripts/agent-gradle templates/java-gradle-cli --logs
 ./scripts/agent-gradle templates/java-gradle-cli --stop
+./scripts/agent-gradle templates/java-gradle-cli --status
+./scripts/agent-gradle templates/java-gradle-cli --repair
+./scripts/supermeta-cache clean --project templates/java-gradle-cli
 ```

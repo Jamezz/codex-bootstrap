@@ -1335,8 +1335,12 @@ Inspect stuck task state:
 
 ```bash
 ./scripts/agent-task ps --match gradle
-./scripts/agent-task logs .gradle/supermeta-gradle/logs
+./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'
+./scripts/agent-gradle . --logs
 ./scripts/agent-gradle . --stop
+./scripts/agent-gradle . --status
+./scripts/agent-gradle . --repair
+./scripts/supermeta-cache clean
 ```
 
 {generated_agent_coordination_readme_section(check_command(plan))}
@@ -1492,10 +1496,13 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Beans check: `./scripts/agent-beans check`
 - Ready backlog: `./scripts/agent-beans list --ready`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
-- List generic task logs: `./scripts/agent-task logs .gradle/supermeta-gradle/logs`
+- List generic task logs: `./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle . --ps`
 - List harness logs: `./scripts/agent-gradle . --logs`
 - Stop scoped Gradle daemon: `./scripts/agent-gradle . --stop`
+- Inspect build capsule status: `./scripts/agent-gradle . --status`
+- Repair build capsule caches: `./scripts/agent-gradle . --repair`
+- Clean Supermeta rules cache: `./scripts/supermeta-cache clean`
 - If debugging raw Gradle behavior only: `./gradlew check`
 
 {generated_windows_agent_section(plan)}

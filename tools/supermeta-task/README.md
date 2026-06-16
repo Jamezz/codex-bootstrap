@@ -8,7 +8,7 @@ From a generated repo:
 ./scripts/agent-task ps --match gradle
 ./scripts/agent-task ps --match uv
 ./scripts/agent-task ps --match bun
-./scripts/agent-task logs .gradle/supermeta-gradle/logs
+./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'
 ./scripts/agent-task kill --match gradle
 ```
 
@@ -16,7 +16,7 @@ Windows PowerShell:
 
 ```powershell
 .\scripts\agent-task.ps1 ps --match gradle
-.\scripts\agent-task.ps1 logs .gradle/supermeta-gradle/logs
+.\scripts\agent-task.ps1 logs .gradle\agent-capsules --glob '**/*.log'
 ```
 
 - `ps` lists matching process commands. Without `--match`, it uses broad build/test defaults.

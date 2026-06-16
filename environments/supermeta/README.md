@@ -20,7 +20,7 @@ The goal is not to preserve every possible option. The goal is to make the good 
 
 `tools/supermeta-rules/check.py` is the shared helper for rules that examples should not reimplement, starting with product source line-count checks.
 
-`tools/supermeta-gradle/gradle.py` is the reusable Gradle harness. Gradle templates should document `scripts/agent-gradle` and `scripts/agent-gradle.ps1` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, unrelated-agent lock contention, and idle daemon memory while still keeping downloaded Gradle assets cached inside each checkout.
+`tools/supermeta-gradle/gradle.py` is the reusable Gradle harness. Gradle templates should document `scripts/agent-gradle` and `scripts/agent-gradle.ps1` as the agent verification path so local runs consistently avoid global Gradle state, file-watch noise, and unrelated-agent lock contention while keeping Gradle state, build cache, logs, hygiene, and repair actions scoped to a named build capsule under each checkout.
 
 ## Environment Checklist
 

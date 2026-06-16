@@ -189,6 +189,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-gradle",
                 "scripts/agent-gradle.ps1",
+                "scripts/supermeta-cache",
+                "scripts/supermeta-cache.ps1",
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
                 "scripts/agent-beans",
@@ -221,9 +223,14 @@ class ManifestTest(unittest.TestCase):
         self.assertFalse(manifest.sync_contract.managed_sets["language-checks"].auto_enable)
         self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
         self.assertIn("scripts/agent-coord", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/supermeta-cache", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/supermeta-cache.ps1", manifest.sync_contract.managed_files)
         self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-agent/agent.py", manifest.sync_contract.managed_files)
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-gradle/capsule.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-gradle/generated_hygiene.py", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-gradle/project_directory.py", manifest.sync_contract.managed_files)
         self.assertIn("AGENTS.md:generated-docs/bootstrap-sync", manifest.sync_contract.managed_regions)
         self.assertIn("README.md:generated-docs/agent-nags", manifest.sync_contract.managed_regions)
         assert_velocity_manifest_contract(self, manifest)
@@ -611,7 +618,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn(".\\scripts\\agent-beans.ps1 prime", readme)
             self.assertIn("./scripts/agent-task ps --match gradle", readme)
             self.assertIn(".\\scripts\\agent-task.ps1 ps --match gradle", readme)
-            self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", readme)
+            self.assertIn("./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'", readme)
             self.assertIn("./scripts/agent-coord status", readme)
             self.assertIn("./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle . check", readme)
             self.assertIn(".\\scripts\\agent-coord.ps1 status", readme)
@@ -632,10 +639,13 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("LOG_LEVEL=info ./scripts/agent-gradle . run", agents)
             self.assertIn("./scripts/agent-beans prime", agents)
             self.assertIn("./scripts/agent-task ps --match gradle", agents)
-            self.assertIn("./scripts/agent-task logs .gradle/supermeta-gradle/logs", agents)
+            self.assertIn("./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'", agents)
             self.assertIn("./scripts/agent-gradle . --ps", agents)
             self.assertIn("./scripts/agent-gradle . --logs", agents)
             self.assertIn("./scripts/agent-gradle . --stop", agents)
+            self.assertIn("./scripts/agent-gradle . --status", agents)
+            self.assertIn("./scripts/agent-gradle . --repair", agents)
+            self.assertIn("./scripts/supermeta-cache clean", agents)
             self.assertIn("./scripts/agent-coord announce --task", agents)
             self.assertIn("./scripts/agent-coord status", agents)
             self.assertIn("./scripts/agent-coord run --resource perf:exclusive", agents)
@@ -697,13 +707,15 @@ class BootstrapSmokeTest(unittest.TestCase):
 
             run_checked(["./scripts/agent-gradle", ".", "check"], cwd=checkout, timeout=360)
             run_checked(
-                ["./scripts/agent-task", "logs", ".gradle/supermeta-gradle/logs"],
+                ["./scripts/agent-task", "logs", ".gradle/agent-capsules", "--glob", "**/*.log"],
                 cwd=checkout,
                 timeout=120,
             )
             run_checked(["./scripts/agent-task", "ps", "--match", "gradle"], cwd=checkout, timeout=120)
             run_checked(["./scripts/agent-gradle", ".", "--logs"], cwd=checkout, timeout=120)
             run_checked(["./scripts/agent-gradle", ".", "--ps"], cwd=checkout, timeout=120)
+            run_checked(["./scripts/agent-gradle", ".", "--status"], cwd=checkout, timeout=120)
+            run_checked(["./scripts/supermeta-cache", "clean"], cwd=checkout, timeout=120)
             coord_home = checkout / ".tmp-agent-coord"
             run_checked(
                 [

@@ -17,10 +17,13 @@ This is a copyable starter, not a long-lived framework.
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle templates/java-gradle-cli check`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
-- List generic task logs: `./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs`
+- List generic task logs: `./scripts/agent-task logs templates/java-gradle-cli/.gradle/agent-capsules --glob '**/*.log'`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle templates/java-gradle-cli --ps`
 - List harness logs: `./scripts/agent-gradle templates/java-gradle-cli --logs`
 - Stop scoped Gradle daemon: `./scripts/agent-gradle templates/java-gradle-cli --stop`
+- Inspect build capsule status: `./scripts/agent-gradle templates/java-gradle-cli --status`
+- Repair build capsule caches: `./scripts/agent-gradle templates/java-gradle-cli --repair`
+- Clean Supermeta rules cache: `./scripts/supermeta-cache clean --project templates/java-gradle-cli`
 - If already inside this template: `../../scripts/agent-gradle . test`
 
 ## Windows
@@ -30,6 +33,7 @@ This is a copyable starter, not a long-lived framework.
 - Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect task processes: `.\scripts\agent-task.ps1 ps --match gradle`
 - Stop scoped Gradle daemon: `.\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop`
+- Clean Supermeta rules cache: `.\scripts\supermeta-cache.ps1 clean --project templates/java-gradle-cli`
 - After materialization, verify with `.\scripts\agent-gradle.ps1 . check`
 
 ## Rules

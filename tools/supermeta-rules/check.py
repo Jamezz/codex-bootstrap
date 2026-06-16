@@ -1075,6 +1075,7 @@ def run_javascript_package_file_count_rules(
             continue
         name = require_string(rule, "name", default=f"javascript_package_file_count[{index}]")
         max_files = require_positive_int(rule, "max_files")
+        min_package_depth = require_non_negative_int(rule, "min_package_depth", default=0)
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"])
         exclude = require_string_list(rule, "exclude", default=[])
@@ -1090,6 +1091,23 @@ def run_javascript_package_file_count_rules(
             scan_context=scan_context,
             narrow_to_working_set=False,
         ):
+            package_depth = javascript_package_depth(source_file, root, paths)
+            if package_depth < min_package_depth:
+                package_unit = "directory" if min_package_depth == 1 else "directories"
+                add_finding(
+                    findings,
+                    Finding(
+                        rule=name,
+                        path=source_file.relative_to(root),
+                        message=(
+                            "JavaScript/TypeScript file is at the package root; "
+                            f"nest it at least {min_package_depth} package "
+                            f"{package_unit} deep "
+                            "using a cohesive domain subpackage"
+                        ),
+                    ),
+                    progress,
+                )
             files_by_package.setdefault(source_file.parent, []).append(source_file)
 
         for package_dir, source_files in sorted(files_by_package.items()):
@@ -1110,6 +1128,19 @@ def run_javascript_package_file_count_rules(
                 )
 
     return findings
+
+
+def javascript_package_depth(source_file: Path, root: Path, paths: list[str]) -> int:
+    parent = source_file.parent.resolve()
+    depths: list[int] = []
+    for configured_path in paths:
+        base_path = resolve_under_root(root, configured_path)
+        try:
+            relative_parent = parent.relative_to(base_path)
+        except ValueError:
+            continue
+        depths.append(len(relative_parent.parts))
+    return min(depths) if depths else 0
 
 
 def run_repeated_helper_method_rules(
@@ -2558,6 +2589,13 @@ def require_positive_int(rule: dict[str, Any], key: str) -> int:
     value = rule.get(key)
     if not isinstance(value, int) or value < 1:
         raise ValueError(f"{key} must be a positive integer")
+    return value
+
+
+def require_non_negative_int(rule: dict[str, Any], key: str, default: int = 0) -> int:
+    value = rule.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{key} must be a non-negative integer")
     return value
 
 

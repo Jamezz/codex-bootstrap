@@ -78,10 +78,13 @@ Stuck-build diagnostics from the repository root:
 
 ```bash
 ./scripts/agent-task ps --match gradle
-./scripts/agent-task logs templates/java-gradle-cli/.gradle/supermeta-gradle/logs
+./scripts/agent-task logs templates/java-gradle-cli/.gradle/agent-capsules --glob '**/*.log'
 ./scripts/agent-gradle templates/java-gradle-cli --ps
 ./scripts/agent-gradle templates/java-gradle-cli --logs
 ./scripts/agent-gradle templates/java-gradle-cli --stop
+./scripts/agent-gradle templates/java-gradle-cli --status
+./scripts/agent-gradle templates/java-gradle-cli --repair
+./scripts/supermeta-cache clean --project templates/java-gradle-cli
 ```
 
 PowerShell entrypoints are available for Windows agents:
@@ -101,7 +104,7 @@ Generated projects also include a pinned Beans wrapper and seeded starter backlo
 ./scripts/agent-beans check
 ```
 
-Agents should prefer the harness because it uses the checked-in wrapper with project-local Gradle state, no file watching, no resident daemon by default, same-checkout serialized runs, and captured logs under `.gradle/supermeta-gradle/logs/`.
+Agents should prefer the harness because it uses the checked-in wrapper with no file watching and capsule-local Gradle state. Each capsule owns its Gradle user home, build cache, logs, locks, generated-output hygiene, and repair actions under `.gradle/agent-capsules/<capsule-id>/`.
 
 For parallel Gradle execution inside one build:
 
