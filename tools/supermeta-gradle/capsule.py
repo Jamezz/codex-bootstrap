@@ -15,11 +15,10 @@ EXPLICIT_ID_ENV = (
     "CODEX_BUILD_CAPSULE_ID",
 )
 SESSION_ID_ENV = (
-    "FORGE_SESSION_ID",
-    "APERTURE_SESSION_ID",
     "CODEX_SESSION_ID",
 )
 SAFE_ID_PATTERN = re.compile(r"[^a-zA-Z0-9_.-]+")
+ENV_NAME_PATTERN = re.compile(r"[^A-Z0-9]+")
 
 
 @dataclass(frozen=True)
@@ -90,7 +89,10 @@ class BuildCapsule:
 
 def resolve_capsule(project_dir: Path, env: Mapping[str, str]) -> BuildCapsule:
     resolved_project = project_dir.expanduser().resolve()
-    capsule_id = first_safe_env_id(env, EXPLICIT_ID_ENV)
+    project_env_name = build_capsule_env_name(resolved_project)
+    capsule_id = first_safe_env_id(env, (project_env_name,)) if project_env_name else None
+    if capsule_id is None:
+        capsule_id = first_safe_env_id(env, EXPLICIT_ID_ENV)
     if capsule_id is None:
         capsule_id = first_safe_env_id(env, SESSION_ID_ENV)
     if capsule_id is None:
@@ -118,6 +120,13 @@ def first_safe_env_id(env: Mapping[str, str], names: tuple[str, ...]) -> str | N
         if value:
             return safe_capsule_id(value)
     return None
+
+
+def build_capsule_env_name(project_dir: Path) -> str | None:
+    prefix = ENV_NAME_PATTERN.sub("_", project_dir.name.upper()).strip("_")
+    if not prefix:
+        return None
+    return f"{prefix}_BUILD_CAPSULE_ID"
 
 
 def safe_capsule_id(value: str) -> str:

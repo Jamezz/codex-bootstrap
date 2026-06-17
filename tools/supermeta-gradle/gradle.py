@@ -35,7 +35,9 @@ from capsule import BuildCapsule
 from capsule import resolve_capsule
 from generated_hygiene import GeneratedHygieneResult
 from generated_hygiene import run_generated_hygiene
+from project_directory import IncludedBuildDefaults
 from project_directory import ProjectDirectoryError
+from project_directory import load_included_build_defaults
 from project_directory import load_project_directory
 from project_directory import materialize_included_worktrees
 from project_directory import PROJECT_DIRECTORY_ENV
@@ -439,10 +441,16 @@ def configure_project_directory_env(
     build_capsule: BuildCapsule,
     env: dict[str, str],
 ) -> Path:
-    repo_ids = resolve_included_build_repo_ids(args, project_dir)
+    defaults = load_included_build_defaults(project_dir)
+    repo_ids = resolve_included_build_repo_ids(args, defaults)
     materialized: dict[str, Path] = {}
     if repo_ids:
-        source = resolve_project_directory_source(project_dir, env, explicit_file=args.project_directory_file)
+        source = resolve_project_directory_source(
+            project_dir,
+            env,
+            explicit_file=args.project_directory_file,
+            default_file=defaults.project_directory_file,
+        )
         directory = load_project_directory(source.path)
         materialized = materialize_included_worktrees(
             directory.repos,
@@ -456,11 +464,14 @@ def configure_project_directory_env(
     return output_file
 
 
-def resolve_included_build_repo_ids(args: argparse.Namespace, _project_dir: Path) -> tuple[str, ...]:
+def resolve_included_build_repo_ids(
+    args: argparse.Namespace,
+    defaults: IncludedBuildDefaults,
+) -> tuple[str, ...]:
     configured = tuple(repo_id.strip() for repo_id in args.included_build_repo if repo_id.strip())
     if configured:
         return configured
-    return ()
+    return defaults.repo_ids
 
 
 def run_project_directory_command(command: list[str]) -> None:

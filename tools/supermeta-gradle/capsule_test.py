@@ -22,13 +22,30 @@ class CapsuleTest(unittest.TestCase):
         self.assertEqual(resolved.root / "gradle-user-home", resolved.gradle_user_home)
         self.assertEqual(resolved.root / "build-cache", resolved.build_cache)
 
+    def test_project_specific_capsule_id_wins_over_generic_explicit_id(self) -> None:
+        project = Path("/workspace/sample-app")
+        env = {
+            "SAMPLE_APP_BUILD_CAPSULE_ID": "project-specific",
+            "SUPERMETA_BUILD_CAPSULE_ID": "supermeta-explicit",
+        }
+
+        resolved = capsule.resolve_capsule(project, env)
+
+        self.assertEqual("project-specific", resolved.capsule_id)
+
+    def test_project_specific_capsule_env_name_is_derived_from_project_name(self) -> None:
+        self.assertEqual(
+            "SAMPLE_APP_BUILD_CAPSULE_ID",
+            capsule.build_capsule_env_name(Path("/workspace/sample-app")),
+        )
+
     def test_session_id_is_used_when_explicit_id_is_absent(self) -> None:
         resolved = capsule.resolve_capsule(
             Path("/workspace/sample-app"),
-            {"FORGE_SESSION_ID": "forge/session 42"},
+            {"CODEX_SESSION_ID": "session 42"},
         )
 
-        self.assertEqual("forge-session-42", resolved.capsule_id)
+        self.assertEqual("session-42", resolved.capsule_id)
 
     def test_worktree_path_hash_is_stable_and_short(self) -> None:
         first = capsule.resolve_capsule(Path("/workspace/sample-app/.worktrees/a"), {})

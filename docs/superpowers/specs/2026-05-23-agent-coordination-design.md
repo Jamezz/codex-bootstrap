@@ -84,15 +84,15 @@ Registry records are JSON:
 ```json
 {
   "schemaVersion": 1,
-  "agentId": "host-12345-hazeldisk-a1b2c3",
+  "agentId": "host-12345-sample-app-a1b2c3",
   "pid": 12345,
   "host": "host",
   "platform": "darwin",
-  "cwd": "/Users/example/src/hazeldisk",
-  "repoName": "hazeldisk",
+  "cwd": "/Users/example/src/sample-app",
+  "repoName": "sample-app",
   "templateId": "java-gradle-cli",
   "task": "perf pass",
-  "tags": ["hazeldisk"],
+  "tags": ["sample-app"],
   "resources": ["cpu:heavy", "perf"],
   "startedAt": "2026-05-23T19:00:00Z",
   "updatedAt": "2026-05-23T19:05:00Z",
@@ -109,7 +109,7 @@ Expired registry records are ignored by status output and removed opportunistica
 Primary commands:
 
 ```bash
-./scripts/agent-coord announce --task "perf pass" --resource cpu:heavy --resource perf --tag hazeldisk
+./scripts/agent-coord announce --task "perf pass" --resource cpu:heavy --resource perf --tag sample-app
 ./scripts/agent-coord status
 ./scripts/agent-coord leave
 ./scripts/agent-coord acquire --resource perf:exclusive --timeout 20m
@@ -148,7 +148,7 @@ When `status` sees multiple live agents advertising the same resource, it should
 resource        mode       holders
 cpu:heavy       advisory   3 agents advertising
 perf            advisory   2 agents advertising
-perf:exclusive  leased     host-12345-hazeldisk-a1b2c3
+perf:exclusive  leased     host-12345-sample-app-a1b2c3
 ```
 
 ## Lease Semantics
@@ -159,10 +159,10 @@ A lease is a JSON file keyed by a normalized resource name:
 {
   "schemaVersion": 1,
   "resource": "perf:exclusive",
-  "agentId": "host-12345-hazeldisk-a1b2c3",
+  "agentId": "host-12345-sample-app-a1b2c3",
   "pid": 12345,
   "host": "host",
-  "cwd": "/Users/example/src/hazeldisk",
+  "cwd": "/Users/example/src/sample-app",
   "task": "perf pass",
   "acquiredAt": "2026-05-23T19:00:00Z",
   "updatedAt": "2026-05-23T19:05:00Z",
@@ -198,7 +198,7 @@ Recommended starter names:
 - `docker`
 - `gradle-home`
 
-The docs should recommend project-specific names for scarce local fixtures, such as `hazeldisk:perf-cluster` or `omega:local-lab`.
+The docs should recommend project-specific names for scarce local fixtures, such as `sample-app:perf-cluster` or `worker-service:local-lab`.
 
 ## Error Handling
 

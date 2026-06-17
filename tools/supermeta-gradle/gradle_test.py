@@ -191,11 +191,20 @@ class ProjectDirectoryIntegrationTest(unittest.TestCase):
             identity_lib = root / "identity-lib"
             for path in (project_dir, core_lib, storage_lib, identity_lib):
                 path.mkdir(parents=True)
-            (project_dir / "project-directory.properties").write_text(
+            catalog = root / "catalog"
+            catalog.mkdir()
+            (catalog / "project-directory.properties").write_text(
                 "version=1\n"
                 "repo.core-lib=../core-lib\n"
                 "repo.storage-lib=../storage-lib\n"
                 "repo.identity-lib=../identity-lib\n",
+                encoding="utf-8",
+            )
+            config_dir = project_dir / ".supermeta-gradle"
+            config_dir.mkdir()
+            (config_dir / "included-builds.properties").write_text(
+                "projectDirectoryFile=../catalog/project-directory.properties\n"
+                "repos=core-lib, storage-lib, identity-lib\n",
                 encoding="utf-8",
             )
             build_capsule = gradle.resolve_capsule(project_dir, {"SUPERMETA_BUILD_CAPSULE_ID": "agent-1"})
@@ -213,7 +222,7 @@ class ProjectDirectoryIntegrationTest(unittest.TestCase):
                 output_file = gradle.configure_project_directory_env(
                     SimpleNamespace(
                         project_directory_file=None,
-                        included_build_repo=["core-lib", "storage-lib", "identity-lib"],
+                        included_build_repo=[],
                     ),
                     project_dir,
                     build_capsule,
@@ -232,21 +241,46 @@ class ProjectDirectoryIntegrationTest(unittest.TestCase):
                 output_file.read_text(encoding="utf-8"),
             )
 
-    def test_included_build_defaults_are_empty(self) -> None:
+    def test_included_build_defaults_come_from_project_config(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gradle-project-directory-") as temp_dir:
+            project_dir = Path(temp_dir) / "sample-service"
+            config_dir = project_dir / ".supermeta-gradle"
+            config_dir.mkdir(parents=True)
+            (config_dir / "included-builds.properties").write_text(
+                "repos=core-lib, storage-lib\n",
+                encoding="utf-8",
+            )
+
+            defaults = gradle.load_included_build_defaults(project_dir)
+
+            self.assertEqual(
+                ("core-lib", "storage-lib"),
+                gradle.resolve_included_build_repo_ids(
+                    SimpleNamespace(included_build_repo=[]),
+                    defaults,
+                ),
+            )
+
+    def test_included_build_defaults_are_empty_without_project_config(self) -> None:
         self.assertEqual(
             (),
             gradle.resolve_included_build_repo_ids(
                 SimpleNamespace(included_build_repo=[]),
-                Path("/workspace/sample-service"),
+                gradle.load_included_build_defaults(Path("/workspace/sample-service")),
             ),
         )
 
     def test_included_build_repo_argument_overrides_project_default(self) -> None:
+        defaults = gradle.IncludedBuildDefaults(
+            project_directory_file=None,
+            repo_ids=("identity-lib",),
+        )
+
         self.assertEqual(
             ("core-lib", "storage-lib"),
             gradle.resolve_included_build_repo_ids(
                 SimpleNamespace(included_build_repo=["core-lib", "storage-lib"]),
-                Path("/workspace/sample-service"),
+                defaults,
             ),
         )
 

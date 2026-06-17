@@ -49,6 +49,42 @@ class ProjectDirectoryTest(unittest.TestCase):
             self.assertEqual(example.resolve(), source.path)
             self.assertFalse(source.explicit)
 
+    def test_default_source_uses_configured_project_directory_file_after_env(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="project-directory-") as temp_dir:
+            project = Path(temp_dir) / "sample-service"
+            project.mkdir(parents=True)
+            configured = Path(temp_dir) / "catalog" / "project-directory.properties"
+            configured.parent.mkdir(parents=True)
+            configured.write_text("version=1\nrepo.shared-lib=../shared-lib\n", encoding="utf-8")
+
+            source = project_directory.resolve_project_directory_source(
+                project,
+                {},
+                default_file=configured,
+            )
+
+            self.assertEqual(configured.resolve(), source.path)
+            self.assertFalse(source.explicit)
+
+    def test_loads_included_build_defaults_from_project_config(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="project-directory-") as temp_dir:
+            project = Path(temp_dir) / "sample-service"
+            config_dir = project / ".supermeta-gradle"
+            config_dir.mkdir(parents=True)
+            (config_dir / "included-builds.properties").write_text(
+                "projectDirectoryFile=../catalog/project-directory.properties\n"
+                "repos=core-lib, storage-lib\n",
+                encoding="utf-8",
+            )
+
+            defaults = project_directory.load_included_build_defaults(project)
+
+            self.assertEqual(
+                (Path(temp_dir) / "catalog" / "project-directory.properties").resolve(),
+                defaults.project_directory_file,
+            )
+            self.assertEqual(("core-lib", "storage-lib"), defaults.repo_ids)
+
     def test_materializes_missing_included_worktrees(self) -> None:
         with tempfile.TemporaryDirectory(prefix="project-directory-") as temp_dir:
             root = Path(temp_dir)

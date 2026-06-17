@@ -11,9 +11,10 @@ Gradle state:
 - serialize runs that share a capsule;
 - tee output to the capsule `logs/` directory.
 
-The default capsule id comes from `SUPERMETA_BUILD_CAPSULE_ID`, `CODEX_BUILD_CAPSULE_ID`, `FORGE_SESSION_ID`,
-`APERTURE_SESSION_ID`, or `CODEX_SESSION_ID`. If none are set, the wrapper derives a stable id from the checkout path.
-Pass `--capsule-id <id>` when two concurrent agents in the same checkout need separate caches.
+The default capsule id comes from `<PROJECT_NAME>_BUILD_CAPSULE_ID`, `SUPERMETA_BUILD_CAPSULE_ID`,
+`CODEX_BUILD_CAPSULE_ID`, or `CODEX_SESSION_ID`. Project names are uppercased and non-alphanumeric separators become
+`_`; for example, `sample-app` reads `SAMPLE_APP_BUILD_CAPSULE_ID`. If none are set, the wrapper derives a stable id
+from the checkout path. Pass `--capsule-id <id>` when two concurrent agents in the same checkout need separate caches.
 
 Logs live under `.gradle/` so `clean` tasks cannot delete the active run log. Log names include the process id and a
 nanosecond suffix so intentional `--no-lock` runs do not collide.
@@ -112,12 +113,21 @@ mode with explicit repo ids when agent concurrency matters:
 ./scripts/agent-gradle . --strict-included-builds --included-build-repo shared-lib -- :app:compileJava
 ```
 
-The wrapper resolves the project-directory source in this order:
+Projects can also declare no-argument strict included-build defaults in `.supermeta-gradle/included-builds.properties`:
+
+```properties
+projectDirectoryFile=../catalog/project-directory.properties
+repos=shared-lib, worker-lib
+```
+
+`--included-build-repo` overrides configured repo defaults. The wrapper resolves the project-directory source in this
+order:
 
 1. `--project-directory-file <file>`
 2. `SUPERMETA_PROJECT_DIRECTORY_FILE`
-3. local `project-directory.properties`
-4. local `project-directory.properties.example`
+3. `.supermeta-gradle/included-builds.properties` `projectDirectoryFile`
+4. local `project-directory.properties`
+5. local `project-directory.properties.example`
 
 It then creates detached worktrees for the required included builds under the capsule `included-builds/` directory and
 exports a generated `SUPERMETA_PROJECT_DIRECTORY_FILE` that points Gradle at those capsule-local worktrees.

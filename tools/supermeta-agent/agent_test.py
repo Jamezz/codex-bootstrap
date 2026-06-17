@@ -112,7 +112,7 @@ class IdentityTest(unittest.TestCase):
 
 class ResourceValidationTest(unittest.TestCase):
     def test_accepts_recommended_resource_names(self) -> None:
-        for value in ("perf", "perf:exclusive", "cpu:heavy", "memory:heavy", "docker", "hazeldisk:perf-cluster"):
+        for value in ("perf", "perf:exclusive", "cpu:heavy", "memory:heavy", "docker", "sample-app:perf-cluster"):
             with self.subTest(value=value):
                 self.assertEqual(value, agent.validate_resource_name(value))
 
@@ -137,7 +137,7 @@ class RegistryLifecycleTest(unittest.TestCase):
                 agent_id="agent-1",
                 cwd=Path("/tmp/sample-app"),
                 task="perf pass",
-                tags=("hazeldisk",),
+                tags=("sample-app",),
                 resources=("cpu:heavy", "perf"),
                 ttl_seconds=900,
                 now=now,
