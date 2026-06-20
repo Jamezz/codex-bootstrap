@@ -16,7 +16,7 @@ from pathlib import Path
 NUMBERED_COPY_PATTERN = re.compile(r"^(?P<stem>.+) (?P<number>[2-9][0-9]*)(?P<suffix>(?:\.[^./]+)*)$")
 COPY_SUFFIX_PATTERN = re.compile(r"^(?P<stem>.+) copy(?P<suffix>(?:\.[^./]+)*)$")
 GENERATED_DIR_NAMES = {"build", "out", "target"}
-SKIPPED_DIR_NAMES = {".git", ".gradle", ".idea", ".venv", ".worktrees", "node_modules"}
+SKIPPED_DIR_NAMES = {".build", ".git", ".gradle", ".idea", ".venv", ".worktrees", "artifacts", "node_modules"}
 CLASSPATH_SUFFIXES = {".class", ".jar", ".properties", ".xml", ".json", ".yml", ".yaml"}
 
 

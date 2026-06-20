@@ -981,8 +981,18 @@ def run_line_count_rules(
         paths = require_string_list(rule, "paths")
         include = require_string_list(rule, "include", default=["**/*"])
         exclude = require_string_list(rule, "exclude", default=[])
+        narrow_to_working_set = require_bool(rule, "narrow_to_working_set", default=True)
 
-        for source_file in iter_rule_files(name, root, paths, include, exclude, progress, scan_context=scan_context):
+        for source_file in iter_rule_files(
+            name,
+            root,
+            paths,
+            include,
+            exclude,
+            progress,
+            scan_context=scan_context,
+            narrow_to_working_set=narrow_to_working_set,
+        ):
             line_count = scan_context.line_count(source_file) if scan_context is not None else count_lines(source_file)
             if line_count > max_lines:
                 add_finding(

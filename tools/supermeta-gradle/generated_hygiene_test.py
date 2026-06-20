@@ -111,6 +111,23 @@ class GeneratedHygieneTest(unittest.TestCase):
             self.assertTrue(duplicate.exists())
             self.assertEqual((), result.actions)
 
+    def test_nested_swift_and_artifact_outputs_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
+            root = Path(temp_dir)
+            for skipped_dir in (".build", "artifacts"):
+                build = root / skipped_dir / "sample-app" / "build" / "classes"
+                build.mkdir(parents=True)
+                original = build / "Worker.class"
+                duplicate = build / "Worker 2.class"
+                original.write_bytes(b"original")
+                duplicate.write_bytes(b"divergent")
+
+            result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
+
+            self.assertEqual((), result.actions)
+            self.assertTrue((root / ".build" / "sample-app" / "build" / "classes" / "Worker 2.class").exists())
+            self.assertTrue((root / "artifacts" / "sample-app" / "build" / "classes" / "Worker 2.class").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

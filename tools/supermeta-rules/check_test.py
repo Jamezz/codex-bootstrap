@@ -795,6 +795,35 @@ class AutomaticWorkingSetTest(unittest.TestCase):
             self.assertEqual(1, len(findings))
             self.assertEqual(Path("src/main/java/example/TooLarge.java"), findings[0].path)
 
+    def test_line_count_rule_can_opt_out_of_working_set_narrowing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            init_git_repo(root)
+            write_source(root, "src/styles/too-large.css", "line 1\nline 2\n")
+            write_source(root, "src/styles/changed.css", "line 1\n")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "baseline")
+            write_source(root, "src/styles/changed.css", "changed\n")
+
+            findings = check.run_rules(
+                {
+                    "line_count": [
+                        {
+                            "name": "layout-source",
+                            "max_lines": 1,
+                            "paths": ["src/styles"],
+                            "include": ["**/*.css"],
+                            "exclude": [],
+                            "narrow_to_working_set": False,
+                        }
+                    ]
+                },
+                root,
+            )
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("src/styles/too-large.css"), findings[0].path)
+
     def test_full_scan_uses_git_visible_files_and_ignores_build_noise(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

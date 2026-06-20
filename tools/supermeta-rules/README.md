@@ -69,11 +69,15 @@ Checks that matching files stay under a configured maximum line count.
       "max_lines": 1000,
       "paths": ["src/main"],
       "include": ["**/*.java"],
-      "exclude": ["**/generated/**"]
+      "exclude": ["**/generated/**"],
+      "narrow_to_working_set": true
     }
   ]
 }
 ```
+
+Set `narrow_to_working_set` to `false` for small, high-signal layout surfaces that should be scanned every run even
+when only one file changed.
 
 ### `java_package_class_count`
 
