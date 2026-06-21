@@ -51,6 +51,7 @@ from task import print_recent_logs as print_task_recent_logs
 
 
 DEFAULT_COLD_MAX_WORKERS = "2"
+TRUE_ENV_VALUES = {"1", "true", "yes"}
 GRADLE_PROCESS_MATCHES = (
     "supermeta-gradle/gradle.py",
     "gradle-launcher",
@@ -96,7 +97,7 @@ def main() -> int:
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}-{time.time_ns() % 1_000_000_000:09d}"
     log_path = log_dir / f"{run_id}-{safe_name(gradle_args)}.log"
 
-    cold_mode = args.cold or os.environ.get("SUPERMETA_GRADLE_COLD") in {"1", "true", "yes"}
+    cold_mode = args.cold or os.environ.get("SUPERMETA_GRADLE_COLD") in TRUE_ENV_VALUES
     build_cache_init_script = build_capsule.write_build_cache_init_script()
     gradle_args = add_init_script_arg(gradle_args, build_cache_init_script)
     command = build_command(wrapper, gradle_args, args.no_default_flags, cold_mode)
@@ -421,7 +422,7 @@ def build_command(
             max_workers = os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS", DEFAULT_COLD_MAX_WORKERS)
             defaults.append(f"--max-workers={max_workers}")
 
-    if not cold_mode and os.environ.get("SUPERMETA_GRADLE_PARALLEL") in {"1", "true", "yes"}:
+    if not cold_mode and os.environ.get("SUPERMETA_GRADLE_PARALLEL") in TRUE_ENV_VALUES:
         add_flag_pair(defaults, gradle_args, "--parallel", "--no-parallel")
         if not has_max_workers(gradle_args) and os.environ.get("SUPERMETA_GRADLE_MAX_WORKERS"):
             defaults.append(f"--max-workers={os.environ['SUPERMETA_GRADLE_MAX_WORKERS']}")

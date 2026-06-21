@@ -122,7 +122,7 @@ class GradleHomeTest(unittest.TestCase):
 
 
 class GeneratedHygieneIntegrationTest(unittest.TestCase):
-    def test_hygiene_only_removes_exact_duplicate(self) -> None:
+    def test_hygiene_only_quarantines_generated_duplicate(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gradle-hygiene-") as temp_dir:
             project_dir = Path(temp_dir)
             build_capsule = gradle.resolve_capsule(project_dir, {"SUPERMETA_BUILD_CAPSULE_ID": "agent-1"})

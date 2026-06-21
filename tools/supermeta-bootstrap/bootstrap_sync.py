@@ -316,16 +316,22 @@ def plan_managed_updates(
         if git_status.get(path) == "??":
             conflicts.append(SyncConflict(path, "untracked file would be overwritten"))
             continue
-        previous = metadata.managed_files.get(path)
-        if current.exists() and previous and sha256_file(current) != previous.sha256:
-            conflicts.append(SyncConflict(path, "hash mismatch; downstream file was edited"))
-            continue
         candidate_text = candidate.read_text(encoding="utf-8")
         candidate_hash = sha256_file(candidate)
         candidate_mode = file_mode(candidate)
         current_hash = sha256_file(current) if current.exists() else ""
         current_mode = file_mode(current) if current.exists() else -1
-        if previous is None or current_hash != candidate_hash or current_mode != candidate_mode:
+        previous = metadata.managed_files.get(path)
+        if current.exists() and previous and current_hash != previous.sha256:
+            if current_hash != candidate_hash:
+                conflicts.append(SyncConflict(path, "hash mismatch; downstream file was edited"))
+                continue
+        if (
+            previous is None
+            or current_hash != candidate_hash
+            or current_mode != candidate_mode
+            or previous.sha256 != candidate_hash
+        ):
             file_changes.append(
                 FileChange(
                     path=path,

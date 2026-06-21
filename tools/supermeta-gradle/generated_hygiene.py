@@ -18,6 +18,7 @@ COPY_SUFFIX_PATTERN = re.compile(r"^(?P<stem>.+) copy(?P<suffix>(?:\.[^./]+)*)$"
 GENERATED_DIR_NAMES = {"build", "out", "target"}
 SKIPPED_DIR_NAMES = {".build", ".git", ".gradle", ".idea", ".venv", ".worktrees", "artifacts", "node_modules"}
 CLASSPATH_SUFFIXES = {".class", ".jar", ".properties", ".xml", ".json", ".yml", ".yaml"}
+REPORT_SUFFIXES = {".html", ".xml", ".json", ".txt"}
 
 
 @dataclass(frozen=True)
@@ -42,24 +43,22 @@ def run_generated_hygiene(root: Path, hygiene_root: Path) -> GeneratedHygieneRes
     actions: list[GeneratedHygieneAction] = []
     for duplicate in generated_duplicate_candidates(resolved_root):
         original = original_for_duplicate(duplicate)
+        if is_generated_report_output(duplicate):
+            actions.append(remove_generated_duplicate(resolved_root, duplicate, original))
+            continue
         if original is None or not original.exists():
             actions.append(
-                quarantine(resolved_root, hygiene_root, duplicate, original, "quarantine-ambiguous-generated-duplicate")
-            )
-            continue
-        if duplicate.is_file() and original.is_file() and hash_file(duplicate) == hash_file(original):
-            duplicate.unlink()
-            actions.append(
-                GeneratedHygieneAction(
-                    action="remove",
-                    reason="remove-exact-generated-duplicate",
-                    duplicate_path=relative_text(resolved_root, duplicate),
-                    original_path=relative_text(resolved_root, original),
+                quarantine(
+                    resolved_root,
+                    hygiene_root,
+                    duplicate,
+                    original,
+                    "quarantine-ambiguous-generated-duplicate",
                 )
             )
             continue
         actions.append(
-            quarantine(resolved_root, hygiene_root, duplicate, original, "quarantine-divergent-generated-duplicate")
+            quarantine(resolved_root, hygiene_root, duplicate, original, "quarantine-generated-duplicate")
         )
     return GeneratedHygieneResult(
         review_needed=any(action.action == "quarantine" for action in actions),
@@ -71,7 +70,7 @@ def generated_duplicate_candidates(root: Path) -> list[Path]:
     candidates: list[Path] = []
     for generated_dir in generated_dirs(root):
         for child in generated_dir.rglob("*"):
-            if child.is_file() and is_classpath_relevant(child) and original_for_duplicate(child) is not None:
+            if child.is_file() and is_generated_duplicate_relevant(child) and original_for_duplicate(child) is not None:
                 candidates.append(child)
     return sorted(candidates)
 
@@ -94,12 +93,34 @@ def original_for_duplicate(path: Path) -> Path | None:
     return path.with_name(f"{match.group('stem')}{match.group('suffix')}")
 
 
+def is_generated_duplicate_relevant(path: Path) -> bool:
+    if is_generated_report_output(path):
+        return True
+    return is_classpath_relevant(path)
+
+
 def is_classpath_relevant(path: Path) -> bool:
     if path.suffix.lower() not in CLASSPATH_SUFFIXES:
         return False
-    if "reports" in path.parts or "test-results" in path.parts:
-        return False
     return path.suffix.lower() == ".jar" or "classes" in path.parts or "resources" in path.parts
+
+
+def is_generated_report_output(path: Path) -> bool:
+    return ("reports" in path.parts or "test-results" in path.parts) and path.suffix.lower() in REPORT_SUFFIXES
+
+
+def remove_generated_duplicate(
+    root: Path,
+    duplicate: Path,
+    original: Path | None,
+) -> GeneratedHygieneAction:
+    duplicate.unlink()
+    return GeneratedHygieneAction(
+        action="remove",
+        reason="remove-generated-output-duplicate",
+        duplicate_path=relative_text(root, duplicate),
+        original_path=relative_text(root, original) if original is not None else None,
+    )
 
 
 def quarantine(
@@ -139,19 +160,11 @@ def write_manifest(
         "duplicatePath": relative_text(root, duplicate),
         "originalPath": relative_text(root, original) if original is not None else None,
         "destinationPath": str(destination),
-        "duplicateSha256": hash_file(destination) if destination.is_file() else None,
-        "originalSha256": hash_file(original) if original is not None and original.is_file() else None,
+        "duplicateSize": destination.stat().st_size if destination.is_file() else None,
+        "originalSize": original.stat().st_size if original is not None and original.is_file() else None,
     }
     manifest.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
-
-
-def hash_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def relative_text(root: Path, path: Path | None) -> str:

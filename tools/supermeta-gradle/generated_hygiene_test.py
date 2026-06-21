@@ -8,7 +8,7 @@ import generated_hygiene
 
 
 class GeneratedHygieneTest(unittest.TestCase):
-    def test_exact_generated_duplicate_is_removed(self) -> None:
+    def test_generated_duplicate_is_quarantined_without_hashing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
             root = Path(temp_dir)
             build = root / "sample-api" / "build" / "classes" / "java" / "test" / "io" / "sample"
@@ -21,24 +21,8 @@ class GeneratedHygieneTest(unittest.TestCase):
             result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
 
             self.assertFalse(duplicate.exists())
-            self.assertFalse(result.review_needed)
-            self.assertEqual("remove-exact-generated-duplicate", result.actions[0].reason)
-
-    def test_divergent_generated_duplicate_is_quarantined(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
-            root = Path(temp_dir)
-            build = root / "sample-api" / "build" / "classes" / "java" / "test"
-            build.mkdir(parents=True)
-            original = build / "ExampleTest.class"
-            duplicate = build / "ExampleTest 2.class"
-            original.write_bytes(b"original")
-            duplicate.write_bytes(b"divergent")
-
-            result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
-
-            self.assertFalse(duplicate.exists())
             self.assertTrue(result.review_needed)
-            self.assertEqual("quarantine-divergent-generated-duplicate", result.actions[0].reason)
+            self.assertEqual("quarantine-generated-duplicate", result.actions[0].reason)
             self.assertTrue(Path(result.actions[0].manifest_path).exists())
 
     def test_source_duplicate_is_not_touched(self) -> None:
@@ -53,7 +37,7 @@ class GeneratedHygieneTest(unittest.TestCase):
             self.assertTrue(source.exists())
             self.assertEqual((), result.actions)
 
-    def test_copy_suffix_generated_duplicate_is_removed(self) -> None:
+    def test_copy_suffix_generated_duplicate_is_quarantined(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
             root = Path(temp_dir)
             build = root / "module" / "build" / "classes"
@@ -66,22 +50,26 @@ class GeneratedHygieneTest(unittest.TestCase):
             result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
 
             self.assertFalse(duplicate.exists())
-            self.assertFalse(result.review_needed)
+            self.assertTrue(result.review_needed)
+            self.assertEqual("quarantine-generated-duplicate", result.actions[0].reason)
 
-    def test_report_duplicate_is_ignored(self) -> None:
+    def test_report_duplicate_is_removed_without_hashing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
             root = Path(temp_dir)
             reports = root / "build" / "reports" / "problems"
             reports.mkdir(parents=True)
+            original = reports / "problems-report.html"
             duplicate = reports / "problems-report 2.html"
+            original.write_text("<html>original</html>", encoding="utf-8")
             duplicate.write_text("<html>report</html>", encoding="utf-8")
 
             result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
 
-            self.assertTrue(duplicate.exists())
-            self.assertEqual((), result.actions)
+            self.assertFalse(duplicate.exists())
+            self.assertFalse(result.review_needed)
+            self.assertEqual("remove-generated-output-duplicate", result.actions[0].reason)
 
-    def test_test_result_duplicate_is_ignored(self) -> None:
+    def test_test_result_duplicate_is_removed_without_hashing(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:
             root = Path(temp_dir)
             test_results = root / "build" / "test-results" / "test"
@@ -93,8 +81,9 @@ class GeneratedHygieneTest(unittest.TestCase):
 
             result = generated_hygiene.run_generated_hygiene(root, root / ".gradle" / "capsule" / "hygiene")
 
-            self.assertTrue(duplicate.exists())
-            self.assertEqual((), result.actions)
+            self.assertFalse(duplicate.exists())
+            self.assertFalse(result.review_needed)
+            self.assertEqual("remove-generated-output-duplicate", result.actions[0].reason)
 
     def test_nested_worktree_duplicate_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory(prefix="generated-hygiene-") as temp_dir:

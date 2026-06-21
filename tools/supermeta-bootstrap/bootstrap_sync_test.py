@@ -207,6 +207,43 @@ class SyncPlannerTest(unittest.TestCase):
             self.assertEqual("scripts/agent-bootstrap", plan.conflicts[0].path)
             self.assertIn("hash mismatch", plan.conflicts[0].reason)
 
+    def test_refreshes_hash_when_downstream_edit_matches_candidate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-plan-promoted-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            candidate = Path(temp_dir) / "candidate"
+            write_text(root / "scripts" / "agent-bootstrap", "promoted upstream\n")
+            write_text(candidate / "scripts" / "agent-bootstrap", "promoted upstream\n")
+            metadata = metadata_for_files(
+                root,
+                managed_files={
+                    "scripts/agent-bootstrap": {
+                        "set": "agent-scripts",
+                        "sha256": "0" * 64,
+                    }
+                },
+            )
+            contract = contract_for(
+                files=[bootstrap_sync.ManagedFileSpec("scripts/agent-bootstrap", "agent-scripts")]
+            )
+
+            plan = bootstrap_sync.plan_managed_updates(
+                root, candidate, metadata, contract, git_status={}
+            )
+            updated = bootstrap_sync.apply_sync_plan(
+                root,
+                metadata,
+                contract,
+                plan,
+                new_commit="abcdef0123456789abcdef0123456789abcdef01",
+            )
+
+            self.assertEqual((), plan.conflicts)
+            self.assertEqual(("scripts/agent-bootstrap",), tuple(change.path for change in plan.file_changes))
+            self.assertEqual(
+                bootstrap_sync.sha256_file(root / "scripts" / "agent-bootstrap"),
+                updated.managed_files["scripts/agent-bootstrap"].sha256,
+            )
+
     def test_refuses_untracked_whole_file_overwrite(self) -> None:
         with tempfile.TemporaryDirectory(prefix="bootstrap-sync-plan-untracked-") as temp_dir:
             root = Path(temp_dir) / "project"

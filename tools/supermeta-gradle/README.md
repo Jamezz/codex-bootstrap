@@ -89,12 +89,13 @@ Set `SUPERMETA_GRADLE_USER_HOME` to opt into an explicit shared cache root or an
 
 ## Generated-Output Hygiene
 
-Before Gradle starts, the wrapper proactively scans generated output directories (`build`, `out`, `target`) for
-classpath-relevant duplicate files such as `Worker 2.class` or `defaults copy.properties`.
+Before Gradle starts, the wrapper proactively scans generated output directories (`build`, `out`, `target`) for duplicate
+files such as `Worker 2.class`, `defaults copy.properties`, or stale copied test reports.
 
-- exact duplicates are removed before Gradle sees them;
-- divergent or ambiguous duplicates are quarantined under the capsule `hygiene/` directory and the run exits for review;
-- generated reports are ignored, because report copies are not classpath hazards.
+- generated reports and test-result copies are removed without reading their contents;
+- classpath-relevant duplicates are quarantined under the capsule `hygiene/` directory with size metadata, without
+  hashing potentially broken generated files;
+- source files and nested worktrees are ignored.
 
 Run hygiene without Gradle:
 

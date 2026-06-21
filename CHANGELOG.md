@@ -61,6 +61,8 @@ Use these buckets inside dated entries when they help:
 - `--source-ref` now selects the remote ref to fetch instead of only relabeling
   metadata, and sync plans print a follow-up dry-run command when the candidate
   ref differs from the recorded source ref.
+- Bootstrap sync now refreshes managed-file hashes without conflict when a
+  downstream-edited file already matches the regenerated upstream candidate.
 - Generated templates now ignore `.codex-bootstrap/nag-state.json`, and the
   sync contract is version 2 with `language-checks` marked manual opt-in for
   existing repos.
@@ -86,6 +88,9 @@ Use these buckets inside dated entries when they help:
   capsule-local `GRADLE_USER_HOME`, build cache, logs, locks, `--status`, `--repair`,
   generated-output hygiene, strict included-build materialization, and Supermeta
   rules cache cleaning.
+- Adjusted Supermeta Gradle generated-output hygiene to quarantine classpath
+  duplicate outputs with size-only manifests while removing generated report and
+  test-result copies without content hashing.
 - Added `min_package_depth` to the JavaScript/TypeScript package-size rule so
   templates can reject files placed directly at configured source roots.
 - Added focused verification lane selection and deterministic failure
@@ -104,6 +109,7 @@ Use these buckets inside dated entries when they help:
 
 - `python3 -m unittest discover -s tools/supermeta-check -p '*_test.py'`
 - `python3 -m unittest discover -s tools/supermeta-fix -p '*_test.py'`
+- `python3 -m unittest discover -s tools/supermeta-gradle -p '*_test.py'`
 - `PYTHONPATH=tools/supermeta-bootstrap python3 -m unittest discover -s tools/supermeta-bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/bootstrap -p '*_test.py'`
 - `python3 -m unittest discover -s tools/pages -p '*_test.py'`
