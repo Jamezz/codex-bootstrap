@@ -147,6 +147,7 @@ class RuleEnablementTest(unittest.TestCase):
                     "rust_module_item_count": [{"enabled": False}],
                     "rust_panic_boundary": [{"enabled": False}],
                     "project_callouts": [{"enabled": False}],
+                    "source_policy_coverage": [{"enabled": False}],
                 },
                 root,
             )
@@ -736,6 +737,34 @@ class FindingSeverityTest(unittest.TestCase):
             self.assertIn("Supermeta rule violations:", output.getvalue())
             self.assertIn("Supermeta rule advisories:", output.getvalue())
 
+    def test_json_output_reports_fixability_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "supermeta-rules.json"
+            config_path.write_text("{}", encoding="utf-8")
+            with patch.object(
+                check,
+                "run_rules",
+                return_value=[
+                    check.Finding(
+                        rule="java-wildcard-imports",
+                        path=Path("src/main/java/example/App.java"),
+                        message="explicit import java.util.List",
+                        fixability="auto",
+                        repair_hint="rewrite import",
+                    )
+                ],
+            ):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exit_code = check.main(["--json", "--config", str(config_path), "--root", str(root), "--full"])
+
+            payload = json.loads(output.getvalue())
+            self.assertEqual(1, exit_code)
+            self.assertEqual(1, payload["summary"]["errorCount"])
+            self.assertEqual("auto", payload["findings"][0]["fixability"])
+            self.assertEqual("rewrite import", payload["findings"][0]["repairHint"])
+
 
 @unittest.skipIf(shutil.which("git") is None, "git is required")
 class AutomaticWorkingSetTest(unittest.TestCase):
@@ -1165,6 +1194,77 @@ class ProjectCalloutRuleTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertFalse(marker.exists())
+
+
+class SourcePolicyCoverageRuleTest(unittest.TestCase):
+    def test_structural_rule_coverage_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/App.java", "package example;\nfinal class App {}\n")
+
+            findings = check.run_rules(source_policy_config(), root, skip_callouts=True)
+
+            self.assertEqual([], findings)
+
+    def test_callout_only_source_is_not_considered_covered(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/main/java/example/App.java", "package example;\nfinal class App {}\n")
+            config = {
+                "project_callouts": [
+                    {
+                        "name": "java-checkstyle",
+                        "language": "java",
+                        "paths": ["src/main/java"],
+                        "include": ["**/*.java"],
+                        "exclude": [],
+                        "command": [sys.executable, "-c", "pass"],
+                    }
+                ],
+                "source_policy_coverage": [source_policy_rule()],
+            }
+
+            findings = check.run_rules(config, root, skip_callouts=True)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual("source-policy-coverage", findings[0].rule)
+            self.assertEqual(Path("src/main/java/example/App.java"), findings[0].path)
+
+    def test_generated_source_can_be_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "src/generated/java/example/App.java", "package example;\nfinal class App {}\n")
+            config = {
+                "source_policy_coverage": [
+                    {
+                        **source_policy_rule(),
+                        "exclude": ["**/generated/**"],
+                    }
+                ]
+            }
+
+            findings = check.run_rules(config, root)
+
+            self.assertEqual([], findings)
+
+    def test_shebang_scripts_are_source_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "scripts/verify-tools", "#!/usr/bin/env bash\necho ok\n")
+
+            findings = check.run_rules({"source_policy_coverage": [source_policy_rule()]}, root)
+
+            self.assertEqual(1, len(findings))
+            self.assertEqual(Path("scripts/verify-tools"), findings[0].path)
+
+    def test_non_source_files_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_source(root, "README.md", "# docs\n")
+
+            findings = check.run_rules({"source_policy_coverage": [source_policy_rule()]}, root)
+
+            self.assertEqual([], findings)
 
 
 class RustModuleItemCountRuleTest(unittest.TestCase):
@@ -2609,6 +2709,30 @@ def javascript_package_count_config(max_files: int, min_package_depth: int | Non
         rule["min_package_depth"] = min_package_depth
     return {
         "javascript_package_file_count": [rule]
+    }
+
+
+def source_policy_rule() -> dict[str, object]:
+    return {
+        "name": "source-policy-coverage",
+        "paths": ["."],
+        "include": ["**/*"],
+        "exclude": [],
+    }
+
+
+def source_policy_config() -> dict[str, object]:
+    return {
+        "line_count": [
+            {
+                "name": "java-source",
+                "max_lines": 1000,
+                "paths": ["src/main/java"],
+                "include": ["**/*.java"],
+                "exclude": [],
+            }
+        ],
+        "source_policy_coverage": [source_policy_rule()],
     }
 
 

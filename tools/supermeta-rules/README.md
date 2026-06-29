@@ -22,6 +22,13 @@ The checker keeps a Git-metadata counter and promotes the next automatic working
 
 Use `--full` or `SUPERMETA_RULES_FULL=1` when a run must scan every matching file regardless of Git state.
 
+Use `--json` when wrappers need structured findings. JSON output includes each finding's `severity`, `fixability`, and
+`repairHint`. Fixability is conservative:
+
+- `auto`: safe for the Supermeta repair engine to apply directly.
+- `patch-only`: needs a source-aware patch and review.
+- `notify-only`: structural or semantic work that should be reported, not guessed.
+
 ## Persistent Analysis Cache
 
 Expensive per-file analysis is cached by default under `.gradle/supermeta-rules/cache-v1.json`, or under the path named
@@ -187,6 +194,36 @@ Rejects panic-prone constructs in production Rust source: `.unwrap(`, `.expect(`
       "include": ["**/*.rs"],
       "exclude": ["**/generated/**"],
       "allow_tests": true
+    }
+  ]
+}
+```
+
+### `source_policy_coverage`
+
+Checks that source-like files under a broad repo area are covered by at least one structural Supermeta rule. This is a
+guardrail for policy drift: adding a new language surface, script tree, build file, or frontend package should require a
+matching `line_count`, package-shape, repeated-helper, Rust, Java, or JavaScript structural rule instead of relying only
+on project callouts.
+
+`project_callouts` do not count as source policy coverage because they delegate to external tools and can be skipped,
+missing, or scoped differently from Supermeta's own file model. Generated, vendored, build-output, and dependency
+directories should be excluded explicitly.
+
+```json
+{
+  "source_policy_coverage": [
+    {
+      "name": "first-party-source-policy-coverage",
+      "paths": ["."],
+      "include": ["*", "**/*"],
+      "exclude": [
+        "**/build/**",
+        "**/generated/**",
+        "**/node_modules/**",
+        "**/target/**",
+        "**/vendor/**"
+      ]
     }
   ]
 }

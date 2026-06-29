@@ -28,6 +28,55 @@ DOMAIN_SPLIT_WARNING = (
     "Refactor with real, concrete, appropriate domain separation: split around "
     "coherent responsibilities and use names that describe the domain boundary."
 )
+STRUCTURAL_POLICY_RULE_KEYS = frozenset(
+    {
+        "java_import_style",
+        "java_lombok_boilerplate",
+        "java_package_class_count",
+        "javascript_package_file_count",
+        "line_count",
+        "repeated_helper_methods",
+        "rust_module_item_count",
+        "rust_panic_boundary",
+    }
+)
+KNOWN_RULE_KEYS = STRUCTURAL_POLICY_RULE_KEYS | frozenset({"project_callouts", "source_policy_coverage"})
+SOURCE_POLICY_FILENAMES = frozenset({"CMakeLists.txt", "Dockerfile", "Makefile"})
+SOURCE_POLICY_EXTENSIONS = frozenset(
+    {
+        ".bat",
+        ".bash",
+        ".c",
+        ".cc",
+        ".cjs",
+        ".cmake",
+        ".cpp",
+        ".css",
+        ".g4",
+        ".gradle",
+        ".groovy",
+        ".h",
+        ".hpp",
+        ".html",
+        ".java",
+        ".js",
+        ".jsx",
+        ".kt",
+        ".kts",
+        ".mjs",
+        ".proto",
+        ".ps1",
+        ".py",
+        ".rs",
+        ".scss",
+        ".sh",
+        ".sql",
+        ".swift",
+        ".ts",
+        ".tsx",
+        ".zsh",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -36,6 +85,8 @@ class Finding:
     path: Path
     message: str
     severity: str = "error"
+    fixability: str = "notify-only"
+    repair_hint: str = ""
 
 
 @dataclass(frozen=True)
@@ -496,6 +547,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"supermeta-rules: unknown finding severities: {', '.join(unknown_severities)}", file=sys.stderr)
         return 2
 
+    if args.json:
+        print_json_result(findings, errors, advisories)
+        return 1 if errors else 0
+
     if errors:
         print_findings("Supermeta rule violations:", errors)
         if advisories:
@@ -513,6 +568,36 @@ def print_findings(title: str, findings: list[Finding]) -> None:
     print(title)
     for finding in findings:
         print(f"- [{finding.rule}] {finding.path}: {finding.message}")
+
+
+def print_json_result(findings: list[Finding], errors: list[Finding], advisories: list[Finding]) -> None:
+    print(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "exitCode": 1 if errors else 0,
+                "summary": {
+                    "findingCount": len(findings),
+                    "errorCount": len(errors),
+                    "advisoryCount": len(advisories),
+                },
+                "findings": [finding_payload(finding) for finding in findings],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+def finding_payload(finding: Finding) -> dict[str, object]:
+    return {
+        "rule": finding.rule,
+        "path": finding.path.as_posix(),
+        "message": finding.message,
+        "severity": finding.severity,
+        "fixability": finding.fixability,
+        "repairHint": finding.repair_hint,
+    }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -552,6 +637,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--cache-report",
         action="store_true",
         help="Print source-analysis cache hit/miss stats.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print structured findings with fixability metadata.",
     )
     return parser.parse_args(argv)
 
@@ -663,6 +753,15 @@ def run_rules(
         )
     )
     findings.extend(
+        run_source_policy_coverage_rules(
+            config.get("source_policy_coverage", []),
+            config,
+            root,
+            progress=progress,
+            scan_context=scan_context,
+        )
+    )
+    findings.extend(
         run_project_callout_rules(
             config.get("project_callouts", []),
             root,
@@ -672,20 +771,7 @@ def run_rules(
         )
     )
 
-    unknown_rules = sorted(
-        set(config)
-        - {
-            "java_import_style",
-            "java_lombok_boilerplate",
-            "java_package_class_count",
-            "javascript_package_file_count",
-            "line_count",
-            "project_callouts",
-            "repeated_helper_methods",
-            "rust_module_item_count",
-            "rust_panic_boundary",
-        }
-    )
+    unknown_rules = sorted(set(config) - KNOWN_RULE_KEYS)
     if unknown_rules:
         raise ValueError(f"unknown rule keys: {', '.join(unknown_rules)}")
     scan_context.finish(progress=progress, cache_report=cache_report)
@@ -1004,6 +1090,7 @@ def run_line_count_rules(
                             f"{line_count} lines exceeds limit of {max_lines}; "
                             f"{DOMAIN_SPLIT_WARNING}"
                         ),
+                        repair_hint="Split the file around a real domain boundary.",
                     ),
                     progress,
                 )
@@ -1062,6 +1149,7 @@ def run_java_package_class_count_rules(
                             f"of {max_classes}; refactor this layer into cohesive subpackages "
                             "based on the system context"
                         ),
+                        repair_hint="Move types into cohesive subpackages instead of applying a mechanical rename.",
                     ),
                     progress,
                 )
@@ -1115,6 +1203,7 @@ def run_javascript_package_file_count_rules(
                             f"{package_unit} deep "
                             "using a cohesive domain subpackage"
                         ),
+                        repair_hint="Move the file into a cohesive domain subpackage.",
                     ),
                     progress,
                 )
@@ -1133,6 +1222,7 @@ def run_javascript_package_file_count_rules(
                             f"of {max_files}; refactor this layer into cohesive subpackages "
                             "based on the system context"
                         ),
+                        repair_hint="Move related files into cohesive subpackages.",
                     ),
                     progress,
                 )
@@ -1151,6 +1241,154 @@ def javascript_package_depth(source_file: Path, root: Path, paths: list[str]) ->
             continue
         depths.append(len(relative_parent.parts))
     return min(depths) if depths else 0
+
+
+@dataclass(frozen=True)
+class SourcePolicyCoverageSpec:
+    rule_type: str
+    name: str
+    paths: tuple[str, ...]
+    include: tuple[str, ...]
+    exclude: tuple[str, ...]
+
+
+def run_source_policy_coverage_rules(
+    rules: Any,
+    config: dict[str, Any],
+    root: Path,
+    progress: RuleProgress | None = None,
+    scan_context: RuleScanContext | None = None,
+) -> list[Finding]:
+    if not isinstance(rules, list):
+        raise ValueError("source_policy_coverage must be an array")
+
+    structural_specs = structural_policy_coverage_specs(config)
+    findings: list[Finding] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"source_policy_coverage[{index}]")
+        if not rule_is_enabled(rule):
+            continue
+        name = require_string(rule, "name", default=f"source_policy_coverage[{index}]")
+        paths = require_string_list(rule, "paths")
+        include = require_string_list(rule, "include", default=["**/*"])
+        exclude = require_string_list(rule, "exclude", default=[])
+
+        for source_file in iter_rule_files(
+            name,
+            root,
+            paths,
+            include,
+            exclude,
+            progress,
+            scan_context=scan_context,
+            narrow_to_working_set=False,
+        ):
+            if not is_source_policy_candidate(source_file):
+                continue
+            if structural_policy_covers_file(root, source_file, structural_specs):
+                continue
+            add_finding(
+                findings,
+                Finding(
+                    rule=name,
+                    path=source_file.relative_to(root),
+                    message=(
+                        "source file is not covered by an enabled structural Supermeta rule; "
+                        "add it to line_count/package/import/repeated-helper policy, or exclude it only "
+                        "when it is generated, vendored, or otherwise not first-party source"
+                    ),
+                    repair_hint="Add structural Supermeta coverage for this source family.",
+                ),
+                progress,
+            )
+
+    return findings
+
+
+def structural_policy_coverage_specs(config: dict[str, Any]) -> list[SourcePolicyCoverageSpec]:
+    specs: list[SourcePolicyCoverageSpec] = []
+    for rule_type in sorted(STRUCTURAL_POLICY_RULE_KEYS):
+        entries = config.get(rule_type, [])
+        if not isinstance(entries, list):
+            continue
+        if rule_type == "repeated_helper_methods":
+            specs.extend(repeated_helper_coverage_specs(entries))
+            continue
+        for index, raw_rule in enumerate(entries):
+            rule = require_object(raw_rule, f"{rule_type}[{index}]")
+            if not rule_is_enabled(rule):
+                continue
+            specs.append(
+                SourcePolicyCoverageSpec(
+                    rule_type=rule_type,
+                    name=require_string(rule, "name", default=rule_type),
+                    paths=tuple(require_string_list(rule, "paths")),
+                    include=tuple(require_string_list(rule, "include", default=default_include_for_rule(rule_type))),
+                    exclude=tuple(require_string_list(rule, "exclude", default=[])),
+                )
+            )
+    return specs
+
+
+def repeated_helper_coverage_specs(rules: list[Any]) -> list[SourcePolicyCoverageSpec]:
+    specs: list[SourcePolicyCoverageSpec] = []
+    for index, raw_rule in enumerate(rules):
+        rule = require_object(raw_rule, f"repeated_helper_methods[{index}]")
+        if not rule_is_enabled(rule):
+            continue
+        repeated_helper_config = parse_repeated_helper_config(rule, index)
+        for group in repeated_helper_config.groups:
+            specs.append(
+                SourcePolicyCoverageSpec(
+                    rule_type="repeated_helper_methods",
+                    name=f"{repeated_helper_config.name}:{group.name}",
+                    paths=group.paths,
+                    include=group.include,
+                    exclude=group.exclude,
+                )
+            )
+    return specs
+
+
+def default_include_for_rule(rule_type: str) -> list[str]:
+    if rule_type in {"java_import_style", "java_lombok_boilerplate", "java_package_class_count"}:
+        return ["**/*.java"]
+    if rule_type == "javascript_package_file_count":
+        return ["**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx"]
+    if rule_type in {"rust_module_item_count", "rust_panic_boundary"}:
+        return ["**/*.rs"]
+    return ["**/*"]
+
+
+def structural_policy_covers_file(root: Path, source_file: Path, specs: list[SourcePolicyCoverageSpec]) -> bool:
+    return any(matches_rule_spec(root, source_file, spec.paths, spec.include, spec.exclude) for spec in specs)
+
+
+def matches_rule_spec(
+    root: Path,
+    source_file: Path,
+    paths: tuple[str, ...],
+    include: tuple[str, ...],
+    exclude: tuple[str, ...],
+) -> bool:
+    relative_path = source_file.relative_to(root).as_posix()
+    return (
+        matches_configured_paths(root, source_file, list(paths))
+        and any(fnmatch.fnmatch(relative_path, pattern) for pattern in include)
+        and not any(fnmatch.fnmatch(relative_path, pattern) for pattern in exclude)
+    )
+
+
+def is_source_policy_candidate(source_file: Path) -> bool:
+    if source_file.name in SOURCE_POLICY_FILENAMES:
+        return True
+    if source_file.suffix in SOURCE_POLICY_EXTENSIONS:
+        return True
+    try:
+        with source_file.open("rb") as handle:
+            return handle.read(2) == b"#!"
+    except OSError:
+        return False
 
 
 def run_repeated_helper_method_rules(
@@ -1206,6 +1444,8 @@ def run_repeated_helper_method_rules(
                     path=finding.path,
                     message=finding.message,
                     severity=finding.severity,
+                    fixability="patch-only",
+                    repair_hint="Extract or reuse a shared helper instead of keeping duplicated helper bodies.",
                 ),
                 progress,
             )
@@ -1289,6 +1529,8 @@ def run_java_import_style_rules(
                             f"explicit import {normalized}; use "
                             f"{suggest_java_wildcard_import(normalized)} unless allowlisted"
                         ),
+                        fixability="auto",
+                        repair_hint="Supermeta can rewrite explicit Java imports to the configured wildcard import.",
                     ),
                     progress,
                 )
@@ -1480,6 +1722,8 @@ def find_lombok_method_boilerplate(
                     rule=rule_name,
                     path=relative_path,
                     message=f"{method.name}() is Lombok boilerplate; {lombok_suggestion(ignore_annotations)}",
+                    fixability="patch-only",
+                    repair_hint="Replace hand-written boilerplate with the appropriate Lombok annotation.",
                 )
             )
         elif is_builder_factory(method):
@@ -1488,6 +1732,8 @@ def find_lombok_method_boilerplate(
                     rule=rule_name,
                     path=relative_path,
                     message=f"{method.name}() is Lombok builder boilerplate; {lombok_suggestion(ignore_annotations)}",
+                    fixability="patch-only",
+                    repair_hint="Replace the hand-written builder factory with Lombok builder support.",
                 )
             )
 
@@ -1515,6 +1761,8 @@ def find_lombok_builder_boilerplate(
                     rule=rule_name,
                     path=relative_path,
                     message=f"Builder class is Lombok builder boilerplate; {lombok_suggestion(ignore_annotations)}",
+                    fixability="patch-only",
+                    repair_hint="Replace the builder class with Lombok builder support.",
                 )
             )
     return findings
@@ -1542,6 +1790,8 @@ def find_lombok_record_builder_requirement(
                     f"{class_block.name} is a record and should use Lombok @Builder for readability; "
                     f"{lombok_suggestion(ignore_annotations)}"
                 ),
+                fixability="patch-only",
+                repair_hint="Add Lombok builder support and update constructor call sites deliberately.",
             )
         )
     return findings
@@ -1592,6 +1842,8 @@ def find_lombok_record_constructor_calls(
                     rule=rule_name,
                     path=source_context.relative_path,
                     message=message,
+                    fixability="patch-only",
+                    repair_hint="Convert constructor call sites to builder calls with source review.",
                 )
             )
     return findings
