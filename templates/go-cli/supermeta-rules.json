@@ -1,0 +1,38 @@
+{
+  "line_count": [
+    {
+      "name": "product-source",
+      "max_lines": 1000,
+      "paths": ["."],
+      "include": ["*.go", "**/*.go"],
+      "exclude": ["**/generated/**"]
+    }
+  ],
+  "project_callouts": [
+    {
+      "name": "go-format",
+      "language": "go",
+      "paths": ["."],
+      "include": ["*.go", "**/*.go"],
+      "exclude": ["**/generated/**"],
+      "command": ["go", "run", "./tools/check-gofmt"]
+    },
+    {
+      "name": "go-vet",
+      "language": "go",
+      "paths": ["."],
+      "include": ["*.go", "**/*.go"],
+      "exclude": ["**/generated/**"],
+      "command": ["go", "vet", "./..."]
+    },
+    {
+      "name": "go-tests",
+      "language": "go",
+      "paths": ["."],
+      "include": ["*.go", "**/*.go"],
+      "exclude": ["**/generated/**"],
+      "command": ["go", "test", "./..."]
+    }
+  ]
+}
+

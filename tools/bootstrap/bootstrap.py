@@ -36,6 +36,7 @@ TEMPLATE_MANIFEST = "bootstrap-template.json"
 SUPPORTED_TEMPLATE_TYPES = {
     "csharp-dotnet-cli",
     "existing-repo-control",
+    "go-cli",
     "java-gradle-cli",
     "python-uv-cli",
     "rust-cargo-cli",
@@ -102,6 +103,7 @@ TEXT_SUFFIXES = {
     ".csproj",
     ".cts",
     ".editorconfig",
+    ".go",
     ".props",
     ".gitignore",
     ".java",
@@ -111,6 +113,7 @@ TEXT_SUFFIXES = {
     ".kts",
     ".lock",
     ".md",
+    ".mod",
     ".mjs",
     ".mts",
     ".properties",
@@ -119,6 +122,7 @@ TEXT_SUFFIXES = {
     ".rs",
     ".sh",
     ".slnx",
+    ".sum",
     ".targets",
     ".txt",
     ".toml",
@@ -563,6 +567,7 @@ def stage_template(plan: BootstrapPlan, staged_root: Path) -> None:
     rewriter = {
         "csharp-dotnet-cli": rewrite_csharp_template,
         "existing-repo-control": rewrite_existing_repo_template,
+        "go-cli": rewrite_go_template,
         "java-gradle-cli": rewrite_java_template,
         "python-uv-cli": rewrite_python_template,
         "rust-cargo-cli": rewrite_rust_template,
@@ -640,6 +645,15 @@ def rewrite_csharp_template(plan: BootstrapPlan, staged_root: Path) -> None:
         "csharpdotnetcli": project_name.lower(),
         "C# .NET CLI Template": plan.project_title,
         "CsharpDotnetCli": project_name,
+    }
+    rewrite_text_files(staged_root, replacements)
+    write_generated_docs(plan, staged_root)
+
+
+def rewrite_go_template(plan: BootstrapPlan, staged_root: Path) -> None:
+    replacements = common_replacements(plan) | {
+        plan.manifest.template_id: plan.config.project_name,
+        f"{plan.manifest.display_name} Template": plan.project_title,
     }
     rewrite_text_files(staged_root, replacements)
     write_generated_docs(plan, staged_root)
@@ -947,6 +961,8 @@ def windows_run_command(plan: BootstrapPlan) -> str:
         return ".\\scripts\\agent-bootstrap.ps1 sync --dry-run"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run"
+    if plan.manifest.template_type == "go-cli":
+        return "go run ."
     if plan.manifest.template_type == "rust-cargo-cli":
         return "cargo run --quiet"
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -963,6 +979,8 @@ def windows_run_with_args_command(plan: BootstrapPlan) -> str:
         return ".\\scripts\\agent-smart-check.ps1 --plan-only"
     if plan.manifest.template_type == "java-gradle-cli":
         return ".\\scripts\\agent-gradle.ps1 . run --args=\"example\""
+    if plan.manifest.template_type == "go-cli":
+        return "go run . \"example\""
     if plan.manifest.template_type == "rust-cargo-cli":
         return "cargo run --quiet -- \"example\""
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -987,6 +1005,8 @@ def windows_process_match(plan: BootstrapPlan) -> str:
         return "gradle"
     if plan.manifest.template_type == "python-uv-cli":
         return "uv"
+    if plan.manifest.template_type == "go-cli":
+        return "go"
     if plan.manifest.template_type == "rust-cargo-cli":
         return "cargo"
     return "bun"
@@ -1150,6 +1170,8 @@ def generated_readme(plan: BootstrapPlan) -> str:
         return generated_existing_repo_readme(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_readme(plan)
+    if plan.manifest.template_type == "go-cli":
+        return generated_go_readme(plan)
     if plan.manifest.template_type == "rust-cargo-cli":
         return generated_rust_readme(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -1192,6 +1214,74 @@ Add repository-specific lanes in `.codex-bootstrap/checks.local.json`.
 ## Agent Workflow
 
 Agents should start by reading `AGENTS.md`, then inspect `.codex-bootstrap/checks.local.json` for project-specific verification lanes.
+"""
+
+
+def generated_go_readme(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title}
+
+{title} is a compact Go command-line project with unit tests, gofmt, go vet, first-class runtime logging, agent notes, and a deterministic verification path.
+
+## Prerequisites
+
+- Go 1.26 or newer on PATH, including gofmt;
+- network access is not required because the starter has no external dependencies.
+
+## Usage
+
+Run the app:
+
+~~~bash
+go run .
+~~~
+
+Pass application arguments:
+
+~~~bash
+go run . "Ada Lovelace"
+~~~
+
+Run tests:
+
+~~~bash
+go test ./...
+~~~
+
+Run the full verification lifecycle:
+
+~~~bash
+./scripts/check
+~~~
+
+{generated_logging_readme_section().replace("<run-command>", "go run .")}
+
+{generated_agent_coordination_readme_section(check_command(plan))}
+{generated_nag_docs_region()}
+{generated_velocity_readme_region(check_command(plan))}
+{generated_windows_readme_section(plan)}
+## Customization
+
+- Keep CLI behavior in cli.go and process setup in main.go.
+- Keep runtime logging in logging.go.
+- Keep the format checker in tools/check-gofmt.
+- Keep the Go module declaration in go.mod.
+- Keep product source files under 1000 lines or less.
+- Keep reusable project checks in supermeta-rules.json and the shared Supermeta rule helper.
+- Keep formatting in gofmt, static checks in go vet, and behavior checks in go test ./...
+- Keep the starter dependency-free until product requirements justify a module dependency.
+
+## First Useful Edit
+
+Extend the CLI behavior in cli.go, update cli_test.go first or in the same change, then run:
+
+~~~bash
+./scripts/check
+go run . example
+~~~
+
+{generated_project_docs_section()}
+{generated_bootstrap_sync_region(check_command(plan))}
 """
 
 
@@ -1392,6 +1482,8 @@ def generated_agents(plan: BootstrapPlan) -> str:
         return generated_existing_repo_agents(plan)
     if plan.manifest.template_type == "python-uv-cli":
         return generated_python_agents(plan)
+    if plan.manifest.template_type == "go-cli":
+        return generated_go_agents(plan)
     if plan.manifest.template_type == "rust-cargo-cli":
         return generated_rust_agents(plan)
     if plan.manifest.template_type == "typescript-bun-mcp-server":
@@ -1424,6 +1516,49 @@ This is an existing repository adopted into the Codex Bootstrap control plane. D
 - Put project-specific verification lanes in `.codex-bootstrap/checks.local.json`.
 - Use `./scripts/agent-bootstrap sync --dry-run` before applying Bootstrap-managed updates.
 - Prefer local opt-outs or local check-policy overrides over editing managed Bootstrap files directly.
+"""
+
+
+def generated_go_agents(plan: BootstrapPlan) -> str:
+    title = plan.project_title
+    return f"""# {title} Agent Notes
+
+This is a standalone Go CLI project. Keep it compact, test-covered, and easy for the next agent to verify.
+
+## Commands
+
+- Verify: ./scripts/check
+- Format check: go run ./tools/check-gofmt
+- Vet: go vet ./...
+- Test: go test ./...
+- Run: go run .
+- Run with app args: go run . "example"
+- Run with text logs: LOG_LEVEL=info go run .
+- Run with JSON logs: LOG_LEVEL=info LOG_FORMAT=json go run .
+- Beans prime: ./scripts/agent-beans prime
+- Beans check: ./scripts/agent-beans check
+- Ready backlog: ./scripts/agent-beans list --ready
+- Inspect Go processes: ./scripts/agent-task ps --match go
+
+{generated_windows_agent_section(plan)}
+{generated_agent_beans_section()}
+{generated_agent_coordination_agent_section(check_command(plan))}
+{generated_agent_nag_section()}
+{generated_velocity_agent_region(check_command(plan))}
+{generated_agent_sync_region(check_command(plan))}
+## Rules
+
+- Target Go 1.26 through go.mod unless the project intentionally chooses a different runtime floor.
+- Keep CLI behavior in cli.go and process setup in main.go.
+- Keep runtime logging in logging.go.
+{generated_logging_agent_rules()}
+- Keep product source files under 1000 lines or less.
+- Keep reusable checks and project callouts in supermeta-rules.json and the shared Supermeta rule helper.
+- Route formatting through gofmt, static checks through go vet, and behavior checks through go test ./...
+- Use ./scripts/check for agent verification unless debugging one tool directly.
+- Keep the starter dependency-free until product requirements justify a module dependency.
+- Extend the sample CLI into real behavior early, and keep tests updated with that change.
+- Prefer clean new-project conventions over compatibility with starter mistakes.
 """
 
 
@@ -2060,6 +2195,8 @@ def logging_runtime_implementation(plan: BootstrapPlan) -> str:
         return "Java uses SLF4J with Logback configured by `LoggingConfig`."
     if plan.manifest.template_type == "python-uv-cli":
         return "Python uses the standard `logging` package configured by `logging_config.py`."
+    if plan.manifest.template_type == "go-cli":
+        return "Go uses the dependency-free starter logger in `logging.go`."
     if plan.manifest.template_type == "rust-cargo-cli":
         return "Rust uses the dependency-free starter logger in `src/logging.rs`."
     return "TypeScript uses Pino configured by `src/logging.ts`."

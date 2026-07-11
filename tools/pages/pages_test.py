@@ -97,6 +97,7 @@ class InstallerTest(unittest.TestCase):
             self.assertIn("existing-repo-control: Existing Repo Control Plane", result.stdout)
             self.assertIn("python-uv-cli: Python uv CLI", result.stdout)
             self.assertIn("rust-cargo-cli: Rust Cargo CLI", result.stdout)
+            self.assertIn("go-cli: Go CLI", result.stdout)
             self.assertIn("typescript-bun-cli: TypeScript Bun CLI", result.stdout)
             self.assertIn(
                 "typescript-bun-mcp-server: TypeScript Bun MCP Server",
@@ -133,6 +134,7 @@ class InstallerTest(unittest.TestCase):
             ("java-gradle-cli", "java-app"),
             ("python-uv-cli", "python-app"),
             ("rust-cargo-cli", "rust-app"),
+            ("go-cli", "go-app"),
             ("typescript-bun-cli", "typescript-app"),
             ("typescript-bun-mcp-server", "mcp-app"),
         ]
@@ -189,6 +191,7 @@ class InstallerTest(unittest.TestCase):
                 (install_root / "python-app" / "src" / "python_app" / "cli.py").is_file()
             )
             self.assertTrue((install_root / "rust-app" / "src" / "main.rs").is_file())
+            self.assertTrue((install_root / "go-app" / "main.go").is_file())
             self.assertTrue((install_root / "typescript-app" / "src" / "cli.ts").is_file())
             self.assertTrue((install_root / "mcp-app" / "src" / "mcp.ts").is_file())
 

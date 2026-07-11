@@ -32,6 +32,8 @@ This repository contains Codex-ready bootstrap environments. Treat each template
 - Java template run: `./scripts/agent-gradle templates/java-gradle-cli run`
 - Rust template check: `cd templates/rust-cargo-cli && ./scripts/check`
 - Rust template run: `cd templates/rust-cargo-cli && cargo run --quiet`
+- Go template check: `cd templates/go-cli && ./scripts/check`
+- Go template run: `cd templates/go-cli && go run .`
 
 ## Naming
 

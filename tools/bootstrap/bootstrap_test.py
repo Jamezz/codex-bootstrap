@@ -323,6 +323,27 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("tools/supermeta-nag/nag.py", manifest.sync_contract.managed_files)
         assert_velocity_manifest_contract(self, manifest)
 
+    def test_loads_go_template_manifest(self) -> None:
+        manifest = TemplateManifest.load(REPO_ROOT, "go-cli")
+        rust_manifest = TemplateManifest.load(REPO_ROOT, "rust-cargo-cli")
+
+        self.assertEqual("go-cli", manifest.template_id)
+        self.assertEqual("go-cli", manifest.template_type)
+        self.assertEqual(("name",), manifest.required_inputs)
+        self.assertIn("./scripts/check", manifest.verification_commands)
+        self.assertIn("go run .", manifest.verification_commands)
+        self.assertIn("Go CLI", manifest.generated_docs.summary)
+        self.assertIn("main.go", manifest.generated_docs.entrypoints)
+        self.assertIn("logging.go", manifest.generated_docs.entrypoints)
+        self.assertEqual(
+            [path.source for path in rust_manifest.support_paths],
+            [path.source for path in manifest.support_paths],
+        )
+        self.assertIn("scripts/agent-bootstrap", manifest.sync_contract.managed_files)
+        self.assertIn("scripts/agent-nag", manifest.sync_contract.managed_files)
+        self.assertIn("tools/supermeta-rules/check.py", manifest.sync_contract.managed_files)
+        assert_velocity_manifest_contract(self, manifest)
+
     def test_loads_typescript_template_manifest(self) -> None:
         manifest = TemplateManifest.load(REPO_ROOT, "typescript-bun-cli")
 
@@ -1034,6 +1055,87 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Do not use `.unwrap()`", read_text(checkout / "AGENTS.md"))
 
             example_run = run_checked(["cargo", "run", "--quiet", "--", "Ada"], cwd=checkout, timeout=180)
+            self.assertIn("Hello, Ada!", example_run.stdout)
+
+    @unittest.skipIf(shutil.which("go") is None, "go is required for Go template smoke test")
+    @unittest.skipIf(shutil.which("git") is None, "git is required for bootstrap smoke test")
+    def test_bootstrap_rewrites_go_template_into_standalone_project(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="codex-bootstrap-go-smoke-") as temp_dir:
+            temp_root = Path(temp_dir)
+            checkout = temp_root / "sample-app"
+            copy_bootstrap_checkout(checkout)
+            initialize_fake_origin(checkout)
+
+            run_checked(
+                [
+                    "./bootstrap",
+                    "--template",
+                    "go-cli",
+                    "--name",
+                    "sample-app",
+                    "--yes",
+                ],
+                cwd=checkout,
+            )
+
+            assert_catalog_removed(self, checkout)
+            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-task").is_file())
+            self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
+            self.assertTrue((checkout / "tools" / "check-gofmt" / "main.go").is_file())
+            self.assertIn("module sample-app", read_text(checkout / "go.mod"))
+            self.assertTrue((checkout / "main.go").is_file())
+            self.assertTrue((checkout / "cli.go").is_file())
+            self.assertTrue((checkout / "logging.go").is_file())
+            self.assertTrue((checkout / "cli_test.go").is_file())
+            self.assertTrue((checkout / "logging_test.go").is_file())
+
+            readme = read_text(checkout / "README.md")
+            agents = read_text(checkout / "AGENTS.md")
+            self.assertIn("# Sample App", readme)
+            self.assertIn("go run .", readme)
+            self.assertIn("./scripts/check", readme)
+            self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
+            self.assertIn("# Sample App Agent Notes", agents)
+            self.assertIn("Target Go 1.26", agents)
+            self.assertIn("go vet ./...", agents)
+            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("## Bootstrap Sync", readme)
+            self.assertIn("## Bootstrap Sync", agents)
+            assert_generated_upstream_suggestion_contract(self, readme, agents)
+            assert_generated_operational_baseline(self, checkout)
+            self.assertIn("Go uses the dependency-free starter logger", read_text(checkout / "docs" / "ARCHITECTURE.md"))
+            checks = json.loads(read_text(checkout / ".codex-bootstrap" / "checks.json"))
+            lanes_by_id = {lane["id"]: lane for lane in checks["lanes"]}
+            self.assertEqual(["go"], lanes_by_id["go-test"]["requires"])
+            self.assertEqual(["go"], lanes_by_id["go-quality"]["requires"])
+            self.assertEqual(["go"], lanes_by_id["full"]["requires"])
+
+            run_checked(["./scripts/check"], cwd=checkout, timeout=360)
+            generated_run = run_checked(["go", "run", "."], cwd=checkout, timeout=360)
+            self.assertIn("Hello, world!", generated_run.stdout)
+            self.assertNotIn("command completed", generated_run.stdout)
+            logged_run = run_checked(
+                ["go", "run", "."],
+                cwd=checkout,
+                timeout=360,
+                env={"LOG_LEVEL": "info", "LOG_FORMAT": "json"},
+            )
+            self.assertIn('"exitCode":0', logged_run.stdout)
+            self.assertIn('"message":"command completed"', logged_run.stdout)
+            binary = checkout / "sample-app"
+            run_checked(["go", "build", "-o", str(binary), "."], cwd=checkout, timeout=360)
+            bad_log_config = run_unchecked(
+                [str(binary)],
+                cwd=checkout,
+                timeout=360,
+                env={"LOG_LEVEL": "verbose"},
+            )
+            self.assertEqual(2, bad_log_config.returncode)
+            self.assertIn("Logging configuration error: invalid LOG_LEVEL", bad_log_config.stdout)
+
+            example_run = run_checked(["go", "run", ".", "Ada"], cwd=checkout, timeout=360)
             self.assertIn("Hello, Ada!", example_run.stdout)
 
     @unittest.skipIf(shutil.which("dotnet") is None, "dotnet is required for C# template smoke test")

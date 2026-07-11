@@ -261,6 +261,33 @@ def default_check_lanes(template_type: str) -> list[dict[str, object]]:
             ),
             full_lane("Complete Rust verification.", [["./scripts/check"]], ["cargo"], 600),
         ]
+    if template_type == "go-cli":
+        return [
+            lane(
+                "go-test",
+                "Go source or tests changed.",
+                ["*.go", "**/*.go"],
+                [["go", "test", "./..."]],
+                cost="fast",
+                tags=["go", "test"],
+                requires=["go"],
+                timeout_seconds=120,
+            ),
+            lane(
+                "go-quality",
+                "Go quality configuration or source changed.",
+                ["*.go", "**/*.go", "go.mod", "supermeta-rules.json"],
+                [
+                    ["go", "run", "./tools/check-gofmt"],
+                    ["go", "vet", "./..."],
+                ],
+                cost="standard",
+                tags=["go", "quality"],
+                requires=["go"],
+                timeout_seconds=240,
+            ),
+            full_lane("Complete Go verification.", [["./scripts/check"]], ["go"], 600),
+        ]
     if template_type == "typescript-bun-mcp-server":
         source_paths = [
             "src/mcp.ts",

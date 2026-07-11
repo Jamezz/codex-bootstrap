@@ -1,0 +1,452 @@
+{
+  "id": "go-cli",
+  "displayName": "Go CLI",
+  "description": "A compact Go command-line project with unit tests, gofmt, go vet, first-class runtime logging, agent notes, and a deterministic verification path.",
+  "type": "go-cli",
+  "requiredInputs": [
+    "name"
+  ],
+  "supportPaths": [
+    {
+      "source": "scripts/agent-bootstrap",
+      "destination": "scripts/agent-bootstrap"
+    },
+    {
+      "source": "scripts/agent-bootstrap.ps1",
+      "destination": "scripts/agent-bootstrap.ps1"
+    },
+    {
+      "source": "scripts/agent-beans",
+      "destination": "scripts/agent-beans"
+    },
+    {
+      "source": "scripts/agent-beans.ps1",
+      "destination": "scripts/agent-beans.ps1"
+    },
+    {
+      "source": "scripts/agent-coord",
+      "destination": "scripts/agent-coord"
+    },
+    {
+      "source": "scripts/agent-coord.ps1",
+      "destination": "scripts/agent-coord.ps1"
+    },
+    {
+      "source": "scripts/agent-nag",
+      "destination": "scripts/agent-nag"
+    },
+    {
+      "source": "scripts/agent-nag.ps1",
+      "destination": "scripts/agent-nag.ps1"
+    },
+    {
+      "source": "scripts/agent-task",
+      "destination": "scripts/agent-task"
+    },
+    {
+      "source": "scripts/agent-task.ps1",
+      "destination": "scripts/agent-task.ps1"
+    },
+    {
+      "source": "scripts/agent-smart-check",
+      "destination": "scripts/agent-smart-check"
+    },
+    {
+      "source": "scripts/agent-smart-check.ps1",
+      "destination": "scripts/agent-smart-check.ps1"
+    },
+    {
+      "source": "scripts/agent-fix-loop",
+      "destination": "scripts/agent-fix-loop"
+    },
+    {
+      "source": "scripts/agent-fix-loop.ps1",
+      "destination": "scripts/agent-fix-loop.ps1"
+    },
+    {
+      "source": "tools/supermeta-check",
+      "destination": "tools/supermeta-check"
+    },
+    {
+      "source": "tools/supermeta-fix",
+      "destination": "tools/supermeta-fix"
+    },
+    {
+      "source": "tools/supermeta-agent",
+      "destination": "tools/supermeta-agent"
+    },
+    {
+      "source": "tools/supermeta-beans",
+      "destination": "tools/supermeta-beans"
+    },
+    {
+      "source": "tools/supermeta-task",
+      "destination": "tools/supermeta-task"
+    },
+    {
+      "source": "tools/supermeta-rules",
+      "destination": "tools/supermeta-rules"
+    },
+    {
+      "source": "tools/supermeta-bootstrap",
+      "destination": "tools/supermeta-bootstrap"
+    },
+    {
+      "source": "tools/supermeta-nag",
+      "destination": "tools/supermeta-nag"
+    }
+  ],
+  "verificationCommands": [
+    "./scripts/check",
+    "go run ."
+  ],
+  "generatedDocs": {
+    "summary": "This is a compact Go CLI project with unit tests, gofmt, go vet, first-class runtime logging, agent notes, generated operations docs, and a deterministic verification path.",
+    "runtime": "Go owns compilation, test execution, formatting, vetting, and runtime execution. Runtime logging is implemented in the starter with quiet text logs on stderr by default and JSON logs controlled by LOG_LEVEL and LOG_FORMAT. scripts/check ties Supermeta rules, the format check, go vet, and tests into one agent verification path.",
+    "entrypoints": [
+      "main.go",
+      "cli.go",
+      "logging.go",
+      "tools/check-gofmt/main.go",
+      "go.mod module"
+    ],
+    "sourceRoots": [
+      "main.go",
+      "cli.go",
+      "logging.go",
+      "tools/check-gofmt"
+    ],
+    "testRoots": [
+      "*_test.go",
+      "supermeta-rules.json"
+    ],
+    "verificationCommands": [
+      "./scripts/check"
+    ],
+    "runCommands": [
+      "go run .",
+      "go run . \"Ada Lovelace\"",
+      "LOG_LEVEL=info LOG_FORMAT=json go run ."
+    ],
+    "firstUsefulEdit": "Extend cli.go, update cli_test.go first or in the same change, then rerun ./scripts/check."
+  },
+  "syncContract": {
+    "version": 2,
+    "managedSets": [
+      {
+        "id": "agent-scripts",
+        "description": "Agent wrapper scripts and bootstrap sync entrypoints.",
+        "files": [
+          {
+            "path": "scripts/agent-bootstrap",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-bootstrap.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-beans.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-coord",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-coord.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-task.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "agent-nags",
+        "description": "Agent reminder policy, nag wrappers, and hook implementation.",
+        "files": [
+          {
+            "path": "scripts/agent-nag",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-nag.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/nag.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/nag_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-nag/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": ".codex-bootstrap/nags.json",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/agent-nags"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/agent-nags"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/agent-nags"
+          }
+        ]
+      },
+      {
+        "id": "velocity-tools",
+        "description": "Focused verification and failure-diagnostic helpers for fast agent inner loops.",
+        "files": [
+          {
+            "path": "scripts/agent-smart-check",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-smart-check.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-fix-loop",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/agent-fix-loop.ps1",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/check_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/hygiene.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/hygiene_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-check/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/fix.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/fix_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-fix/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": ".codex-bootstrap/checks.json",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/velocity-tools"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/velocity-tools"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/velocity-tools"
+          }
+        ]
+      },
+      {
+        "id": "supermeta-tools",
+        "description": "Shared Supermeta support tools copied into generated projects.",
+        "files": [
+          {
+            "path": "tools/supermeta-bootstrap/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_sync_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/__init__.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/agent.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/agent_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-agent/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/beans_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beans/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/task_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-task/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/cache.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/cache_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/repeated_helpers.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/repeated_helpers_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/requirements.txt",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/workspace.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/check_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-rules/README.md",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-bootstrap/bootstrap_adopt.py",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      },
+      {
+        "id": "generated-docs",
+        "description": "Generated bootstrap sync instructions in project docs.",
+        "files": [],
+        "regions": [
+          {
+            "path": "README.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "AGENTS.md",
+            "id": "generated-docs/bootstrap-sync"
+          },
+          {
+            "path": "docs/OPERATIONS.md",
+            "id": "generated-docs/bootstrap-sync"
+          }
+        ]
+      },
+      {
+        "id": "language-checks",
+        "autoEnable": false,
+        "description": "Template verification and reusable rule configuration.",
+        "files": [
+          {
+            "path": "supermeta-rules.json",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check",
+            "mode": "whole-file"
+          },
+          {
+            "path": "scripts/check.ps1",
+            "mode": "whole-file"
+          }
+        ],
+        "regions": []
+      }
+    ],
+    "verificationCommands": [
+      "./scripts/agent-bootstrap sync --dry-run",
+      "./scripts/check"
+    ],
+    "migrationNotes": []
+  }
+}

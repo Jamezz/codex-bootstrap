@@ -7,6 +7,7 @@ The repo currently ships:
 - `environments/supermeta/`: the meta environment that explains how this catalog is organized and what new environments must provide.
 - `templates/csharp-dotnet-cli/`: a C# .NET command-line starter with xUnit tests, first-class runtime logging, and a deterministic verification path.
 - `templates/existing-repo-control/`: a non-destructive control-plane adoption package for bringing existing repositories under Bootstrap-managed scripts, sync metadata, and Supermeta tooling.
+- `templates/go-cli/`: a Go command-line starter with unit tests, gofmt, go vet, first-class runtime logging, and a deterministic verification path.
 - `templates/java-gradle-cli/`: a Java Gradle command-line starter with tests, first-class runtime logging, and a deterministic verification path.
 - `templates/python-uv-cli/`: a Python uv command-line starter with pytest, Ruff, mypy, first-class runtime logging, and a deterministic verification path.
 - `templates/rust-cargo-cli/`: a Rust Cargo command-line starter with unit tests, Clippy, rustfmt, first-class runtime logging, and a deterministic verification path.
@@ -85,6 +86,9 @@ Other starter variants:
 ./bootstrap --template rust-cargo-cli --name my-service
 ./scripts/check
 
+./bootstrap --template go-cli --name my-service
+./scripts/check
+
 ./bootstrap --template typescript-bun-cli --name my-service
 ./scripts/check
 
@@ -103,6 +107,7 @@ Use `--dry-run` to inspect the plan first:
 ./bootstrap --template java-gradle-cli --name my-service --package com.example.myservice --dry-run
 ./bootstrap --template python-uv-cli --name my-service --dry-run
 ./bootstrap --template rust-cargo-cli --name my-service --dry-run
+./bootstrap --template go-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-cli --name my-service --dry-run
 ./bootstrap --template typescript-bun-mcp-server --name my-mcp-server --dry-run
 ./bootstrap --template csharp-dotnet-cli --name my-service --dry-run
@@ -313,6 +318,7 @@ site/
 templates/
   csharp-dotnet-cli/
   existing-repo-control/
+  go-cli/
   java-gradle-cli/
   python-uv-cli/
   rust-cargo-cli/
@@ -373,6 +379,14 @@ Verify the Rust starter in catalog form with:
 cd templates/rust-cargo-cli
 ./scripts/check
 cargo run --quiet
+```
+
+Verify the Go starter in catalog form with:
+
+```bash
+cd templates/go-cli
+./scripts/check
+go run .
 ```
 
 Verify the TypeScript starter in catalog form with:
