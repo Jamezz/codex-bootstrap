@@ -8,3 +8,9 @@ __pycache__/
 .codex-bootstrap/fix-loop/
 .codex-bootstrap/cleanup-quarantine/
 build/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
