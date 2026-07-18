@@ -15,8 +15,8 @@ This is a copyable MCP server starter, not a long-lived framework.
 - Run with file state from repo root: `cd templates/typescript-bun-mcp-server && bun run src/main.ts --state file --state-file .mcp/state.json`
 - Run with text logs: `cd templates/typescript-bun-mcp-server && LOG_LEVEL=info bun run src/main.ts --transport http`
 - Run with JSON logs: `cd templates/typescript-bun-mcp-server && LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts --transport http`
-- Beans prime after materialization: `./scripts/agent-beans prime`
-- Beans check after materialization: `./scripts/agent-beans check`
+- Beads prime after materialization: `./scripts/agent-beads prime`
+- Beads ready work after materialization: `./scripts/agent-beads ready --json`
 - Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
@@ -27,7 +27,7 @@ This is a copyable MCP server starter, not a long-lived framework.
 
 - Verify from template root: `.\scripts\check.ps1`
 - Show server help from template root: `bun run src/main.ts --help`
-- Beans prime after materialization: `.\scripts\agent-beans.ps1 prime`
+- Beads prime after materialization: `.\scripts\agent-beads.ps1 prime`
 - Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect Bun processes after materialization: `.\scripts\agent-task.ps1 ps --match bun`
 
@@ -42,7 +42,7 @@ This is a copyable MCP server starter, not a long-lived framework.
 - Keep runtime logging in `src/logging.ts`; `LOG_LEVEL` and `LOG_FORMAT` are the public knobs.
 - Keep product source files under `src/` at 1000 lines or less.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
-- Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
+- Keep generated-doc metadata and Beads support paths aligned in `bootstrap-template.json`.
 - Route formatting and linting through Biome, type checking through `tsc --noEmit`, and behavior checks through `bun test`.
 - Keep the `typecheck`, `lint`, and `format` package scripts Bun-invoked so a stale global Node install cannot break verification.
 - Use `./scripts/check` for agent verification unless debugging one tool directly.

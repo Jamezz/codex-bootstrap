@@ -84,7 +84,7 @@ class PolicyLoadingTest(unittest.TestCase):
                             "cadence": "per-run",
                             "action": "suggest-command",
                             "message": "Refresh task context before handoff.",
-                            "commands": [["./scripts/agent-beans", "check"]],
+                            "commands": [["./scripts/agent-beads", "ready", "--json"]],
                         }
                     ],
                 },
@@ -97,7 +97,7 @@ class PolicyLoadingTest(unittest.TestCase):
             self.assertEqual(("post-run-backlog-check",), tuple(policy.nags))
             self.assertEqual("post-run", policy.nags["post-run-backlog-check"].hook)
             self.assertEqual(
-                (("./scripts/agent-beans", "check"),),
+                (("./scripts/agent-beads", "ready", "--json"),),
                 policy.nags["post-run-backlog-check"].commands,
             )
 
@@ -258,7 +258,7 @@ def write_default_policy(root: Path) -> None:
                     "cadence": "per-run",
                     "action": "suggest-command",
                     "message": "Refresh task context before handoff.",
-                    "commands": [["./scripts/agent-beans", "check"]],
+                    "commands": [["./scripts/agent-beads", "ready", "--json"]],
                 }
             ],
         },
@@ -650,7 +650,7 @@ class HookEvaluationTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertIn("agent-nag: post-run-backlog-check", output.getvalue())
-            self.assertIn("./scripts/agent-beans check", output.getvalue())
+            self.assertIn("./scripts/agent-beads ready --json", output.getvalue())
             state = json.loads((root / ".codex-bootstrap" / "nag-state.json").read_text(encoding="utf-8"))
             self.assertEqual("2026-05-23T20:00:00Z", state["nags"]["post-run-backlog-check"]["lastShownAt"])
 
@@ -1700,7 +1700,7 @@ def default_nag_policy() -> dict[str, object]:
                 "cadence": "per-run",
                 "action": "suggest-command",
                 "message": "Wrapped execution completed. Refresh task context before handoff.",
-                "commands": [["./scripts/agent-beans", "check"]],
+                "commands": [["./scripts/agent-beads", "ready", "--json"]],
             },
             {
                 "id": "post-failure-diagnostics",
@@ -1711,14 +1711,14 @@ def default_nag_policy() -> dict[str, object]:
                 "message": "Command failed. Inspect task state before retrying.",
                 "commands": [
                     ["./scripts/agent-task", "ps"],
-                    ["./scripts/agent-beans", "list", "--ready"],
+                    ["./scripts/agent-beads", "ready", "--json"],
                 ],
             },
         ],
     }
 ```
 
-Call `write_nag_policy_files(staged_root)` from `write_generated_project_docs_and_state` after `write_generated_beans(plan, staged_root)`.
+Call `write_nag_policy_files(staged_root)` from `write_generated_project_docs_and_state` after `write_generated_beads(plan, staged_root)`.
 
 - [ ] **Step 5: Generate managed nag docs regions**
 

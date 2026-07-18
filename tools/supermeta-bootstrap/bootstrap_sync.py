@@ -6,7 +6,10 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import hashlib
+import importlib.util
 import json
+import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -18,11 +21,20 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 SYNC_METADATA = Path(".codex-bootstrap/sync.json")
 REPORTS_DIR = Path(".codex-bootstrap/reports")
 TEMPLATE_MANIFEST = "bootstrap-template.json"
 DEFAULT_TIMEOUT_SECONDS = 300
+BEANS_MIGRATION_ID = "beans-to-beads-v1"
+RETIRED_BEANS_PATHS = (
+    ".beans.yml",
+    ".beans",
+    "scripts/agent-beans",
+    "scripts/agent-beans.ps1",
+    "tools/supermeta-beans",
+)
 
 
 class SyncError(Exception):
@@ -57,6 +69,7 @@ class SyncMetadata:
     managed_files: dict[str, ManagedFileState]
     managed_regions: dict[str, ManagedRegionState]
     verification_commands: tuple[str, ...]
+    applied_migrations: tuple[str, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -87,6 +100,7 @@ class SyncMetadata:
                 for key, state in sorted(self.managed_regions.items())
             },
             "verificationCommands": list(self.verification_commands),
+            "appliedMigrations": list(self.applied_migrations),
         }
 
 
@@ -122,6 +136,7 @@ class SyncContract:
     managed_sets: dict[str, ManagedSetSpec]
     verification_commands: tuple[str, ...]
     migration_notes: tuple[str, ...]
+    migrations: tuple["MigrationSpec", ...] = ()
 
     @property
     def managed_files(self) -> dict[str, ManagedFileSpec]:
@@ -160,6 +175,20 @@ class RegionChange:
 
 
 @dataclass(frozen=True)
+class MigrationSpec:
+    migration_id: str
+    from_max_contract_version: int
+
+
+@dataclass(frozen=True)
+class MigrationChange:
+    migration_id: str
+    new_jsonl: str
+    issue_count: int
+    retired_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class SyncConflict:
     path: str
     reason: str
@@ -170,13 +199,16 @@ class SyncPlan:
     new_managed_sets: tuple[str, ...]
     file_changes: tuple[FileChange, ...]
     region_changes: tuple[RegionChange, ...]
+    migration_changes: tuple[MigrationChange, ...]
     conflicts: tuple[SyncConflict, ...]
     migration_notes: tuple[str, ...]
     verification_commands: tuple[str, ...]
 
     @property
     def has_changes(self) -> bool:
-        return bool(self.new_managed_sets or self.file_changes or self.region_changes)
+        return bool(
+            self.new_managed_sets or self.file_changes or self.region_changes or self.migration_changes
+        )
 
     @property
     def has_conflicts(self) -> bool:
@@ -194,9 +226,9 @@ def load_sync_metadata(root: Path) -> SyncMetadata:
         raise SyncError("missing .codex-bootstrap/sync.json; this project is not sync-enabled")
     raw = load_json_object(metadata_path)
     schema_version = require_int(raw, "schemaVersion")
-    if schema_version != SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise SyncError(
-            f"unsupported sync schema {schema_version}; supported schema is {SCHEMA_VERSION}"
+            f"unsupported sync schema {schema_version}; supported schemas are {SUPPORTED_SCHEMA_VERSIONS}"
         )
     source = require_object(raw, "source")
     template = require_object(raw, "template")
@@ -229,6 +261,7 @@ def load_sync_metadata(root: Path) -> SyncMetadata:
         managed_files=managed_files,
         managed_regions=managed_regions,
         verification_commands=tuple(require_string_list(raw, "verificationCommands")),
+        applied_migrations=tuple(require_string_list(raw, "appliedMigrations", allow_missing=True)),
     )
 
 
@@ -269,6 +302,13 @@ def load_sync_contract(catalog_root: Path, template_id: str) -> SyncContract:
         managed_sets=managed_sets,
         verification_commands=tuple(require_string_list(sync_raw, "verificationCommands")),
         migration_notes=tuple(require_string_list(sync_raw, "migrationNotes")),
+        migrations=tuple(
+            MigrationSpec(
+                migration_id=require_string(item, "id"),
+                from_max_contract_version=require_int(item, "fromMaxContractVersion"),
+            )
+            for item in require_object_array(sync_raw, "migrations", allow_missing=True)
+        ),
     )
 
 
@@ -293,6 +333,7 @@ def plan_managed_updates(
 ) -> SyncPlan:
     file_changes: list[FileChange] = []
     region_changes: list[RegionChange] = []
+    migration_changes: list[MigrationChange] = []
     conflicts: list[SyncConflict] = []
     opt_out = set(metadata.opt_out)
     new_managed_sets = tuple(
@@ -405,14 +446,64 @@ def plan_managed_updates(
                 )
             )
 
+    for migration in contract.migrations:
+        if (
+            migration.migration_id in metadata.applied_migrations
+            or metadata.contract_version > migration.from_max_contract_version
+        ):
+            continue
+        if migration.migration_id != BEANS_MIGRATION_ID:
+            conflicts.append(SyncConflict(str(SYNC_METADATA), f"unknown migration {migration.migration_id}"))
+            continue
+        for path, previous in metadata.managed_files.items():
+            if not is_retired_beans_path(path):
+                continue
+            current = root / path
+            if current.is_file() and sha256_file(current) != previous.sha256:
+                conflicts.append(SyncConflict(path, "retired Beans tooling was edited downstream"))
+        if conflicts:
+            continue
+        try:
+            migration_module = load_beans_migration_module(candidate_root)
+            result = migration_module.migrate_repository(root)
+        except Exception as error:
+            conflicts.append(SyncConflict(".beans", f"Beans migration preflight failed: {error}"))
+            continue
+        migration_changes.append(
+            MigrationChange(
+                migration_id=migration.migration_id,
+                new_jsonl=result.jsonl,
+                issue_count=result.issue_count,
+                retired_paths=RETIRED_BEANS_PATHS,
+            )
+        )
+
     return SyncPlan(
         new_managed_sets=new_managed_sets,
         file_changes=tuple(file_changes),
         region_changes=tuple(region_changes),
+        migration_changes=tuple(migration_changes),
         conflicts=tuple(conflicts),
         migration_notes=contract.migration_notes,
         verification_commands=contract.verification_commands,
     )
+
+
+def is_retired_beans_path(path: str) -> bool:
+    return any(path == retired or path.startswith(retired + "/") for retired in RETIRED_BEANS_PATHS)
+
+
+def load_beans_migration_module(candidate_root: Path) -> Any:
+    path = candidate_root / "tools" / "supermeta-beads" / "migration.py"
+    if not path.is_file():
+        path = Path(__file__).resolve().parents[1] / "supermeta-beads" / "migration.py"
+    spec = importlib.util.spec_from_file_location("supermeta_beads_migration", path)
+    if spec is None or spec.loader is None:
+        raise SyncError(f"could not load Beads migration from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def extract_region(text: str, region_id: str) -> RegionBody:
@@ -468,6 +559,7 @@ def apply_sync_plan(
 ) -> SyncMetadata:
     if plan.conflicts:
         raise SyncError("refusing to apply sync plan with conflicts")
+    beads_bin = merge_existing_beads(root, plan.migration_changes)
     for change in plan.file_changes:
         destination = root / change.path
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -489,7 +581,26 @@ def apply_sync_plan(
             next_text = change.new_text
         destination.write_text(next_text, encoding="utf-8")
 
+    for change in plan.migration_changes:
+        beads_dir = root / ".beads"
+        beads_dir.mkdir(parents=True, exist_ok=True)
+        destination = beads_dir / "issues.jsonl"
+        temporary = beads_dir / "issues.jsonl.bootstrap-migration"
+        temporary.write_text(change.new_jsonl, encoding="utf-8")
+        temporary.replace(destination)
+        if beads_bin:
+            run_checked([beads_bin, "export", "-o", str(destination)], cwd=root)
+        for retired in change.retired_paths:
+            retired_path = root / retired
+            if retired_path.is_dir() and not retired_path.is_symlink():
+                shutil.rmtree(retired_path)
+            elif retired_path.exists():
+                retired_path.unlink()
+
     managed_files = dict(metadata.managed_files)
+    for path in tuple(managed_files):
+        if is_retired_beans_path(path):
+            managed_files.pop(path)
     for change in plan.file_changes:
         managed_files[change.path] = ManagedFileState(
             managed_set=change.managed_set,
@@ -507,6 +618,7 @@ def apply_sync_plan(
 
     updated = dataclasses.replace(
         metadata,
+        schema_version=SCHEMA_VERSION,
         source_ref=new_ref or metadata.source_ref,
         source_commit=new_commit,
         contract_version=contract.version,
@@ -514,10 +626,36 @@ def apply_sync_plan(
         managed_files=managed_files,
         managed_regions=managed_regions,
         verification_commands=contract.verification_commands,
+        applied_migrations=tuple(
+            sorted(
+                set(metadata.applied_migrations)
+                | {change.migration_id for change in plan.migration_changes}
+            )
+        ),
     )
     write_sync_metadata(root, updated)
     write_sync_report(root, plan, updated)
     return updated
+
+
+def merge_existing_beads(root: Path, changes: tuple[MigrationChange, ...]) -> str | None:
+    if not changes or not any((root / ".beads" / name).exists() for name in ("embeddeddolt", "dolt")):
+        return None
+    beads_bin = os.environ.get("SUPERMETA_BEADS_BIN") or shutil.which("bd")
+    if not beads_bin:
+        raise SyncError("Beads 1.1.0 is required to merge migrated data into the existing database")
+    version = run_checked([beads_bin, "version"], cwd=root).stdout
+    if not re.search(r"\bbd\s+version\s+v?1\.1\.0\b", version):
+        raise SyncError(f"Beads 1.1.0 is required for migration; found {version.strip()}")
+    with tempfile.TemporaryDirectory(prefix="codex-bootstrap-beads-migration-") as temp_dir:
+        for change in changes:
+            path = Path(temp_dir) / f"{change.migration_id}.jsonl"
+            path.write_text(change.new_jsonl, encoding="utf-8")
+            run_checked([beads_bin, "import", "--dry-run", str(path)], cwd=root)
+        for change in changes:
+            path = Path(temp_dir) / f"{change.migration_id}.jsonl"
+            run_checked([beads_bin, "import", str(path)], cwd=root)
+    return beads_bin
 
 
 def write_sync_metadata(root: Path, metadata: SyncMetadata) -> None:
@@ -539,6 +677,14 @@ def write_sync_report(root: Path, plan: SyncPlan, metadata: SyncMetadata) -> Pat
         "newManagedSets": list(plan.new_managed_sets),
         "fileChanges": [dataclasses.asdict(change) for change in plan.file_changes],
         "regionChanges": [dataclasses.asdict(change) for change in plan.region_changes],
+        "migrationChanges": [
+            {
+                "id": change.migration_id,
+                "issueCount": change.issue_count,
+                "retiredPaths": list(change.retired_paths),
+            }
+            for change in plan.migration_changes
+        ],
         "conflicts": [dataclasses.asdict(conflict) for conflict in plan.conflicts],
         "verificationCommands": list(plan.verification_commands),
         "migrationNotes": list(plan.migration_notes),
@@ -679,6 +825,8 @@ def print_sync_plan(
         print(f"  update-file: {change.path}")
     for change in plan.region_changes:
         print(f"  update-region: {change.path}#{change.region_id}")
+    for change in plan.migration_changes:
+        print(f"  migrate-backlog: {change.migration_id} ({change.issue_count} issues)")
     for conflict in plan.conflicts:
         print(f"  conflict: {conflict.path}: {conflict.reason}")
     for note in plan.migration_notes:
@@ -827,8 +975,8 @@ def require_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
     return value
 
 
-def require_string_list(raw: dict[str, Any], key: str) -> list[str]:
-    value = raw.get(key)
+def require_string_list(raw: dict[str, Any], key: str, allow_missing: bool = False) -> list[str]:
+    value = raw.get(key, [] if allow_missing else None)
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise SyncError(f"{key} must be an array of non-empty strings")
     return value

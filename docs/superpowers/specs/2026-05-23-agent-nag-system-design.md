@@ -36,7 +36,7 @@ The first hook producer should be `agent-coord run` because it already owns wrap
 - Do not let nag failures change a wrapped command's exit code.
 - Do not require network access for normal checks.
 - Do not make normal `scripts/check` commands block on nag state.
-- Do not replace Beans, Beads, task diagnostics, coordination, or sync tools.
+- Do not replace Beads, Beads, task diagnostics, coordination, or sync tools.
 - Do not implement a general workflow engine, scheduler, or notification service in V1.
 - Do not add adoption for old generated projects in this design. Adoption can be handled through the bootstrap sync adoption story later.
 
@@ -135,7 +135,7 @@ Managed default policy uses JSON:
       "action": "suggest-command",
       "message": "Wrapped execution completed. Refresh task context before handoff.",
       "commands": [
-        ["./scripts/agent-beans", "check"]
+        ["./scripts/agent-beads", "ready", "--json"]
       ]
     },
     {
@@ -147,14 +147,14 @@ Managed default policy uses JSON:
       "message": "Command failed. Inspect task state before retrying.",
       "commands": [
         ["./scripts/agent-task", "ps"],
-        ["./scripts/agent-beans", "list", "--ready"]
+        ["./scripts/agent-beads", "ready", "--json"]
       ]
     }
   ]
 }
 ```
 
-The command list is intentionally generic. A future project can replace or extend it with `beads`, `beans`, a repo-specific script, or another CLI without changing wrapper code.
+The command list is intentionally generic. A future project can replace or extend it with `beads`, `beads`, a repo-specific script, or another CLI without changing wrapper code.
 
 Local overrides use the same shape and merge by `id`. Rules:
 

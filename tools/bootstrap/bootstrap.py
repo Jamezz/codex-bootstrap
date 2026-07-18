@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ CATALOG_TOP_LEVEL_PATHS = {
     ".github",
     ".gitattributes",
     ".gitignore",
+    ".beads",
     ".codex-bootstrap",
     "AGENTS.md",
     "CHANGELOG.md",
@@ -318,11 +320,18 @@ class ManagedSetSpec:
 
 
 @dataclass(frozen=True)
+class MigrationSpec:
+    migration_id: str
+    from_max_contract_version: int
+
+
+@dataclass(frozen=True)
 class SyncContract:
     version: int
     managed_sets: dict[str, ManagedSetSpec]
     verification_commands: tuple[str, ...]
     migration_notes: tuple[str, ...]
+    migrations: tuple[MigrationSpec, ...]
 
     @property
     def managed_files(self) -> dict[str, ManagedFileSpec]:
@@ -692,7 +701,7 @@ def common_replacements(plan: BootstrapPlan) -> dict[str, str]:
         "../../scripts/agent-gradle": "./scripts/agent-gradle",
         "../../scripts/agent-dotnet .": "./scripts/agent-dotnet .",
         "../../scripts/agent-dotnet": "./scripts/agent-dotnet",
-        "../../scripts/agent-beans": "./scripts/agent-beans",
+        "../../scripts/agent-beads": "./scripts/agent-beads",
         "../../scripts/agent-task": "./scripts/agent-task",
         "../../scripts/agent-nag": "./scripts/agent-nag",
         "../../tools/supermeta-rules/check.py": "tools/supermeta-rules/check.py",
@@ -819,7 +828,7 @@ def write_generated_docs(plan: BootstrapPlan, staged_root: Path) -> None:
     (docs_dir / "ARCHITECTURE.md").write_text(generated_architecture(plan), encoding="utf-8")
     (docs_dir / "OPERATIONS.md").write_text(generated_operations(plan), encoding="utf-8")
     (docs_dir / "DECISIONS.md").write_text(generated_decisions(plan), encoding="utf-8")
-    write_generated_beans(plan, staged_root)
+    write_generated_beads(plan, staged_root)
     write_nag_policy_files(staged_root)
     write_checks_policy_file(plan.manifest.template_id, plan.manifest.template_type, staged_root)
 
@@ -829,18 +838,18 @@ def generated_project_docs_section() -> str:
 
 - `docs/ARCHITECTURE.md`: runtime shape, entrypoints, and code layout.
 - `docs/OPERATIONS.md`: verification, run, troubleshooting, and backlog commands.
-- `docs/DECISIONS.md`: active decisions only; superseded decision history belongs in completed or archived Beans.
+- `docs/DECISIONS.md`: active decisions only; superseded decision history belongs in completed or archived Beads.
 
 ## Backlog
 
-This project starts with a small Beans backlog for replacing the starter behavior, locking architecture decisions, and adding CI or release verification.
+This project starts with a small Beads backlog for replacing the starter behavior, locking architecture decisions, and adding CI or release verification.
 
-If the pinned Beans CLI is installed, inspect project task context with:
+If the pinned Beads CLI is installed, inspect project task context with:
 
 ```bash
-./scripts/agent-beans prime
-./scripts/agent-beans list
-./scripts/agent-beans check
+./scripts/agent-beads prime
+./scripts/agent-beads ready --json
+./scripts/agent-beads list
 ```
 """
 
@@ -1022,7 +1031,7 @@ PowerShell entrypoints mirror the Unix scripts:
 ```powershell
 {setup_line}{windows_check_command(plan)}
 {windows_run_command(plan)}
-.\\scripts\\agent-beans.ps1 prime
+.\\scripts\\agent-beads.ps1 prime
 .\\scripts\\agent-task.ps1 ps --match {windows_process_match(plan)}
 ```
 """
@@ -1034,18 +1043,18 @@ def generated_windows_agent_section(plan: BootstrapPlan) -> str:
 - Verify: `{windows_check_command(plan)}`
 - Run: `{windows_run_command(plan)}`
 - Run with app args: `{windows_run_with_args_command(plan)}`
-- Beans prime: `.\\scripts\\agent-beans.ps1 prime`
+- Beads prime: `.\\scripts\\agent-beads.ps1 prime`
 - Inspect task processes: `.\\scripts\\agent-task.ps1 ps --match {windows_process_match(plan)}`
 """
 
 
-def generated_agent_beans_section() -> str:
-    return """## Beans
+def generated_agent_beads_section() -> str:
+    return """## Beads
 
-- Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.
-- Use `./scripts/agent-beans list --ready` to inspect ready work.
-- Keep the seeded Beans current as starter behavior is replaced.
-- If `./scripts/agent-beans` reports a missing or wrong Beans CLI version, tell the user instead of bypassing the wrapper.
+- Before substantial work, run `./scripts/agent-beads prime` and follow its project-task context.
+- Use `./scripts/agent-beads ready --json` to inspect ready work.
+- Keep the seeded Beads current as starter behavior is replaced.
+- If `./scripts/agent-beads` reports a missing or wrong Beads CLI version, tell the user instead of bypassing the wrapper.
 """
 
 
@@ -1504,8 +1513,8 @@ This is an existing repository adopted into the Codex Bootstrap control plane. D
 - Preview Bootstrap sync: `./scripts/agent-bootstrap sync --dry-run`
 - Plan focused checks: `./scripts/agent-smart-check --plan-only`
 - Run full configured check lane: `./scripts/agent-smart-check --full`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Inspect local processes: `./scripts/agent-task ps`
 
@@ -1535,13 +1544,13 @@ This is a standalone Go CLI project. Keep it compact, test-covered, and easy for
 - Run with app args: go run . "example"
 - Run with text logs: LOG_LEVEL=info go run .
 - Run with JSON logs: LOG_LEVEL=info LOG_FORMAT=json go run .
-- Beans prime: ./scripts/agent-beans prime
-- Beans check: ./scripts/agent-beans check
-- Ready backlog: ./scripts/agent-beans list --ready
+- Beads prime: ./scripts/agent-beads prime
+- Beads ready work: ./scripts/agent-beads ready --json
+- Ready backlog: ./scripts/agent-beads ready --json
 - Inspect Go processes: ./scripts/agent-task ps --match go
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -1579,9 +1588,9 @@ This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and 
 - Run with app args: `cargo run --quiet -- "example"`
 - Run with text logs: `LOG_LEVEL=info cargo run --quiet`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json cargo run --quiet`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
@@ -1589,7 +1598,7 @@ This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and 
 - Inspect Rust compiler processes: `./scripts/agent-task ps --match rustc`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -1627,9 +1636,9 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - Run with app args: `./scripts/agent-gradle . run --args="example"`
 - Run with text logs: `LOG_LEVEL=info ./scripts/agent-gradle . run`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json ./scripts/agent-gradle . run`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Inspect generic task processes: `./scripts/agent-task ps --match gradle`
 - List generic task logs: `./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'`
 - Inspect stuck Gradle processes: `./scripts/agent-gradle . --ps`
@@ -1641,7 +1650,7 @@ This is a standalone Java Gradle CLI project. Keep it compact, test-covered, and
 - If debugging raw Gradle behavior only: `./gradlew check`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -1779,13 +1788,13 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Run with app args: `{run_command} "example"`
 - Run with text logs: `LOG_LEVEL=info {run_command}`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json {run_command}`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Inspect dotnet processes: `./scripts/agent-task ps --match dotnet`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -1906,14 +1915,14 @@ This is a standalone Python uv CLI project. Keep it compact, typed, test-covered
 - Run module entrypoint: `uv run --no-editable python -m {module_name} "example"`
 - Run with text logs: `LOG_LEVEL=info uv run --no-editable {plan.config.project_name}`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json uv run --no-editable {plan.config.project_name}`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Inspect task processes: `./scripts/agent-task ps --match uv`
 - Inspect pytest processes: `./scripts/agent-task ps --match pytest`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -2021,14 +2030,14 @@ This is a standalone TypeScript Bun CLI project. Keep it compact, typed, test-co
 - Run with app args: `bun run src/main.ts "example"`
 - Run with text logs: `LOG_LEVEL=info bun run src/main.ts`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -2156,14 +2165,14 @@ This is a standalone TypeScript Bun MCP server. Keep it compact, typed, test-cov
 - Run with file state: `bun run src/main.ts --state file --state-file .mcp/state.json`
 - Run with text logs: `LOG_LEVEL=info bun run src/main.ts --transport http`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json bun run src/main.ts --transport http`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Inspect Bun processes: `./scripts/agent-task ps --match bun`
 - Inspect TypeScript processes: `./scripts/agent-task ps --match tsc`
 
 {generated_windows_agent_section(plan)}
-{generated_agent_beans_section()}
+{generated_agent_beads_section()}
 {generated_agent_coordination_agent_section(check_command(plan))}
 {generated_agent_nag_section()}
 {generated_velocity_agent_region(check_command(plan))}
@@ -2271,10 +2280,9 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ## Backlog
 
 ```bash
-./scripts/agent-beans prime
-./scripts/agent-beans list
-./scripts/agent-beans check
-./scripts/agent-beans roadmap
+./scripts/agent-beads prime
+./scripts/agent-beads ready --json
+./scripts/agent-beads list
 ```
 
 {generated_agent_coordination_operations_section(check_command(plan))}
@@ -2285,7 +2293,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 ```powershell
 {windows_check_command(plan)}
 {windows_run_command(plan)}
-.\\scripts\\agent-beans.ps1 prime
+.\\scripts\\agent-beads.ps1 prime
 ```
 
 {generated_agent_sync_region(check_command(plan))}
@@ -2293,7 +2301,7 @@ def generated_operations(plan: BootstrapPlan) -> str:
 
 Use `./scripts/agent-task ps` to inspect stuck build or test processes. Use the language-specific commands in `AGENTS.md` before killing processes directly.
 
-If `./scripts/agent-beans` fails because Beans is absent or has the wrong version, install the pinned version shown by the wrapper and rerun the command.
+If `./scripts/agent-beads` fails because Beads is absent or has the wrong version, install the pinned version shown by the wrapper and rerun the command.
 """
 
 
@@ -2302,14 +2310,14 @@ def generated_decisions(plan: BootstrapPlan) -> str:
     first_useful_edit = render_doc_text(plan, docs.first_useful_edit)
     return f"""# {plan.project_title} Decisions
 
-This file contains active project decisions only. When a decision is superseded, remove it from this file after a completed or archived Bean records the old decision, why it changed, and where the current rule lives.
+This file contains active project decisions only. When a decision is superseded, remove it from this file after a completed or archived Bead records the old decision, why it changed, and where the current rule lives.
 
 ## Active Decisions
 
 ### Bootstrap Baseline
 
 - Status: active
-- Decision: Start from the `{plan.manifest.template_id}` starter with its checked-in verification path, agent notes, docs pack, and Beans backlog.
+- Decision: Start from the `{plan.manifest.template_id}` starter with its checked-in verification path, agent notes, docs pack, and Beads backlog.
 - Reason: A generated project should be immediately runnable, inspectable, and ready for agent handoff.
 
 ### First Useful Edit
@@ -2326,16 +2334,25 @@ This file contains active project decisions only. When a decision is superseded,
 """
 
 
-def write_generated_beans(plan: BootstrapPlan, staged_root: Path) -> None:
-    beans_dir = staged_root / ".beans"
-    beans_dir.mkdir(parents=True, exist_ok=True)
-    (staged_root / ".beans.yml").write_text(generated_beans_config(plan), encoding="utf-8")
-    (beans_dir / ".gitignore").write_text(
-        "# Generated by beans init\n.worktrees/\n.conversations/\n",
-        encoding="utf-8",
+def write_generated_beads(plan: BootstrapPlan, staged_root: Path) -> None:
+    beads_dir = staged_root / ".beads"
+    beads_dir.mkdir(parents=True, exist_ok=True)
+    (beads_dir / ".gitignore").write_text(generated_beads_gitignore(), encoding="utf-8")
+    (beads_dir / "README.md").write_text(generated_beads_readme(), encoding="utf-8")
+    (beads_dir / "config.yaml").write_text(generated_beads_config(plan), encoding="utf-8")
+    (beads_dir / "interactions.jsonl").write_text("", encoding="utf-8")
+    (beads_dir / "issues.jsonl").write_text(generated_seed_beads(plan), encoding="utf-8")
+    project_id = uuid.uuid5(uuid.NAMESPACE_URL, f"codex-bootstrap:{plan.config.project_name}")
+    metadata = {
+        "backend": "dolt",
+        "database": "dolt",
+        "dolt_database": plan.config.project_name.replace("-", "_"),
+        "dolt_mode": "embedded",
+        "project_id": str(project_id),
+    }
+    (beads_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    for filename, content in generated_seed_beans(plan).items():
-        (beans_dir / filename).write_text(content, encoding="utf-8")
 
 
 def write_nag_policy_files(staged_root: Path) -> None:
@@ -2359,7 +2376,7 @@ def default_nag_policy_json() -> str:
     {
       "action": "suggest-command",
       "cadence": "per-run",
-      "commands": [["./scripts/agent-beans", "check"]],
+      "commands": [["./scripts/agent-beads", "ready", "--json"]],
       "enabled": true,
       "hook": "post-run",
       "id": "post-run-backlog-check",
@@ -2373,7 +2390,7 @@ def default_nag_policy_json() -> str:
       "cadence": "per-run",
       "commands": [
         ["./scripts/agent-task", "ps"],
-        ["./scripts/agent-beans", "list", "--ready"]
+        ["./scripts/agent-beads", "ready", "--json"]
       ],
       "enabled": true,
       "hook": "post-failure",
@@ -2414,7 +2431,7 @@ def default_nag_policy() -> dict[str, object]:
                 "cadence": "per-run",
                 "action": "suggest-command",
                 "message": "Wrapped execution completed. Refresh task context before handoff.",
-                "commands": [["./scripts/agent-beans", "check"]],
+                "commands": [["./scripts/agent-beads", "ready", "--json"]],
             },
             {
                 "id": "post-failure-diagnostics",
@@ -2425,7 +2442,7 @@ def default_nag_policy() -> dict[str, object]:
                 "message": "Command failed. Inspect task state before retrying.",
                 "commands": [
                     ["./scripts/agent-task", "ps"],
-                    ["./scripts/agent-beans", "list", "--ready"],
+                    ["./scripts/agent-beads", "ready", "--json"],
                 ],
             },
         ],
@@ -2438,7 +2455,7 @@ def write_sync_metadata(plan: BootstrapPlan, staged_root: Path) -> None:
     reports_dir.mkdir(parents=True, exist_ok=True)
     (reports_dir / ".gitignore").write_text("*\n!.gitignore\n", encoding="utf-8")
     metadata = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "source": {
             "repository": detect_source_repository(plan.repo_root),
             "ref": detect_source_ref(plan.repo_root),
@@ -2454,6 +2471,7 @@ def write_sync_metadata(plan: BootstrapPlan, staged_root: Path) -> None:
         "managedFiles": managed_file_hashes(plan, staged_root),
         "managedRegions": managed_region_hashes(plan, staged_root),
         "verificationCommands": list(plan.manifest.sync_contract.verification_commands),
+        "appliedMigrations": ["beans-to-beads-v1"],
     }
     (sync_dir / "sync.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
@@ -2551,71 +2569,68 @@ def git_output_or(repo_root: Path, command: list[str], fallback: str) -> str:
     return result.stdout.strip() or fallback
 
 
-def generated_beans_config(plan: BootstrapPlan) -> str:
-    return f"""# Beans configuration
-# See: https://github.com/hmans/beans
-project:
-  name: {plan.project_title}
-beans:
-  path: .beans
-  prefix: {plan.config.project_name}-
-  id_length: 4
-  default_status: todo
-  default_type: task
-agent:
-  enabled: true
-  default_mode: act
+def generated_beads_config(plan: BootstrapPlan) -> str:
+    return f"""# Beads 1.1.0 project configuration
+# See: https://github.com/gastownhall/beads
+issue-prefix: {plan.config.project_name}
+export:
+  auto: true
+  git-add: true
 """
 
 
-def generated_seed_beans(plan: BootstrapPlan) -> dict[str, str]:
-    prefix = f"{plan.config.project_name}-"
-    milestone = f"{prefix}m001"
-    feature = f"{prefix}f001"
-    architecture_task = f"{prefix}t001"
-    ci_task = f"{prefix}t002"
-    return {
-        f"{milestone}--ship-first-real-project-slice.md": bean_markdown(
-            "Ship first real project slice",
-            "milestone",
-            "A working first slice should replace the starter behavior, keep verification green, and leave the docs accurate.",
-            order="a",
-        ),
-        f"{feature}--replace-starter-behavior.md": bean_markdown(
-            "Replace starter behavior with real product behavior",
-            "feature",
-            "Turn the generated CLI into the first useful product path. Update tests before or with the behavior change.",
-            parent=milestone,
-            order="b",
-        ),
-        f"{architecture_task}--lock-architecture-and-decisions.md": bean_markdown(
-            "Lock architecture and active decisions",
-            "task",
-            "Review `docs/ARCHITECTURE.md` and `docs/DECISIONS.md` after the first real behavior lands. Keep only active decisions in the docs.",
-            parent=feature,
-            order="c",
-        ),
-        f"{ci_task}--add-ci-and-release-verification.md": bean_markdown(
-            "Add CI and release verification",
-            "task",
-            "Choose the project CI path and make the default verification command run there without hidden local state.",
-            parent=feature,
-            order="d",
-        ),
+def generated_seed_beads(plan: BootstrapPlan) -> str:
+    epic = f"{plan.config.project_name}-m001"
+    feature = f"{epic}.1"
+    architecture_task = f"{feature}.1"
+    ci_task = f"{feature}.2"
+    records = [
+        bead_record(epic, "Ship first real project slice", "epic", "A working first slice should replace the starter behavior, keep verification green, and leave the docs accurate."),
+        bead_record(feature, "Replace starter behavior with real product behavior", "feature", "Turn the generated CLI into the first useful product path. Update tests before or with the behavior change.", parent=epic),
+        bead_record(architecture_task, "Lock architecture and active decisions", "task", "Review `docs/ARCHITECTURE.md` and `docs/DECISIONS.md` after the first real behavior lands. Keep only active decisions in the docs.", parent=feature),
+        bead_record(ci_task, "Add CI and release verification", "task", "Choose the project CI path and make the default verification command run there without hidden local state.", parent=feature),
+    ]
+    return "".join(
+        json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n" for record in records
+    )
+
+
+def bead_record(
+    issue_id: str, title: str, issue_type: str, description: str, parent: str = ""
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "_type": "issue",
+        "description": description,
+        "id": issue_id,
+        "issue_type": issue_type,
+        "priority": 2,
+        "status": "open",
+        "title": title,
     }
+    if parent:
+        record["dependencies"] = [
+            {"depends_on_id": parent, "issue_id": issue_id, "type": "parent-child"}
+        ]
+    return record
 
 
-def bean_markdown(title: str, bean_type: str, body: str, order: str, parent: str = "") -> str:
-    parent_line = f"parent: {parent}\n" if parent else ""
-    return f"""---
-title: {title}
-status: todo
-type: {bean_type}
-priority: normal
-order: {order}
-{parent_line}---
+def generated_beads_gitignore() -> str:
+    return """# Local Beads/Dolt state
+dolt/
+embeddeddolt/
+*.lock
+.local_version
+last-touched
+export-state.json
+export-state/
+backup/
+"""
 
-{body}
+
+def generated_beads_readme() -> str:
+    return """# Beads Workspace
+
+This project tracks agent work with Beads 1.1.0. The checked-in `issues.jsonl` seeds fresh clones; `./scripts/agent-beads` materializes the ignored local Dolt database on first use.
 """
 
 
@@ -2830,6 +2845,13 @@ def parse_sync_contract(raw: Any) -> SyncContract:
         managed_sets=managed_sets,
         verification_commands=tuple(require_string_list(raw, "verificationCommands")),
         migration_notes=tuple(require_string_list(raw, "migrationNotes")),
+        migrations=tuple(
+            MigrationSpec(
+                migration_id=require_string(item, "id"),
+                from_max_contract_version=require_int(item, "fromMaxContractVersion"),
+            )
+            for item in require_object_list(raw, "migrations", allow_missing=True)
+        ),
     )
 
 

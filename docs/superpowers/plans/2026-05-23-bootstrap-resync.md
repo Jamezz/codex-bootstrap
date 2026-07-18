@@ -1863,7 +1863,7 @@ def require_int(raw: dict[str, Any], key: str) -> int:
     return value
 ```
 
-- [ ] **Step 5: Emit sync metadata after generated docs and beans**
+- [ ] **Step 5: Emit sync metadata after generated docs and beads**
 
 In `stage_template()`, after the rewriter call:
 
@@ -1871,7 +1871,7 @@ In `stage_template()`, after the rewriter call:
     write_sync_metadata(plan, staged_root)
 ```
 
-Add helpers near `write_generated_beans()`:
+Add helpers near `write_generated_beads()`:
 
 ```python
 def write_sync_metadata(plan: BootstrapPlan, staged_root: Path) -> None:
@@ -2036,7 +2036,7 @@ In every `templates/*/bootstrap-template.json`, add these entries to `supportPat
 
 - [ ] **Step 2: Add common sync contract to each template manifest**
 
-Add this `syncContract` object near `generatedDocs` in every template manifest. For Java include `scripts/agent-gradle` and `tools/supermeta-gradle`; for C# include `scripts/agent-dotnet`; for all templates include the shared agent/bootstrap/task/beans/rules paths already copied by that template.
+Add this `syncContract` object near `generatedDocs` in every template manifest. For Java include `scripts/agent-gradle` and `tools/supermeta-gradle`; for C# include `scripts/agent-dotnet`; for all templates include the shared agent/bootstrap/task/beads/rules paths already copied by that template.
 
 ```json
 "syncContract": {
@@ -2048,8 +2048,8 @@ Add this `syncContract` object near `generatedDocs` in every template manifest. 
       "files": [
         {"path": "scripts/agent-bootstrap", "mode": "whole-file"},
         {"path": "scripts/agent-bootstrap.ps1", "mode": "whole-file"},
-        {"path": "scripts/agent-beans", "mode": "whole-file"},
-        {"path": "scripts/agent-beans.ps1", "mode": "whole-file"},
+        {"path": "scripts/agent-beads", "mode": "whole-file"},
+        {"path": "scripts/agent-beads.ps1", "mode": "whole-file"},
         {"path": "scripts/agent-task", "mode": "whole-file"},
         {"path": "scripts/agent-task.ps1", "mode": "whole-file"}
       ],
@@ -2063,8 +2063,8 @@ Add this `syncContract` object near `generatedDocs` in every template manifest. 
         {"path": "tools/supermeta-bootstrap/README.md", "mode": "whole-file"},
         {"path": "tools/supermeta-task/task.py", "mode": "whole-file"},
         {"path": "tools/supermeta-task/README.md", "mode": "whole-file"},
-        {"path": "tools/supermeta-beans/beans.py", "mode": "whole-file"},
-        {"path": "tools/supermeta-beans/README.md", "mode": "whole-file"},
+        {"path": "tools/supermeta-beads/beads.py", "mode": "whole-file"},
+        {"path": "tools/supermeta-beads/README.md", "mode": "whole-file"},
         {"path": "tools/supermeta-rules/check.py", "mode": "whole-file"},
         {"path": "tools/supermeta-rules/README.md", "mode": "whole-file"}
       ],

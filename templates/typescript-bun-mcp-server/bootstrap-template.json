@@ -3,9 +3,7 @@
   "displayName": "TypeScript Bun MCP Server",
   "description": "A compact TypeScript Bun MCP server starter with stdio, Streamable HTTP, typed state stores, Biome, type checking, Bun tests, agent notes, and a deterministic verification path.",
   "type": "typescript-bun-mcp-server",
-  "requiredInputs": [
-    "name"
-  ],
+  "requiredInputs": ["name"],
   "supportPaths": [
     {
       "source": "scripts/agent-bootstrap",
@@ -16,12 +14,12 @@
       "destination": "scripts/agent-bootstrap.ps1"
     },
     {
-      "source": "scripts/agent-beans",
-      "destination": "scripts/agent-beans"
+      "source": "scripts/agent-beads",
+      "destination": "scripts/agent-beads"
     },
     {
-      "source": "scripts/agent-beans.ps1",
-      "destination": "scripts/agent-beans.ps1"
+      "source": "scripts/agent-beads.ps1",
+      "destination": "scripts/agent-beads.ps1"
     },
     {
       "source": "scripts/agent-coord",
@@ -76,8 +74,8 @@
       "destination": "tools/supermeta-agent"
     },
     {
-      "source": "tools/supermeta-beans",
-      "destination": "tools/supermeta-beans"
+      "source": "tools/supermeta-beads",
+      "destination": "tools/supermeta-beads"
     },
     {
       "source": "tools/supermeta-task",
@@ -96,10 +94,7 @@
       "destination": "tools/supermeta-nag"
     }
   ],
-  "verificationCommands": [
-    "./scripts/check",
-    "bun run src/main.ts --help"
-  ],
+  "verificationCommands": ["./scripts/check", "bun run src/main.ts --help"],
   "generatedDocs": {
     "summary": "This is a compact TypeScript Bun MCP server with local stdio, Bun-native Streamable HTTP, typed state stores, tests, type checking, agent notes, generated operations docs, and a deterministic verification path.",
     "runtime": "Bun owns package installation, runtime execution, and tests. The MCP server is constructed separately from transport startup so tests can exercise tools through an in-memory MCP client. `stdio` is the default transport for local agent-spawned servers, while `http` exposes `/health` and `/mcp` through Bun's native server. State defaults to memory and can be switched to an atomic JSON file store. Runtime logging uses Pino on stderr, Biome owns formatting and linting, TypeScript owns static checking, and `scripts/check` ties the full agent verification path together.",
@@ -113,17 +108,9 @@
       "src/logging.ts",
       "package.json scripts"
     ],
-    "sourceRoots": [
-      "src",
-      "tools/supermeta-rules"
-    ],
-    "testRoots": [
-      "tests",
-      "supermeta-rules.json"
-    ],
-    "verificationCommands": [
-      "./scripts/check"
-    ],
+    "sourceRoots": ["src", "tools/supermeta-rules"],
+    "testRoots": ["tests", "supermeta-rules.json"],
+    "verificationCommands": ["./scripts/check"],
     "runCommands": [
       "bun run src/main.ts --help",
       "bun run src/main.ts",
@@ -133,7 +120,7 @@
     "firstUsefulEdit": "Replace or extend the stub tools in `src/mcp.ts`, update the protocol tests first or in the same change, then rerun `./scripts/check`."
   },
   "syncContract": {
-    "version": 2,
+    "version": 3,
     "managedSets": [
       {
         "id": "agent-scripts",
@@ -148,11 +135,11 @@
             "mode": "whole-file"
           },
           {
-            "path": "scripts/agent-beans",
+            "path": "scripts/agent-beads",
             "mode": "whole-file"
           },
           {
-            "path": "scripts/agent-beans.ps1",
+            "path": "scripts/agent-beads.ps1",
             "mode": "whole-file"
           },
           {
@@ -339,15 +326,23 @@
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/beans.py",
+            "path": "tools/supermeta-beads/beads.py",
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/beans_test.py",
+            "path": "tools/supermeta-beads/beads_test.py",
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/README.md",
+            "path": "tools/supermeta-beads/migration.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beads/migration_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beads/README.md",
             "mode": "whole-file"
           },
           {
@@ -448,6 +443,12 @@
     "verificationCommands": [
       "./scripts/agent-bootstrap sync --dry-run",
       "./scripts/check"
+    ],
+    "migrations": [
+      {
+        "id": "beans-to-beads-v1",
+        "fromMaxContractVersion": 2
+      }
     ],
     "migrationNotes": []
   }

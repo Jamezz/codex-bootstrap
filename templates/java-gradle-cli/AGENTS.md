@@ -11,8 +11,8 @@ This is a copyable starter, not a long-lived framework.
 - Run with app args from repo root: `./scripts/agent-gradle templates/java-gradle-cli run --args="Ada Lovelace"`
 - Run with text logs: `cd templates/java-gradle-cli && LOG_LEVEL=info ../../scripts/agent-gradle . run`
 - Run with JSON logs: `cd templates/java-gradle-cli && LOG_LEVEL=info LOG_FORMAT=json ../../scripts/agent-gradle . run`
-- Beans prime after materialization: `./scripts/agent-beans prime`
-- Beans check after materialization: `./scripts/agent-beans check`
+- Beads prime after materialization: `./scripts/agent-beads prime`
+- Beads ready work after materialization: `./scripts/agent-beads ready --json`
 - Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/agent-gradle templates/java-gradle-cli check`
@@ -53,7 +53,7 @@ This is a copyable starter, not a long-lived framework.
 - Treat unused-import Checkstyle findings as warnings; clean them up, but do not make them a build-breaking gate.
 - Preserve Lombok compile-only and annotation-processor wiring.
 - Keep reusable checks and project callouts in `supermeta-rules.json` and the shared Supermeta rule helper.
-- Keep generated-doc metadata and Beans support paths aligned in `bootstrap-template.json`.
+- Keep generated-doc metadata and Beads support paths aligned in `bootstrap-template.json`.
 - Keep Java lint in Gradle Checkstyle with config under `config/checkstyle/`.
 - Use the Supermeta Gradle harness for agent verification unless debugging raw Gradle behavior.
 - Preserve the Gradle wrapper so the template is runnable without a global Gradle install.

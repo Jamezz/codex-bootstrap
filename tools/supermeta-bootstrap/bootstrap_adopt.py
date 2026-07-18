@@ -11,12 +11,13 @@ import shlex
 import shutil
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_TEMPLATE = "existing-repo-control"
 MANIFEST_NAME = "bootstrap-template.json"
 SYNC_METADATA = Path(".codex-bootstrap/sync.json")
@@ -247,6 +248,28 @@ def generated_control_files(
         )
         + "\n",
     }
+    if not (target / ".beads").exists():
+        files.update(
+            {
+                ".beads/.gitignore": "dolt/\nembeddeddolt/\n*.lock\n.local_version\nlast-touched\nexport-state.json\nexport-state/\nbackup/\n",
+                ".beads/README.md": "# Beads Workspace\n\nRun `./scripts/agent-beads prime` before substantial work.\n",
+                ".beads/config.yaml": f"issue-prefix: {project_name}\nexport:\n  auto: true\n  git-add: true\n",
+                ".beads/interactions.jsonl": "",
+                ".beads/issues.jsonl": "",
+                ".beads/metadata.json": json.dumps(
+                    {
+                        "backend": "dolt",
+                        "database": "dolt",
+                        "dolt_database": project_name.replace("-", "_"),
+                        "dolt_mode": "embedded",
+                        "project_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"codex-bootstrap:{project_name}")),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+            }
+        )
     metadata = sync_metadata(
         catalog_root=catalog_root,
         target=target,
@@ -292,6 +315,7 @@ def sync_metadata(
         "managedFiles": managed_files,
         "managedRegions": {},
         "verificationCommands": list(verification_commands),
+        "appliedMigrations": ["beans-to-beads-v1"],
     }
 
 
@@ -414,7 +438,7 @@ def default_nag_policy_json() -> str:
     {
       "action": "suggest-command",
       "cadence": "per-run",
-      "commands": [["./scripts/agent-beans", "check"]],
+      "commands": [["./scripts/agent-beads", "ready", "--json"]],
       "enabled": true,
       "hook": "post-run",
       "id": "post-run-backlog-check",
@@ -428,7 +452,7 @@ def default_nag_policy_json() -> str:
       "cadence": "per-run",
       "commands": [
         ["./scripts/agent-task", "ps"],
-        ["./scripts/agent-beans", "list", "--ready"]
+        ["./scripts/agent-beads", "ready", "--json"]
       ],
       "enabled": true,
       "hook": "post-failure",

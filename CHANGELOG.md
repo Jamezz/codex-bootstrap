@@ -16,7 +16,7 @@ Each entry should cover:
 - what changed;
 - which surfaces moved, such as `tools/bootstrap/`, `templates/<name>/`,
   `tools/pages/`, `site/`, `.github/`, `scripts/`, or `tools/supermeta-*`;
-- generated-project contract changes, including docs, Beans, scripts,
+- generated-project contract changes, including docs, Beads, scripts,
   manifest fields, or verification commands;
 - compatibility breaks or migration notes;
 - verification commands that passed.
@@ -33,6 +33,11 @@ Use these buckets inside dated entries when they help:
 - `Merge Notes`
 
 ## Unreleased
+
+### Beads Migration
+
+- Replaced Beans with pinned Beads 1.1.0 wrappers, native `prime` and `ready --json` workflows, tracked JSONL seed graphs, and ignored embedded-Dolt state across every starter and existing-repo adoption.
+- Added sync schema 2 and template contract 3 with the fail-closed `beans-to-beads-v1` migration, preserving issue fields, hierarchy, blockers, timestamps, tags, priorities, and archived outcomes before retiring Beans tooling.
 
 ### Generated Contract
 

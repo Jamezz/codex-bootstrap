@@ -29,7 +29,7 @@ When adding a new environment or template, include:
 - `README.md` with purpose, prerequisites, usage, verification, and customization;
 - `AGENTS.md` with repo-local instructions for agents;
 - generated-project docs metadata for `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
-- generated-project Beans support through `scripts/agent-beans`, `scripts/agent-beans.ps1`, `.beans.yml`, `.beans/.gitignore`, and starter backlog files;
+- generated-project Beads support through `scripts/agent-beads`, `scripts/agent-beads.ps1`, `.beads/config.yaml`, `.beads/issues.jsonl`, and ignored local Dolt state;
 - first-class runtime logging with quiet defaults, stderr logs, and documented `LOG_LEVEL`/`LOG_FORMAT` controls;
 - `bootstrap-template.json` for runnable templates that can be materialized by the root launcher;
 - a deterministic validation command;
@@ -66,4 +66,4 @@ Favor boring, durable defaults:
 
 For generated projects, keep support paths local to the project. A materialized starter must not depend on `templates/`, `environments/`, or root bootstrap code after the launcher finishes.
 
-Generated decisions docs stay current-only. When a decision is superseded, preserve the old reasoning in a completed or archived Bean, then remove the stale entry from `docs/DECISIONS.md`.
+Generated decisions docs stay current-only. When a decision is superseded, preserve the old reasoning in a completed or archived Bead, then remove the stale entry from `docs/DECISIONS.md`.

@@ -22,13 +22,13 @@ function Invoke-PythonChecked {
         exit $LASTEXITCODE
     }
 
-    [Console]::Error.WriteLine("scripts/agent-beans.ps1: python3, python, or py is required")
+    [Console]::Error.WriteLine("scripts/agent-beads.ps1: python3, python, or py is required")
     exit 2
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
-$beansScript = Join-Path $repoRoot "tools/supermeta-beans/beans.py"
-$pythonArgs = @($beansScript)
+$beadsScript = Join-Path $repoRoot "tools/supermeta-beads/beads.py"
+$pythonArgs = @($beadsScript)
 $pythonArgs += $args
 Invoke-PythonChecked @pythonArgs

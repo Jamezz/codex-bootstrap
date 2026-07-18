@@ -911,6 +911,44 @@ class SyncApplyTest(unittest.TestCase):
             self.assertEqual(1, exit_code)
 
 
+    def test_migrates_beans_and_retires_old_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="bootstrap-sync-beads-migration-") as temp_dir:
+            root = Path(temp_dir)
+            beans_dir = root / ".beans"
+            beans_dir.mkdir()
+            (root / ".beans.yml").write_text("beans:\n  prefix: app-\n", encoding="utf-8")
+            (beans_dir / "app-t1--work.md").write_text(
+                "---\ntitle: Work\nstatus: todo\ntype: task\npriority: normal\n---\n\nDo the work.\n",
+                encoding="utf-8",
+            )
+            metadata = metadata_for(root, managed_files={}, managed_regions={}, managed_sets=())
+            contract = bootstrap_sync.SyncContract(
+                version=3,
+                managed_sets={},
+                verification_commands=(),
+                migration_notes=(),
+                migrations=(bootstrap_sync.MigrationSpec("beans-to-beads-v1", 2),),
+            )
+            plan = bootstrap_sync.plan_managed_updates(
+                root,
+                Path(__file__).resolve().parents[2],
+                metadata,
+                contract,
+                git_status={},
+            )
+
+            self.assertFalse(plan.conflicts)
+            self.assertEqual(1, plan.migration_changes[0].issue_count)
+            updated = bootstrap_sync.apply_sync_plan(root, metadata, contract, plan, "new")
+
+            self.assertFalse((root / ".beans").exists())
+            self.assertFalse((root / ".beans.yml").exists())
+            migrated = json.loads((root / ".beads" / "issues.jsonl").read_text(encoding="utf-8"))
+            self.assertEqual("app-t1", migrated["id"])
+            self.assertEqual(2, updated.schema_version)
+            self.assertEqual(("beans-to-beads-v1",), updated.applied_migrations)
+
+
 class CandidateRegenerationTest(unittest.TestCase):
     def test_builds_bootstrap_args_from_identity(self) -> None:
         metadata = bootstrap_sync.SyncMetadata(

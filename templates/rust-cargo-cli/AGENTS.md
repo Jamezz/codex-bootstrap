@@ -12,9 +12,9 @@ This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and 
 - Run with app args: `cargo run --quiet -- "Ada Lovelace"`
 - Run with text logs: `LOG_LEVEL=info cargo run --quiet`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json cargo run --quiet`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
@@ -24,7 +24,7 @@ This is a standalone Rust Cargo CLI project. Keep it compact, test-covered, and 
 
 - Verify: `.\scripts\check.ps1`
 - Run: `cargo run --quiet`
-- Beans prime: `.\scripts\agent-beans.ps1 prime`
+- Beads prime: `.\scripts\agent-beads.ps1 prime`
 - Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect Cargo processes: `.\scripts\agent-task.ps1 ps --match cargo`
 

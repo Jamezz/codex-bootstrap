@@ -13,9 +13,9 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Run with app args: `./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj -- "example"`
 - Run with text logs: `LOG_LEVEL=info ./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --`
 - Run with JSON logs: `LOG_LEVEL=info LOG_FORMAT=json ./scripts/agent-dotnet . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --`
-- Beans prime: `./scripts/agent-beans prime`
-- Beans check: `./scripts/agent-beans check`
-- Ready backlog: `./scripts/agent-beans list --ready`
+- Beads prime: `./scripts/agent-beads prime`
+- Beads ready work: `./scripts/agent-beads ready --json`
+- Ready backlog: `./scripts/agent-beads ready --json`
 - Announce coordination state: `./scripts/agent-coord announce --task "verification" --resource cpu:heavy`
 - Inspect peer agents: `./scripts/agent-coord status`
 - Serialize perf-sensitive work: `./scripts/agent-coord run --resource perf:exclusive -- ./scripts/check`
@@ -26,16 +26,16 @@ This is a standalone C# .NET CLI project. Keep it compact, test-covered, and eas
 - Restore locked dependencies: `.\scripts\agent-dotnet.ps1 . restore --locked-mode`
 - Verify: `.\scripts\check.ps1`
 - Run: `.\scripts\agent-dotnet.ps1 . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --`
-- Beans prime: `.\scripts\agent-beans.ps1 prime`
+- Beads prime: `.\scripts\agent-beads.ps1 prime`
 - Inspect peer agents: `.\scripts\agent-coord.ps1 status`
 - Inspect dotnet processes: `.\scripts\agent-task.ps1 ps --match dotnet`
 
-## Beans
+## Beads
 
-- Before substantial work, run `./scripts/agent-beans prime` and follow its project-task context.
-- Use `./scripts/agent-beans list --ready` to inspect ready work.
-- Keep the seeded Beans current as starter behavior is replaced.
-- If `./scripts/agent-beans` reports a missing or wrong Beans CLI version, tell the user instead of bypassing the wrapper.
+- Before substantial work, run `./scripts/agent-beads prime` and follow its project-task context.
+- Use `./scripts/agent-beads ready --json` to inspect ready work.
+- Keep the seeded Beads current as starter behavior is replaced.
+- If `./scripts/agent-beads` reports a missing or wrong Beads CLI version, tell the user instead of bypassing the wrapper.
 
 ## Rules
 

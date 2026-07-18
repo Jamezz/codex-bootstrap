@@ -30,7 +30,7 @@ The repo currently ships:
 - `tools/supermeta-fix/`: the generated-project fix-loop helper copied into generated projects.
 - `tools/supermeta-rules/`: a reusable rule checker for generated projects, including source-size rules, Java policy checks, Rust safety checks, and Java repeated-helper detection.
 - `tools/supermeta-gradle/`: a Gradle harness that applies agent-safe defaults around wrapper usage.
-- `tools/supermeta-beans/`: a pinned Beans wrapper used by generated projects for file-backed backlog context.
+- `tools/supermeta-beads/`: a pinned Beads wrapper and migration helper used by generated projects for Dolt-backed backlog context.
 - `tools/supermeta-task/`: a language-agnostic stuck-task diagnostic helper copied into generated projects.
 
 ## Quick Start
@@ -266,7 +266,7 @@ Every bootstrap environment should include:
 - a README that explains purpose, prerequisites, usage, verification, and customization;
 - an `AGENTS.md` with direct instructions for Codex-style agents working inside the environment;
 - a generated operational docs pack: `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, and `docs/DECISIONS.md`;
-- a generated Beans workspace with a starter backlog and pinned `scripts/agent-beans` / `scripts/agent-beans.ps1` wrappers;
+- a generated Beads workspace with a starter backlog and pinned `scripts/agent-beads` / `scripts/agent-beads.ps1` wrappers;
 - a generated sync contract with `.codex-bootstrap/sync.json`, `scripts/agent-bootstrap`, and `tools/supermeta-bootstrap/`;
 - a generated nag contract with `.codex-bootstrap/nags.json`, local overrides, `scripts/agent-nag`, and lifecycle hook docs;
 - a generated velocity contract with `.codex-bootstrap/checks.json`, `scripts/agent-smart-check`, `scripts/agent-fix-loop`, and lifecycle docs;
@@ -297,8 +297,8 @@ bootstrap.ps1
 environments/
   supermeta/
 scripts/
-  agent-beans
-  agent-beans.ps1
+  agent-beads
+  agent-beads.ps1
   agent-coord
   agent-coord.ps1
   agent-nag
@@ -330,7 +330,7 @@ tools/
   supermeta-agent/
   supermeta-nag/
   supermeta-gradle/
-  supermeta-beans/
+  supermeta-beads/
   supermeta-rules/
   supermeta-task/
 ```

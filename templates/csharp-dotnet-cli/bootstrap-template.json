@@ -24,12 +24,12 @@
       "destination": "scripts/agent-bootstrap.ps1"
     },
     {
-      "source": "scripts/agent-beans",
-      "destination": "scripts/agent-beans"
+      "source": "scripts/agent-beads",
+      "destination": "scripts/agent-beads"
     },
     {
-      "source": "scripts/agent-beans.ps1",
-      "destination": "scripts/agent-beans.ps1"
+      "source": "scripts/agent-beads.ps1",
+      "destination": "scripts/agent-beads.ps1"
     },
     {
       "source": "scripts/agent-coord",
@@ -84,8 +84,8 @@
       "destination": "tools/supermeta-agent"
     },
     {
-      "source": "tools/supermeta-beans",
-      "destination": "tools/supermeta-beans"
+      "source": "tools/supermeta-beads",
+      "destination": "tools/supermeta-beads"
     },
     {
       "source": "tools/supermeta-task",
@@ -136,7 +136,7 @@
     "firstUsefulEdit": "Extend `App.cs`, update `AppTests.cs` first or in the same change, then rerun `./scripts/check`."
   },
   "syncContract": {
-    "version": 2,
+    "version": 3,
     "managedSets": [
       {
         "id": "agent-scripts",
@@ -159,11 +159,11 @@
             "mode": "whole-file"
           },
           {
-            "path": "scripts/agent-beans",
+            "path": "scripts/agent-beads",
             "mode": "whole-file"
           },
           {
-            "path": "scripts/agent-beans.ps1",
+            "path": "scripts/agent-beads.ps1",
             "mode": "whole-file"
           },
           {
@@ -350,15 +350,23 @@
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/beans.py",
+            "path": "tools/supermeta-beads/beads.py",
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/beans_test.py",
+            "path": "tools/supermeta-beads/beads_test.py",
             "mode": "whole-file"
           },
           {
-            "path": "tools/supermeta-beans/README.md",
+            "path": "tools/supermeta-beads/migration.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beads/migration_test.py",
+            "mode": "whole-file"
+          },
+          {
+            "path": "tools/supermeta-beads/README.md",
             "mode": "whole-file"
           },
           {
@@ -459,6 +467,12 @@
     "verificationCommands": [
       "./scripts/agent-bootstrap sync --dry-run",
       "./scripts/check"
+    ],
+    "migrations": [
+      {
+        "id": "beans-to-beads-v1",
+        "fromMaxContractVersion": 2
+      }
     ],
     "migrationNotes": []
   }

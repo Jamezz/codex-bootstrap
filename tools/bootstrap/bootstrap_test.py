@@ -104,8 +104,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/agent-dotnet.ps1",
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -119,7 +119,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-check",
                 "tools/supermeta-fix",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -193,8 +193,8 @@ class ManifestTest(unittest.TestCase):
                 "scripts/supermeta-cache.ps1",
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -209,7 +209,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-fix",
                 "tools/supermeta-gradle",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -217,7 +217,8 @@ class ManifestTest(unittest.TestCase):
             ],
             [path.source for path in manifest.support_paths],
         )
-        self.assertEqual(2, manifest.sync_contract.version)
+        self.assertEqual(3, manifest.sync_contract.version)
+        self.assertEqual("beans-to-beads-v1", manifest.sync_contract.migrations[0].migration_id)
         self.assertIn("agent-scripts", manifest.sync_contract.managed_sets)
         self.assertIn("agent-nags", manifest.sync_contract.managed_sets)
         self.assertFalse(manifest.sync_contract.managed_sets["language-checks"].auto_enable)
@@ -250,8 +251,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -265,7 +266,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-check",
                 "tools/supermeta-fix",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -294,8 +295,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -309,7 +310,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-check",
                 "tools/supermeta-fix",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -359,8 +360,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -374,7 +375,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-check",
                 "tools/supermeta-fix",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -403,8 +404,8 @@ class ManifestTest(unittest.TestCase):
             [
                 "scripts/agent-bootstrap",
                 "scripts/agent-bootstrap.ps1",
-                "scripts/agent-beans",
-                "scripts/agent-beans.ps1",
+                "scripts/agent-beads",
+                "scripts/agent-beads.ps1",
                 "scripts/agent-coord",
                 "scripts/agent-coord.ps1",
                 "scripts/agent-nag",
@@ -418,7 +419,7 @@ class ManifestTest(unittest.TestCase):
                 "tools/supermeta-check",
                 "tools/supermeta-fix",
                 "tools/supermeta-agent",
-                "tools/supermeta-beans",
+                "tools/supermeta-beads",
                 "tools/supermeta-task",
                 "tools/supermeta-rules",
                 "tools/supermeta-bootstrap",
@@ -486,8 +487,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / "scripts" / "agent-gradle.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-bootstrap").is_file())
             self.assertTrue((checkout / "scripts" / "agent-bootstrap.ps1").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-coord").is_file())
             self.assertTrue((checkout / "scripts" / "agent-coord.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-nag").is_file())
@@ -502,7 +503,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertTrue((checkout / "tools" / "supermeta-gradle" / "gradle.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-agent" / "agent.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-nag" / "nag.py").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-check" / "check.py").is_file())
@@ -521,9 +522,10 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
             checks = json.loads((checkout / ".codex-bootstrap" / "checks.json").read_text(encoding="utf-8"))
             nags = json.loads((checkout / ".codex-bootstrap" / "nags.json").read_text(encoding="utf-8"))
-            self.assertEqual(1, sync_metadata["schemaVersion"])
+            self.assertEqual(2, sync_metadata["schemaVersion"])
             self.assertEqual("java-gradle-cli", sync_metadata["template"]["id"])
-            self.assertEqual(2, sync_metadata["template"]["contractVersion"])
+            self.assertEqual(3, sync_metadata["template"]["contractVersion"])
+            self.assertEqual(["beans-to-beads-v1"], sync_metadata["appliedMigrations"])
             self.assertEqual("sample-app", sync_metadata["identity"]["projectName"])
             self.assertEqual("com.acme.sample", sync_metadata["identity"]["javaPackage"])
             self.assertIn("agent-scripts", sync_metadata["managedSets"])
@@ -635,8 +637,8 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App", readme)
             self.assertIn("./scripts/agent-gradle . check", readme)
             self.assertIn(".\\scripts\\agent-gradle.ps1 . check", readme)
-            self.assertIn("./scripts/agent-beans prime", readme)
-            self.assertIn(".\\scripts\\agent-beans.ps1 prime", readme)
+            self.assertIn("./scripts/agent-beads prime", readme)
+            self.assertIn(".\\scripts\\agent-beads.ps1 prime", readme)
             self.assertIn("./scripts/agent-task ps --match gradle", readme)
             self.assertIn(".\\scripts\\agent-task.ps1 ps --match gradle", readme)
             self.assertIn("./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'", readme)
@@ -658,7 +660,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn('./scripts/agent-gradle . run --args="example"', agents)
             self.assertIn('.\\scripts\\agent-gradle.ps1 . run --args="example"', agents)
             self.assertIn("LOG_LEVEL=info ./scripts/agent-gradle . run", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("./scripts/agent-task ps --match gradle", agents)
             self.assertIn("./scripts/agent-task logs .gradle/agent-capsules --glob '**/*.log'", agents)
             self.assertIn("./scripts/agent-gradle . --ps", agents)
@@ -841,12 +843,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -876,12 +878,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("uv run --no-editable sample-app", readme)
             self.assertIn("uv run --no-editable python -m sample_app", readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
-            self.assertIn("./scripts/agent-beans prime", readme)
+            self.assertIn("./scripts/agent-beads prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("uv run --no-editable sample-app", agents)
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info uv run --no-editable sample-app", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
@@ -1034,12 +1036,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -1079,7 +1081,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
@@ -1100,7 +1102,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("Target Go 1.26", agents)
             self.assertIn("go vet ./...", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
@@ -1162,12 +1164,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             assert_catalog_removed(self, checkout)
             self.assertTrue((checkout / "scripts" / "agent-dotnet").is_file())
             self.assertTrue((checkout / "scripts" / "agent-dotnet.ps1").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -1229,7 +1231,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("Target .NET 10 through `net10.0`", agents)
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info ./scripts/agent-dotnet . run --project src/SampleApp/SampleApp.csproj --", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
@@ -1321,12 +1323,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -1357,12 +1359,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn(".\\scripts\\check.ps1", readme)
             self.assertIn("bun run src/main.ts", readme)
             self.assertIn("LOG_LEVEL=info LOG_FORMAT=json", readme)
-            self.assertIn("./scripts/agent-beans prime", readme)
+            self.assertIn("./scripts/agent-beads prime", readme)
             self.assertIn("# Sample App Agent Notes", agents)
             self.assertIn("Bun is the only package-manager/runtime contract", agents)
             self.assertIn(".\\scripts\\check.ps1", agents)
             self.assertIn("LOG_LEVEL=info bun run src/main.ts", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
@@ -1422,12 +1424,12 @@ class BootstrapSmokeTest(unittest.TestCase):
             )
 
             assert_catalog_removed(self, checkout)
-            self.assertTrue((checkout / "scripts" / "agent-beans").is_file())
-            self.assertTrue((checkout / "scripts" / "agent-beans.ps1").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads").is_file())
+            self.assertTrue((checkout / "scripts" / "agent-beads.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task").is_file())
             self.assertTrue((checkout / "scripts" / "agent-task.ps1").is_file())
             self.assertTrue((checkout / "scripts" / "check.ps1").is_file())
-            self.assertTrue((checkout / "tools" / "supermeta-beans" / "beans.py").is_file())
+            self.assertTrue((checkout / "tools" / "supermeta-beads" / "beads.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-task" / "task.py").is_file())
             self.assertTrue((checkout / "tools" / "supermeta-rules" / "check.py").is_file())
 
@@ -1456,7 +1458,7 @@ class BootstrapSmokeTest(unittest.TestCase):
             self.assertIn("bun run src/main.ts --transport http", readme)
             self.assertIn("Keep stdio output clean", agents)
             self.assertIn(".\\scripts\\check.ps1", agents)
-            self.assertIn("./scripts/agent-beans prime", agents)
+            self.assertIn("./scripts/agent-beads prime", agents)
             self.assertIn("## Bootstrap Sync", readme)
             self.assertIn("## Bootstrap Sync", agents)
             assert_generated_upstream_suggestion_contract(self, readme, agents)
@@ -1813,7 +1815,7 @@ def assert_generated_operational_baseline(test_case: unittest.TestCase, checkout
     architecture = read_text(checkout / "docs" / "ARCHITECTURE.md")
     operations = read_text(checkout / "docs" / "OPERATIONS.md")
     decisions = read_text(checkout / "docs" / "DECISIONS.md")
-    beans_config = read_text(checkout / ".beans.yml")
+    beads_config = read_text(checkout / ".beads" / "config.yaml")
 
     test_case.assertIn("# Sample App Architecture", architecture)
     test_case.assertIn("## Runtime Shape", architecture)
@@ -1821,32 +1823,26 @@ def assert_generated_operational_baseline(test_case: unittest.TestCase, checkout
     test_case.assertIn("LOG_LEVEL", architecture)
     test_case.assertIn("LOG_FORMAT", architecture)
     test_case.assertIn("# Sample App Operations", operations)
-    test_case.assertIn("./scripts/agent-beans check", operations)
+    test_case.assertIn("./scripts/agent-beads ready --json", operations)
     test_case.assertIn("## Logging", operations)
     test_case.assertIn("LOG_LEVEL", operations)
     test_case.assertIn("# Sample App Decisions", decisions)
     test_case.assertIn("active project decisions only", decisions)
     test_case.assertIn("Runtime Logging Contract", decisions)
-    test_case.assertIn("prefix: sample-app-", beans_config)
-    test_case.assertIn("default_type: task", beans_config)
-    test_case.assertEqual(
-        "# Generated by beans init\n.worktrees/\n.conversations/\n",
-        read_text(checkout / ".beans" / ".gitignore"),
-    )
-
-    bean_files = sorted(path.name for path in (checkout / ".beans").glob("*.md"))
-    test_case.assertEqual(
-        [
-            "sample-app-f001--replace-starter-behavior.md",
-            "sample-app-m001--ship-first-real-project-slice.md",
-            "sample-app-t001--lock-architecture-and-decisions.md",
-            "sample-app-t002--add-ci-and-release-verification.md",
-        ],
-        bean_files,
-    )
-    seed_bean = read_text(checkout / ".beans" / "sample-app-f001--replace-starter-behavior.md")
-    test_case.assertIn("type: feature", seed_bean)
-    test_case.assertIn("parent: sample-app-m001", seed_bean)
+    test_case.assertIn("issue-prefix: sample-app", beads_config)
+    test_case.assertIn("git-add: true", beads_config)
+    test_case.assertIn("embeddeddolt/", read_text(checkout / ".beads" / ".gitignore"))
+    records = [
+        json.loads(line)
+        for line in read_text(checkout / ".beads" / "issues.jsonl").splitlines()
+        if line.strip()
+    ]
+    test_case.assertEqual(4, len(records))
+    by_id = {record["id"]: record for record in records}
+    test_case.assertEqual("epic", by_id["sample-app-m001"]["issue_type"])
+    feature = by_id["sample-app-m001.1"]
+    test_case.assertEqual("feature", feature["issue_type"])
+    test_case.assertEqual("sample-app-m001", feature["dependencies"][0]["depends_on_id"])
 
 
 def assert_generated_upstream_suggestion_contract(

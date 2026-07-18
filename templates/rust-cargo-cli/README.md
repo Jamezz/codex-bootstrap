@@ -76,12 +76,12 @@ cargo run --quiet
 .\..\..\scripts\agent-task.ps1 ps --match cargo
 ```
 
-Generated projects also include a pinned Beans wrapper and seeded starter backlog:
+Generated projects also include a pinned Beads wrapper and seeded starter backlog:
 
 ```bash
-./scripts/agent-beans prime
-./scripts/agent-beans list --ready
-./scripts/agent-beans check
+./scripts/agent-beads prime
+./scripts/agent-beads ready --json
+./scripts/agent-beads list
 ```
 
 ## Conventions

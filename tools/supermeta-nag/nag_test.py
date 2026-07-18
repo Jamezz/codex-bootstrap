@@ -35,7 +35,7 @@ class PolicyLoadingTest(unittest.TestCase):
                             "cadence": "per-run",
                             "action": "suggest-command",
                             "message": "Refresh task context before handoff.",
-                            "commands": [["./scripts/agent-beans", "check"]],
+                            "commands": [["./scripts/agent-beads", "ready", "--json"]],
                         }
                     ],
                 },
@@ -48,7 +48,7 @@ class PolicyLoadingTest(unittest.TestCase):
             self.assertEqual(("post-run-backlog-check",), tuple(policy.nags))
             self.assertEqual("post-run", policy.nags["post-run-backlog-check"].hook)
             self.assertEqual(
-                (("./scripts/agent-beans", "check"),),
+                (("./scripts/agent-beads", "ready", "--json"),),
                 policy.nags["post-run-backlog-check"].commands,
             )
 
@@ -211,7 +211,7 @@ class HookEvaluationTest(unittest.TestCase):
 
             self.assertEqual(0, exit_code)
             self.assertIn("agent-nag: post-run-backlog-check", output.getvalue())
-            self.assertIn("./scripts/agent-beans check", output.getvalue())
+            self.assertIn("./scripts/agent-beads ready --json", output.getvalue())
             state = json.loads((root / ".codex-bootstrap" / "nag-state.json").read_text(encoding="utf-8"))
             self.assertEqual("2026-05-23T20:00:00Z", state["nags"]["post-run-backlog-check"]["lastShownAt"])
 
@@ -380,7 +380,7 @@ def write_default_policy(root: Path) -> None:
                     "action": "suggest-command",
                     "message": "Refresh task context before handoff.",
                     "when": {"exitCode": 0},
-                    "commands": [["./scripts/agent-beans", "check"]],
+                    "commands": [["./scripts/agent-beads", "ready", "--json"]],
                 }
             ],
         },

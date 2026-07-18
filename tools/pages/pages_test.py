@@ -48,7 +48,7 @@ class PagesBuildTest(unittest.TestCase):
                 template for template in templates["templates"] if template["id"] == "java-gradle-cli"
             )
             self.assertTrue(java_template["syncCapable"])
-            self.assertEqual(2, java_template["syncContractVersion"])
+            self.assertEqual(3, java_template["syncContractVersion"])
             self.assertIn("agent-scripts", java_template["managedSets"])
             self.assertIn("agent-nags", java_template["managedSets"])
             self.assertIn("velocity-tools", java_template["managedSets"])

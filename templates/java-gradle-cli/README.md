@@ -96,12 +96,12 @@ PowerShell entrypoints are available for Windows agents:
 .\scripts\agent-gradle.ps1 templates/java-gradle-cli --stop
 ```
 
-Generated projects also include a pinned Beans wrapper and seeded starter backlog:
+Generated projects also include a pinned Beads wrapper and seeded starter backlog:
 
 ```bash
-./scripts/agent-beans prime
-./scripts/agent-beans list --ready
-./scripts/agent-beans check
+./scripts/agent-beads prime
+./scripts/agent-beads ready --json
+./scripts/agent-beads list
 ```
 
 Agents should prefer the harness because it uses the checked-in wrapper with no file watching and capsule-local Gradle state. Each capsule owns its Gradle user home, build cache, logs, locks, generated-output hygiene, and repair actions under `.gradle/agent-capsules/<capsule-id>/`.

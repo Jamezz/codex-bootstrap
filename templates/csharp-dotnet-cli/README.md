@@ -55,7 +55,7 @@ PowerShell entrypoints mirror the Unix scripts:
 .\scripts\agent-dotnet.ps1 . restore --locked-mode
 .\scripts\check.ps1
 .\scripts\agent-dotnet.ps1 . run --project src/CsharpDotnetCli/CsharpDotnetCli.csproj --
-.\scripts\agent-beans.ps1 prime
+.\scripts\agent-beads.ps1 prime
 .\scripts\agent-task.ps1 ps --match dotnet
 ```
 
@@ -84,18 +84,18 @@ Extend the CLI behavior in `App.cs`, update `AppTests.cs` first or in the same c
 
 - `docs/ARCHITECTURE.md`: runtime shape, entrypoints, and code layout.
 - `docs/OPERATIONS.md`: verification, run, troubleshooting, and backlog commands.
-- `docs/DECISIONS.md`: active decisions only; superseded decision history belongs in completed or archived Beans.
+- `docs/DECISIONS.md`: active decisions only; superseded decision history belongs in completed or archived Beads.
 
 ## Backlog
 
-This project starts with a small Beans backlog for replacing the starter behavior, locking architecture decisions, and adding CI or release verification.
+This project starts with a small Beads backlog for replacing the starter behavior, locking architecture decisions, and adding CI or release verification.
 
-If the pinned Beans CLI is installed, inspect project task context with:
+If the pinned Beads CLI is installed, inspect project task context with:
 
 ```bash
-./scripts/agent-beans prime
-./scripts/agent-beans list
-./scripts/agent-beans check
+./scripts/agent-beads prime
+./scripts/agent-beads list
+./scripts/agent-beads ready --json
 ```
 
 ## Agent Workflow
